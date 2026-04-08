@@ -1,0 +1,427 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\InventoryProduct;
+use App\Models\InventoryReservation;
+use App\Models\PriceBook;
+use App\Models\Quotation;
+use App\Models\QuotationItem;
+use App\Models\Warehouse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
+
+class QuotationService
+{
+    public function __construct(
+        private readonly InventoryService $inventoryService,
+        private readonly PriceBookService $priceBookService
+    )
+    {
+    }
+
+    public function getAll()
+    {
+        return Quotation::query()->with(['priceBook', 'items.product', 'items.warehouse', 'quoteable'])->latest()->get();
+    }
+
+    public function getByUid(string $uid): Quotation
+    {
+        return Quotation::query()->with(['priceBook', 'items.product', 'items.warehouse', 'quoteable'])->where('uid', $uid)->firstOrFail();
+    }
+
+    public function create(array $data): Quotation
+    {
+        $validated = $this->validateQuotation($data);
+
+        return DB::transaction(function () use ($validated) {
+            $quoteable = $this->resolveQuoteable($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
+            $priceBook = $this->resolvePriceBook($validated['price_book_uid'] ?? null);
+
+            $quotation = Quotation::query()->create([
+                'owner_user_id' => $quoteable?->owner_user_id ?? auth()->id(),
+                'created_by_user_id' => auth()->id(),
+                'price_book_id' => $priceBook?->getKey(),
+                'quoteable_type' => $quoteable ? get_class($quoteable) : null,
+                'quoteable_id' => $quoteable?->getKey(),
+                'quote_number' => $validated['quote_number'],
+                'title' => $validated['title'],
+                'status' => $validated['status'] ?? 'draft',
+                'currency' => $validated['currency'] ?? null,
+                'valid_until' => $validated['valid_until'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            return $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+        });
+    }
+
+    public function update(string $uid, array $data): Quotation
+    {
+        $quotation = $this->getByUid($uid);
+        $validated = $this->validateQuotation($data, true);
+
+        return DB::transaction(function () use ($quotation, $validated) {
+            $payload = [];
+
+            foreach (['quote_number', 'title', 'status', 'currency', 'valid_until', 'notes'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $payload[$field] = $validated[$field];
+                }
+            }
+
+            if (array_key_exists('price_book_uid', $validated)) {
+                $payload['price_book_id'] = $this->resolvePriceBook($validated['price_book_uid'])?->getKey();
+            }
+
+            if (array_key_exists('entity_type', $validated) || array_key_exists('entity_uid', $validated)) {
+                $quoteable = $this->resolveQuoteable($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
+                $payload['quoteable_type'] = $quoteable ? get_class($quoteable) : null;
+                $payload['quoteable_id'] = $quoteable?->getKey();
+                $payload['owner_user_id'] = $quoteable?->owner_user_id ?? $quotation->owner_user_id;
+            }
+
+            if ($payload !== []) {
+                $quotation->update($payload);
+            }
+
+            return $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+        });
+    }
+
+    public function addItem(string $quotationUid, array $data): QuotationItem
+    {
+        $quotation = $this->getByUid($quotationUid);
+        $validated = $this->validateItem($data);
+
+        return DB::transaction(function () use ($quotation, $validated) {
+            $product = $this->resolveProduct($validated['product_uid'] ?? null);
+            $warehouse = $this->resolveWarehouse($validated['warehouse_uid'] ?? null);
+            $pricing = $this->buildPricingPayload(
+                $quotation->priceBook,
+                $product,
+                (int) $validated['quantity'],
+                $validated['unit_price'] ?? null,
+                $validated['discount_percent'] ?? 0,
+                $validated['discount_amount'] ?? null
+            );
+
+            return QuotationItem::query()->create([
+                'quotation_id' => $quotation->getKey(),
+                'product_id' => $product?->getKey(),
+                'warehouse_id' => $warehouse?->getKey(),
+                'sku' => $validated['sku'] ?? $product?->sku,
+                'description' => $validated['description'],
+                'quantity' => $validated['quantity'],
+                'list_unit_price' => $pricing['list_unit_price'],
+                'discount_percent' => $pricing['discount_percent'],
+                'discount_amount' => $pricing['discount_amount'],
+                'net_unit_price' => $pricing['net_unit_price'],
+                'unit_price' => $pricing['net_unit_price'],
+                'unit_cost' => $pricing['unit_cost'],
+                'margin_amount' => $pricing['margin_amount'],
+                'margin_percent' => $pricing['margin_percent'],
+                'min_margin_percent' => $pricing['min_margin_percent'],
+                'below_min_margin' => $pricing['below_min_margin'],
+            ])->fresh(['quotation', 'product', 'warehouse']);
+        });
+    }
+
+    public function updateItem(string $itemUid, array $data): QuotationItem
+    {
+        $item = $this->getItemByUid($itemUid);
+        $validated = $this->validateItem($data, true);
+
+        return DB::transaction(function () use ($item, $validated) {
+            $payload = [];
+            $product = $item->product;
+
+            if (array_key_exists('product_uid', $validated)) {
+                $product = $this->resolveProduct($validated['product_uid']);
+                $payload['product_id'] = $product?->getKey();
+            }
+
+            if (array_key_exists('warehouse_uid', $validated)) {
+                $payload['warehouse_id'] = $this->resolveWarehouse($validated['warehouse_uid'])?->getKey();
+            }
+
+            foreach (['sku', 'description', 'quantity'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $payload[$field] = $validated[$field];
+                }
+            }
+
+            if (array_key_exists('quantity', $validated) && $item->reserved_quantity > (int) $validated['quantity']) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['La cantidad no puede ser menor que el stock ya reservado'],
+                ]);
+            }
+
+            if (
+                array_key_exists('quantity', $validated)
+                || array_key_exists('product_uid', $validated)
+                || array_key_exists('unit_price', $validated)
+                || array_key_exists('discount_percent', $validated)
+                || array_key_exists('discount_amount', $validated)
+            ) {
+                $quotation = $item->quotation ?? $this->getByUid($item->quotation_uid);
+                $quantity = (int) ($validated['quantity'] ?? $item->quantity);
+                $pricing = $this->buildPricingPayload(
+                    $quotation->priceBook,
+                    $product,
+                    $quantity,
+                    $validated['unit_price'] ?? null,
+                    $validated['discount_percent'] ?? (float) $item->discount_percent,
+                    $validated['discount_amount'] ?? null
+                );
+
+                $payload = array_merge($payload, [
+                    'list_unit_price' => $pricing['list_unit_price'],
+                    'discount_percent' => $pricing['discount_percent'],
+                    'discount_amount' => $pricing['discount_amount'],
+                    'net_unit_price' => $pricing['net_unit_price'],
+                    'unit_price' => $pricing['net_unit_price'],
+                    'unit_cost' => $pricing['unit_cost'],
+                    'margin_amount' => $pricing['margin_amount'],
+                    'margin_percent' => $pricing['margin_percent'],
+                    'min_margin_percent' => $pricing['min_margin_percent'],
+                    'below_min_margin' => $pricing['below_min_margin'],
+                ]);
+            }
+
+            $item->update($payload);
+
+            return $item->fresh(['quotation', 'product', 'warehouse']);
+        });
+    }
+
+    public function deleteItem(string $itemUid): void
+    {
+        $item = $this->getItemByUid($itemUid);
+
+        if ($item->reserved_quantity > 0) {
+            throw ValidationException::withMessages([
+                'item' => ['No puedes eliminar un item con stock reservado activo'],
+            ]);
+        }
+
+        $item->delete();
+    }
+
+    public function reserveItemStock(string $itemUid, array $data): array
+    {
+        $item = $this->getItemByUid($itemUid);
+        $validated = Validator::make($data, [
+            'quantity' => 'required|integer|min:1',
+            'comment' => 'nullable|string',
+        ])->validate();
+
+        if (!$item->product_id || !$item->warehouse_id) {
+            throw ValidationException::withMessages([
+                'item' => ['El item debe tener producto y bodega para reservar stock'],
+            ]);
+        }
+
+        $remaining = $item->quantity - $item->reserved_quantity;
+
+        if ((int) $validated['quantity'] > $remaining) {
+            throw ValidationException::withMessages([
+                'quantity' => ['La reserva excede la cantidad pendiente del item de cotizacion'],
+            ]);
+        }
+
+        $result = $this->inventoryService->reserveStock([
+            'product_uid' => $item->product_uid,
+            'warehouse_uid' => $item->warehouse_uid,
+            'quantity' => (int) $validated['quantity'],
+            'source_type' => 'quotation_item',
+            'source_uid' => $item->uid,
+            'comment' => $validated['comment'] ?? null,
+        ]);
+
+        return [
+            'quotation_uid' => $item->quotation_uid,
+            'item' => $item->fresh(['quotation', 'product', 'warehouse']),
+            'reservation' => $result['reservation'],
+            'preview' => $result['preview'],
+        ];
+    }
+
+    public function releaseItemReservation(string $itemUid, string $reservationUid): array
+    {
+        $item = $this->getItemByUid($itemUid);
+        $reservation = InventoryReservation::query()
+            ->where('uid', $reservationUid)
+            ->where('source_type', 'quotation_item')
+            ->where('source_uid', $item->uid)
+            ->firstOrFail();
+
+        $result = $this->inventoryService->releaseReservation($reservation->uid);
+
+        return [
+            'quotation_uid' => $item->quotation_uid,
+            'item' => $item->fresh(['quotation', 'product', 'warehouse']),
+            'reservation' => $result['reservation'],
+            'preview' => $result['preview'],
+        ];
+    }
+
+    private function validateQuotation(array $data, bool $partial = false): array
+    {
+        $validator = Validator::make($data, [
+            'quote_number' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'status' => 'sometimes|string|in:draft,sent,approved,rejected,cancelled',
+            'currency' => 'nullable|string|max:10',
+            'valid_until' => 'nullable|date',
+            'notes' => 'nullable|string',
+            'price_book_uid' => 'nullable|uuid',
+            'entity_type' => 'nullable|string',
+            'entity_uid' => 'nullable|uuid',
+        ]);
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator);
+        }
+
+        $validated = $validator->validated();
+
+        if (!empty($validated['entity_type']) xor !empty($validated['entity_uid'])) {
+            throw ValidationException::withMessages([
+                'entity_uid' => ['Debes enviar entity_type y entity_uid juntos'],
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function validateItem(array $data, bool $partial = false): array
+    {
+        $validator = Validator::make($data, [
+            'product_uid' => 'nullable|uuid',
+            'warehouse_uid' => 'nullable|uuid',
+            'sku' => 'nullable|string|max:255',
+            'description' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'quantity' => [$partial ? 'sometimes' : 'required', 'integer', 'min:1'],
+            'unit_price' => 'sometimes|numeric|min:0',
+            'discount_percent' => 'sometimes|numeric|min:0|max:100',
+            'discount_amount' => 'sometimes|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator);
+        }
+
+        $validated = $validator->validated();
+
+        if (!empty($validated['warehouse_uid']) && empty($validated['product_uid']) && !$partial) {
+            throw ValidationException::withMessages([
+                'product_uid' => ['Debes asociar un producto si vas a definir bodega'],
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function resolveQuoteable(?string $type, ?string $uid)
+    {
+        if (!$type && !$uid) {
+            return null;
+        }
+
+        $entity = find_entity_by_uid($type, $uid);
+
+        if (!$entity) {
+            throw ValidationException::withMessages([
+                'entity_uid' => ['La entidad comercial no existe o no es visible'],
+            ]);
+        }
+
+        return $entity;
+    }
+
+    private function resolveProduct(?string $uid): ?InventoryProduct
+    {
+        if (!$uid) {
+            return null;
+        }
+
+        return InventoryProduct::query()->where('uid', $uid)->firstOr(function () {
+            throw ValidationException::withMessages([
+                'product_uid' => ['El producto no existe o no pertenece a este tenant'],
+            ]);
+        });
+    }
+
+    private function resolveWarehouse(?string $uid): ?Warehouse
+    {
+        if (!$uid) {
+            return null;
+        }
+
+        return Warehouse::query()->where('uid', $uid)->firstOr(function () {
+            throw ValidationException::withMessages([
+                'warehouse_uid' => ['La bodega no existe o no pertenece a este tenant'],
+            ]);
+        });
+    }
+
+    private function getItemByUid(string $uid): QuotationItem
+    {
+        return QuotationItem::query()->with(['quotation', 'product', 'warehouse'])->where('uid', $uid)->firstOrFail();
+    }
+
+    private function resolvePriceBook(?string $uid): ?PriceBook
+    {
+        if (!$uid) {
+            return null;
+        }
+
+        return $this->priceBookService->resolveActivePriceBook($uid);
+    }
+
+    private function buildPricingPayload(
+        ?PriceBook $priceBook,
+        ?InventoryProduct $product,
+        int $quantity,
+        ?float $manualUnitPrice,
+        float $discountPercent,
+        ?float $manualDiscountAmount
+    ): array {
+        $listPrice = $manualUnitPrice ?? 0;
+        $minMarginPercent = 0;
+        $unitCost = (float) ($product?->cost_price ?? 0);
+
+        if ($priceBook && $product) {
+            $priceBookItem = $this->priceBookService->getItemForProduct($priceBook, $product);
+
+            if (!$priceBookItem) {
+                throw ValidationException::withMessages([
+                    'product_uid' => ['El producto no existe en la lista de precios seleccionada'],
+                ]);
+            }
+
+            $listPrice = $manualUnitPrice ?? (float) $priceBookItem->unit_price;
+            $minMarginPercent = (float) $priceBookItem->min_margin_percent;
+        }
+
+        $discountAmount = $manualDiscountAmount ?? round($listPrice * ($discountPercent / 100), 2);
+        $netUnitPrice = max(0, round($listPrice - $discountAmount, 2));
+        $marginAmount = round($netUnitPrice - $unitCost, 2);
+        $marginPercent = $netUnitPrice > 0 ? round(($marginAmount / $netUnitPrice) * 100, 2) : 0;
+
+        return [
+            'list_unit_price' => $listPrice,
+            'discount_percent' => $discountPercent,
+            'discount_amount' => $discountAmount,
+            'net_unit_price' => $netUnitPrice,
+            'unit_cost' => $unitCost,
+            'margin_amount' => $marginAmount,
+            'margin_percent' => $marginPercent,
+            'min_margin_percent' => $minMarginPercent,
+            'below_min_margin' => $marginPercent < $minMarginPercent,
+            'quantity' => $quantity,
+        ];
+    }
+}
