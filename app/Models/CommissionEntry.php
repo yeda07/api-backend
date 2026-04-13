@@ -18,6 +18,7 @@ class CommissionEntry extends Model
         'quotation_id',
         'quotation_item_id',
         'financial_record_id',
+        'commission_run_id',
         'customer_type',
         'base_amount',
         'rate_percent',
@@ -36,6 +37,7 @@ class CommissionEntry extends Model
         'quotation_id',
         'quotation_item_id',
         'financial_record_id',
+        'commission_run_id',
     ];
 
     protected $appends = [
@@ -44,6 +46,7 @@ class CommissionEntry extends Model
         'quotation_uid',
         'quotation_item_uid',
         'financial_record_uid',
+        'commission_run_uid',
     ];
 
     protected $casts = [
@@ -80,6 +83,11 @@ class CommissionEntry extends Model
         return $this->belongsTo(FinancialRecord::class);
     }
 
+    public function commissionRun()
+    {
+        return $this->belongsTo(CommissionRun::class);
+    }
+
     public function getUserUidAttribute()
     {
         return $this->user?->uid
@@ -108,5 +116,11 @@ class CommissionEntry extends Model
     {
         return $this->financialRecord?->uid
             ?? ($this->financial_record_id ? FinancialRecord::query()->whereKey($this->financial_record_id)->value('uid') : null);
+    }
+
+    public function getCommissionRunUidAttribute()
+    {
+        return $this->commissionRun?->uid
+            ?? ($this->commission_run_id ? CommissionRun::query()->whereKey($this->commission_run_id)->value('uid') : null);
     }
 }

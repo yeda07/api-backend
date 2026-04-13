@@ -16,7 +16,9 @@ class QuotationService
 {
     public function __construct(
         private readonly InventoryService $inventoryService,
-        private readonly PriceBookService $priceBookService
+        private readonly PriceBookService $priceBookService,
+        private readonly PricingService $pricingService,
+        private readonly CreditService $creditService
     )
     {
     }
@@ -38,6 +40,9 @@ class QuotationService
         return DB::transaction(function () use ($validated) {
             $quoteable = $this->resolveQuoteable($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
             $priceBook = $this->resolvePriceBook($validated['price_book_uid'] ?? null);
+            if ($quoteable) {
+                $this->creditService->ensureCanOperate($quoteable);
+            }
 
             $quotation = Quotation::query()->create([
                 'owner_user_id' => $quoteable?->owner_user_id ?? auth()->id(),
@@ -49,6 +54,8 @@ class QuotationService
                 'title' => $validated['title'],
                 'status' => $validated['status'] ?? 'draft',
                 'currency' => $validated['currency'] ?? null,
+                'exchange_rate' => $validated['exchange_rate'] ?? 1,
+                'local_currency' => $validated['local_currency'] ?? (auth()->user()?->tenant?->currency?->code ?? 'COP'),
                 'valid_until' => $validated['valid_until'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
@@ -64,8 +71,9 @@ class QuotationService
 
         return DB::transaction(function () use ($quotation, $validated) {
             $payload = [];
+            $previousStatus = $quotation->status;
 
-            foreach (['quote_number', 'title', 'status', 'currency', 'valid_until', 'notes'] as $field) {
+            foreach (['quote_number', 'title', 'status', 'currency', 'exchange_rate', 'local_currency', 'valid_until', 'notes'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $payload[$field] = $validated[$field];
                 }
@@ -86,7 +94,17 @@ class QuotationService
                 $quotation->update($payload);
             }
 
-            return $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+            $quotation = $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+            if ($quotation->quoteable) {
+                $this->creditService->ensureCanOperate($quotation->quoteable);
+            }
+
+            if (($payload['status'] ?? null) === 'approved' && $previousStatus !== 'approved') {
+                $this->reservePendingQuotationStock($quotation);
+                $quotation = $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+            }
+
+            return $quotation;
         });
     }
 
@@ -274,6 +292,8 @@ class QuotationService
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'status' => 'sometimes|string|in:draft,sent,approved,rejected,cancelled',
             'currency' => 'nullable|string|max:10',
+            'exchange_rate' => 'sometimes|numeric|min:0.000001',
+            'local_currency' => 'nullable|string|max:10',
             'valid_until' => 'nullable|date',
             'notes' => 'nullable|string',
             'price_book_uid' => 'nullable|uuid',
@@ -394,13 +414,7 @@ class QuotationService
         $unitCost = (float) ($product?->cost_price ?? 0);
 
         if ($priceBook && $product) {
-            $priceBookItem = $this->priceBookService->getItemForProduct($priceBook, $product);
-
-            if (!$priceBookItem) {
-                throw ValidationException::withMessages([
-                    'product_uid' => ['El producto no existe en la lista de precios seleccionada'],
-                ]);
-            }
+            $priceBookItem = $this->pricingService->resolveProductPrice($priceBook, $product);
 
             $listPrice = $manualUnitPrice ?? (float) $priceBookItem->unit_price;
             $minMarginPercent = (float) $priceBookItem->min_margin_percent;
@@ -423,5 +437,31 @@ class QuotationService
             'below_min_margin' => $marginPercent < $minMarginPercent,
             'quantity' => $quantity,
         ];
+    }
+
+    private function reservePendingQuotationStock(Quotation $quotation): void
+    {
+        foreach ($quotation->items as $item) {
+            $pendingQuantity = max(0, (int) $item->quantity - (int) $item->reserved_quantity);
+
+            if ($pendingQuantity === 0) {
+                continue;
+            }
+
+            if (!$item->product_id || !$item->warehouse_id) {
+                throw ValidationException::withMessages([
+                    'quotation' => ['Todos los items deben tener producto y bodega para aprobar y reservar stock'],
+                ]);
+            }
+
+            $this->inventoryService->reserveStock([
+                'product_uid' => $item->product_uid,
+                'warehouse_uid' => $item->warehouse_uid,
+                'quantity' => $pendingQuantity,
+                'source_type' => 'quotation_item',
+                'source_uid' => $item->uid,
+                'comment' => 'Reserva automatica por aprobacion de cotizacion',
+            ]);
+        }
     }
 }

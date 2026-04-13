@@ -16,6 +16,7 @@ class PriceBookItem extends Model
         'price_book_id',
         'product_id',
         'unit_price',
+        'currency',
         'min_margin_percent',
     ];
 

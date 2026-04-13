@@ -7,8 +7,11 @@ use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\CommissionEntry;
 use App\Models\CommissionRule;
+use App\Models\CostCenter;
 use App\Models\CustomField;
+use App\Models\Invoice;
 use App\Models\Permission;
+use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\Relation;
 use App\Models\Role;
@@ -22,15 +25,20 @@ use App\Models\InventoryReservation;
 use App\Models\InventoryStock;
 use App\Models\Interaction;
 use App\Models\PriceBook;
+use App\Models\Opportunity;
+use App\Models\OpportunityStage;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\PurchaseOrderPayment;
+use App\Services\QuotationPdfMail;
 use App\Services\TwoFactorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -1832,6 +1840,88 @@ class PublicUidApiTest extends TestCase
             ->assertJsonPath('data.reservation.status', 'released');
     }
 
+    public function test_inventory_reservations_are_controlled_consumable_and_list_movements(): void
+    {
+        $user = $this->authenticate([
+            'inventory.read',
+            'inventory.manage',
+            'inventory.reserve',
+            'accounts.read',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Principal',
+            'code' => 'BOD-CONSUME',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-CONSUME-01',
+            'name' => 'Producto Reservable',
+            'reorder_point' => 2,
+        ]);
+
+        InventoryStock::create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 10,
+            'reserved_stock' => 0,
+        ]);
+
+        $firstReserve = $this->postJson('/api/inventory/reservations', [
+            'product_uid' => $product->uid,
+            'warehouse_uid' => $warehouse->uid,
+            'quantity' => 2,
+            'source_type' => 'quotation_item',
+            'source_uid' => 'quote-item-001',
+        ]);
+
+        $reservationUid = $firstReserve->json('data.reservation.uid');
+
+        $secondReserve = $this->postJson('/api/inventory/reservations', [
+            'product_uid' => $product->uid,
+            'warehouse_uid' => $warehouse->uid,
+            'quantity' => 3,
+            'source_type' => 'quotation_item',
+            'source_uid' => 'quote-item-001',
+        ]);
+
+        $secondReserve->assertCreated()
+            ->assertJsonPath('data.reservation.uid', $reservationUid)
+            ->assertJsonPath('data.reservation.quantity', 5);
+
+        $this->assertDatabaseCount('inventory_reservations', 1);
+
+        $availabilityResponse = $this->getJson('/api/inventory/availability?product_uid=' . $product->uid);
+        $availabilityResponse->assertOk()
+            ->assertJsonPath('data.summary.physical_stock', 10)
+            ->assertJsonPath('data.summary.reserved_stock', 5)
+            ->assertJsonPath('data.summary.available_stock', 5);
+
+        $consumeResponse = $this->postJson("/api/inventory/reservations/{$reservationUid}/consume", [
+            'reference_type' => 'sale',
+            'reference_uid' => 'sale-001',
+            'comment' => 'Venta confirmada',
+        ]);
+
+        $consumeResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.reservation.status', 'consumed')
+            ->assertJsonPath('data.preview.projected_physical_stock', 5)
+            ->assertJsonPath('data.preview.projected_reserved_stock', 0);
+
+        $movementsResponse = $this->getJson('/api/inventory/movements?reference_type=sale&reference_uid=sale-001');
+        $movementsResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.data.0.type', 'reservation_consume')
+            ->assertJsonPath('data.data.0.product_uid', $product->uid);
+    }
+
     public function test_inventory_transfer_updates_multi_warehouse_stock(): void
     {
         $user = $this->authenticate(['inventory.read', 'inventory.manage', 'inventory.reserve', 'inventory.report']);
@@ -2047,6 +2137,164 @@ class PublicUidApiTest extends TestCase
             ->assertJsonPath('data.item.reserved_quantity', 0);
     }
 
+    public function test_approved_quotation_auto_reserves_pending_stock(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'inventory.read',
+            'inventory.manage',
+            'inventory.reserve',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Auto Reserva',
+            'document' => '901000099',
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Auto',
+            'code' => 'AUTO-01',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-AUTO-01',
+            'name' => 'Producto Auto',
+            'reorder_point' => 1,
+        ]);
+
+        InventoryStock::create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 6,
+            'reserved_stock' => 0,
+        ]);
+
+        $quotationResponse = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-AUTO-001',
+            'title' => 'Cotizacion aprobable',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+        ]);
+
+        $quotationUid = $quotationResponse->json('data.uid');
+
+        $itemResponse = $this->postJson("/api/quotations/{$quotationUid}/items", [
+            'product_uid' => $product->uid,
+            'warehouse_uid' => $warehouse->uid,
+            'description' => 'Producto reservado al aprobar',
+            'quantity' => 4,
+            'unit_price' => 100,
+        ]);
+
+        $itemUid = $itemResponse->json('data.uid');
+
+        $approveResponse = $this->putJson("/api/quotations/{$quotationUid}", [
+            'status' => 'approved',
+        ]);
+
+        $approveResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.reservation_indicator', 'reserved');
+
+        $sourceResponse = $this->getJson("/api/inventory/reservations/source/quotation_item/{$itemUid}");
+        $sourceResponse->assertOk()
+            ->assertJsonPath('data.totals.reserved_units', 4)
+            ->assertJsonPath('data.totals.active_reservations', 1);
+    }
+
+    public function test_quotation_pdf_can_be_downloaded_and_sent_by_email(): void
+    {
+        Mail::fake();
+
+        $user = $this->authenticate([
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'accounts.read',
+            'accounts.create',
+            'price-books.read',
+            'price-books.manage',
+            'inventory.read',
+            'inventory.manage',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente PDF',
+            'document' => '901000020',
+            'email' => 'cliente.pdf@example.com',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-PDF-01',
+            'name' => 'Servicio PDF',
+            'cost_price' => 40,
+        ]);
+
+        $priceBook = PriceBook::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Lista PDF',
+            'key' => 'lista-pdf',
+            'channel' => 'B2B',
+            'is_active' => true,
+        ]);
+
+        $priceBook->items()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'unit_price' => 120,
+            'min_margin_percent' => 10,
+        ]);
+
+        $quotationResponse = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-PDF-001',
+            'title' => 'Cotizacion PDF',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'price_book_uid' => $priceBook->uid,
+            'currency' => 'COP',
+        ]);
+
+        $quotationUid = $quotationResponse->json('data.uid');
+
+        $this->postJson("/api/quotations/{$quotationUid}/items", [
+            'product_uid' => $product->uid,
+            'description' => 'Servicio empresarial',
+            'quantity' => 2,
+        ])->assertCreated();
+
+        $downloadResponse = $this->get("/api/quotations/{$quotationUid}/pdf");
+
+        $downloadResponse->assertOk();
+        $this->assertSame('application/pdf', $downloadResponse->headers->get('content-type'));
+        $this->assertStringContainsString('cotizacion-COT-PDF-001.pdf', (string) $downloadResponse->headers->get('content-disposition'));
+        $this->assertStringStartsWith('%PDF-', $downloadResponse->getContent());
+
+        $sendResponse = $this->postJson("/api/quotations/{$quotationUid}/send", [
+            'message' => 'Adjunto encuentras la cotizacion para aprobacion.',
+        ]);
+
+        $sendResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.recipient_email', 'cliente.pdf@example.com')
+            ->assertJsonPath('data.quotation.status', 'sent');
+
+        Mail::assertSent(QuotationPdfMail::class, function ($mail) use ($account) {
+            return $mail->hasTo($account->email)
+                && $mail->quotation->quote_number === 'COT-PDF-001';
+        });
+    }
+
     public function test_quotation_routes_require_permissions(): void
     {
         $this->authenticate([]);
@@ -2056,12 +2304,20 @@ class PublicUidApiTest extends TestCase
             'quote_number' => 'COT-0002',
             'title' => 'Sin permiso',
         ]);
+        $pdfResponse = $this->getJson('/api/quotations/test/pdf');
+        $sendResponse = $this->postJson('/api/quotations/test/send', []);
 
         $indexResponse->assertStatus(403)
             ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: quotations.read');
 
         $storeResponse->assertStatus(403)
             ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: quotations.create');
+
+        $pdfResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: quotations.read');
+
+        $sendResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: quotations.update');
     }
 
     public function test_price_book_and_cpq_pricing_flow_calculates_discount_and_margin(): void
@@ -2316,6 +2572,1259 @@ class PublicUidApiTest extends TestCase
             ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: commissions.manage');
     }
 
+    public function test_commission_plans_assignments_simulation_dashboard_and_runs_work(): void
+    {
+        $user = $this->authenticate([
+            'commissions.read',
+            'commissions.manage',
+            'price-books.read',
+            'price-books.manage',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'inventory.read',
+            'inventory.manage',
+            'accounts.read',
+        ]);
+
+        $seller = User::factory()->create([
+            'tenant_id' => $user->tenant_id,
+            'manager_id' => $user->getKey(),
+        ]);
+
+        $planResponse = $this->postJson('/api/commissions/plans', [
+            'name' => 'Plan Escalonado',
+            'type' => 'sale',
+            'base_percent' => 5,
+            'tiers_json' => [
+                ['threshold' => 1000, 'percent' => 7],
+            ],
+            'active' => true,
+        ]);
+
+        $planResponse->assertCreated()
+            ->assertJsonPath('data.type', 'sale')
+            ->assertJsonPath('data.base_percent', '5.00');
+
+        $planUid = $planResponse->json('data.uid');
+
+        $assignmentResponse = $this->postJson('/api/commissions/assignments', [
+            'user_uid' => $seller->uid,
+            'commission_plan_uid' => $planUid,
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'active' => true,
+        ]);
+
+        $assignmentResponse->assertCreated()
+            ->assertJsonPath('data.user_uid', $seller->uid)
+            ->assertJsonPath('data.commission_plan_uid', $planUid);
+
+        $targetResponse = $this->postJson('/api/commissions/targets', [
+            'user_uid' => $seller->uid,
+            'period' => now()->format('Y-m'),
+            'target_amount' => 2000,
+        ]);
+
+        $targetResponse->assertCreated()
+            ->assertJsonPath('data.user_uid', $seller->uid)
+            ->assertJsonPath('data.target_amount', '2000.00');
+
+        $simulateResponse = $this->postJson('/api/commissions/simulate', [
+            'user_uid' => $seller->uid,
+            'sale_amount' => 1500,
+            'period' => now()->format('Y-m'),
+        ]);
+
+        $simulateResponse->assertOk()
+            ->assertJsonPath('data.applied_percent', 7)
+            ->assertJsonPath('data.commission_amount', 105);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Comision Plan',
+            'document' => '901000100',
+            'owner_user_id' => $seller->getKey(),
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-COM-PLAN',
+            'name' => 'Licencia Pro',
+            'cost_price' => 40,
+        ]);
+
+        $priceBook = PriceBook::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'B2B Plan',
+            'key' => 'b2b-plan',
+            'channel' => 'B2B',
+            'is_active' => true,
+        ]);
+
+        $priceBook->items()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'unit_price' => 100,
+            'min_margin_percent' => 10,
+        ]);
+
+        $quotationResponse = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-COM-PLAN-001',
+            'title' => 'Cotizacion para plan',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'price_book_uid' => $priceBook->uid,
+        ]);
+
+        $quotationUid = $quotationResponse->json('data.uid');
+
+        $this->postJson("/api/quotations/{$quotationUid}/items", [
+            'product_uid' => $product->uid,
+            'description' => 'Licencia Pro anual',
+            'quantity' => 10,
+            'discount_percent' => 0,
+        ])->assertCreated();
+
+        $recordResponse = $this->postJson('/api/commissions/financial-records', [
+            'quotation_uid' => $quotationUid,
+            'record_type' => 'invoice_paid',
+            'external_reference' => 'FAC-COM-PLAN-001',
+            'amount' => 1000,
+            'currency' => 'COP',
+            'paid_at' => now()->toDateString(),
+        ]);
+
+        $recordResponse->assertCreated()
+            ->assertJsonPath('data.summary.entries_count', 1)
+            ->assertJsonPath('data.summary.commission_total', 70)
+            ->assertJsonPath('data.commission_entries.0.rate_percent', '7.00')
+            ->assertJsonPath('data.commission_entries.0.user_uid', $seller->uid);
+
+        $dashboardResponse = $this->getJson("/api/commissions/dashboard/{$seller->uid}");
+        $dashboardResponse->assertOk()
+            ->assertJsonPath('data.monthly_target', 2000)
+            ->assertJsonPath('data.sales_achieved', 1000)
+            ->assertJsonPath('data.projected_commission', 70)
+            ->assertJsonPath('data.active_assignment.commission_plan_uid', $planUid);
+
+        $runResponse = $this->postJson('/api/commissions/runs', [
+            'user_uid' => $seller->uid,
+            'period_start' => now()->startOfMonth()->toDateString(),
+            'period_end' => now()->endOfMonth()->toDateString(),
+        ]);
+
+        $runResponse->assertCreated()
+            ->assertJsonPath('data.sales_amount', '1000.00')
+            ->assertJsonPath('data.commission_amount', '70.00')
+            ->assertJsonPath('data.status', 'pending');
+
+        $runUid = $runResponse->json('data.uid');
+
+        $this->postJson("/api/commissions/runs/{$runUid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->postJson("/api/commissions/runs/{$runUid}/pay", [
+            'paid_at' => now()->toDateString(),
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'paid');
+
+        $entriesResponse = $this->getJson('/api/commissions/entries?user_uid=' . $seller->uid);
+        $entriesResponse->assertOk()
+            ->assertJsonPath('data.0.status', 'paid');
+    }
+
+    public function test_opportunity_pipeline_supports_stages_board_and_summary(): void
+    {
+        $user = $this->authenticate([
+            'opportunities.read',
+            'opportunities.manage',
+            'accounts.read',
+            'accounts.create',
+        ]);
+
+        $prospectingStage = $this->postJson('/api/opportunities/stages', [
+            'name' => 'Prospecting',
+            'key' => 'prospecting',
+            'position' => 1,
+            'probability_percent' => 10,
+        ]);
+
+        $wonStage = $this->postJson('/api/opportunities/stages', [
+            'name' => 'Won',
+            'key' => 'won',
+            'position' => 2,
+            'probability_percent' => 100,
+            'is_won' => true,
+        ]);
+
+        $prospectingUid = $prospectingStage->json('data.uid');
+        $wonUid = $wonStage->json('data.uid');
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Pipeline',
+            'document' => '901000004',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $opportunityResponse = $this->postJson('/api/opportunities', [
+            'stage_uid' => $prospectingUid,
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'title' => 'Renovacion anual',
+            'amount' => 25000,
+            'currency' => 'COP',
+            'expected_close_date' => now()->addMonth()->toDateString(),
+        ]);
+
+        $opportunityUid = $opportunityResponse->json('data.uid');
+
+        $opportunityResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.stage_uid', $prospectingUid)
+            ->assertJsonPath('data.opportunityable_uid', $account->uid)
+            ->assertJsonPath('data.amount', '25000.00');
+
+        $boardResponse = $this->getJson('/api/opportunities/board');
+        $boardResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.stages.0.summary.count', 1)
+            ->assertJsonPath('data.stages.0.summary.amount', 25000);
+
+        $updateResponse = $this->putJson("/api/opportunities/{$opportunityUid}", [
+            'stage_uid' => $wonUid,
+        ]);
+
+        $updateResponse->assertOk()
+            ->assertJsonPath('data.stage_uid', $wonUid);
+
+        $summaryResponse = $this->getJson('/api/opportunities/summary');
+        $summaryResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.totals.count', 1)
+            ->assertJsonPath('data.totals.won_count', 1)
+            ->assertJsonPath('data.by_stage.1.count', 1);
+    }
+
+    public function test_opportunity_routes_require_permissions(): void
+    {
+        $this->authenticate([]);
+
+        $boardResponse = $this->getJson('/api/opportunities/board');
+        $storeResponse = $this->postJson('/api/opportunities', [
+            'title' => 'Sin permiso',
+        ]);
+
+        $boardResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: opportunities.read');
+
+        $storeResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: opportunities.manage');
+    }
+
+    public function test_financial_operations_import_and_customer_summary_work(): void
+    {
+        $user = $this->authenticate([
+            'finance.read',
+            'finance.manage',
+            'accounts.read',
+            'accounts.create',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Finanzas',
+            'document' => '901000005',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $invoiceResponse = $this->postJson('/api/finance/import', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'record_type' => 'invoice_open',
+            'source_system' => 'quickbooks',
+            'external_reference' => 'INV-1001',
+            'amount' => 1000,
+            'outstanding_amount' => 1000,
+            'currency' => 'COP',
+            'issued_at' => now()->subDays(10)->toDateString(),
+            'due_at' => now()->subDay()->toDateString(),
+            'status' => 'overdue',
+        ]);
+
+        $invoiceResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.financeable_uid', $account->uid)
+            ->assertJsonPath('data.source_system', 'quickbooks')
+            ->assertJsonPath('data.status', 'overdue');
+
+        $paymentResponse = $this->postJson('/api/finance/import', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'record_type' => 'collection_received',
+            'source_system' => 'quickbooks',
+            'external_reference' => 'PAY-1001',
+            'amount' => 600,
+            'outstanding_amount' => 0,
+            'currency' => 'COP',
+            'paid_at' => now()->toDateString(),
+            'status' => 'paid',
+        ]);
+
+        $paymentResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.financeable_uid', $account->uid)
+            ->assertJsonPath('data.status', 'paid');
+
+        $recordsResponse = $this->getJson('/api/finance/records?entity_type=account&entity_uid=' . $account->uid);
+        $recordsResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(2, 'data');
+
+        $summaryResponse = $this->getJson("/api/finance/customer/account/{$account->uid}/summary");
+        $summaryResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.entity_uid', $account->uid)
+            ->assertJsonPath('data.totals.invoiced', 1000)
+            ->assertJsonPath('data.totals.paid', 600)
+            ->assertJsonPath('data.totals.outstanding', 1000)
+            ->assertJsonPath('data.totals.overdue', 1000)
+            ->assertJsonPath('data.counts.records', 2)
+            ->assertJsonPath('data.counts.overdue', 1);
+
+        $dashboardResponse = $this->getJson('/api/finance/dashboard');
+        $dashboardResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.totals.paid', 600)
+            ->assertJsonPath('data.totals.outstanding', 1000)
+            ->assertJsonPath('data.totals.overdue', 1000);
+    }
+
+    public function test_finance_routes_require_permissions(): void
+    {
+        $this->authenticate([]);
+
+        $recordsResponse = $this->getJson('/api/finance/records');
+        $importResponse = $this->postJson('/api/finance/import', []);
+        $invoiceResponse = $this->postJson('/api/finance/invoices', []);
+        $paymentResponse = $this->postJson('/api/finance/payments', []);
+
+        $recordsResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: finance.read');
+
+        $importResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: finance.manage');
+
+        $invoiceResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: finance.manage');
+
+        $paymentResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: finance.manage');
+    }
+
+    public function test_finance_module_supports_credit_quotes_invoices_and_payments(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'accounts.create',
+            'accounts.update',
+            'inventory.read',
+            'inventory.manage',
+            'inventory.reserve',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'price-books.read',
+            'price-books.manage',
+            'finance.read',
+            'finance.manage',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Financiero',
+            'document' => '901000080',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Finanzas',
+            'code' => 'FIN-01',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-FIN-01',
+            'name' => 'Producto Finanzas',
+            'cost_price' => 50,
+            'reorder_point' => 0,
+        ]);
+
+        InventoryStock::create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 10,
+            'reserved_stock' => 0,
+        ]);
+
+        $priceBookResponse = $this->postJson('/api/price-books', [
+            'name' => 'Lista B2G USD',
+            'key' => 'lista-b2g-usd',
+            'channel' => 'B2G',
+            'items' => [
+                [
+                    'product_uid' => $product->uid,
+                    'unit_price' => 100,
+                    'currency' => 'USD',
+                    'min_margin_percent' => 10,
+                ],
+            ],
+        ]);
+
+        $priceBookUid = $priceBookResponse->json('data.uid');
+
+        $this->putJson("/api/finance/credit/account/{$account->uid}", [
+            'credit_limit' => 5000,
+            'status' => 'ok',
+        ])->assertOk()
+            ->assertJsonPath('data.creditable_uid', $account->uid);
+
+        $quotationResponse = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-FIN-001',
+            'title' => 'Cotizacion financiera',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'price_book_uid' => $priceBookUid,
+            'currency' => 'USD',
+            'exchange_rate' => 4000,
+            'local_currency' => 'COP',
+        ]);
+
+        $quotationUid = $quotationResponse->json('data.uid');
+
+        $quotationResponse->assertCreated()
+            ->assertJsonPath('data.currency', 'USD')
+            ->assertJsonPath('data.local_currency', 'COP');
+
+        $itemResponse = $this->postJson("/api/quotations/{$quotationUid}/items", [
+            'product_uid' => $product->uid,
+            'warehouse_uid' => $warehouse->uid,
+            'description' => 'Producto financiero',
+            'quantity' => 2,
+            'discount_percent' => 10,
+        ]);
+
+        $itemResponse->assertCreated()
+            ->assertJsonPath('data.list_unit_price', '100.00')
+            ->assertJsonPath('data.net_unit_price', '90.00');
+
+        $this->putJson("/api/quotations/{$quotationUid}", [
+            'status' => 'approved',
+        ])->assertOk();
+
+        $invoiceResponse = $this->postJson('/api/finance/invoices', [
+            'quotation_uid' => $quotationUid,
+            'invoice_number' => 'FAC-0001',
+            'currency' => 'COP',
+            'exchange_rate' => 4000,
+        ]);
+
+        $invoiceUid = $invoiceResponse->json('data.uid');
+
+        $invoiceResponse->assertCreated()
+            ->assertJsonPath('data.currency', 'COP')
+            ->assertJsonPath('data.quote_currency', 'USD')
+            ->assertJsonPath('data.total', '720000.00')
+            ->assertJsonPath('data.outstanding_total', '720000.00')
+            ->assertJsonPath('data.status', 'issued');
+
+        $partialPayment = $this->postJson('/api/finance/payments', [
+            'invoice_uid' => $invoiceUid,
+            'amount' => 200000,
+            'payment_date' => now()->toDateString(),
+            'method' => 'transfer',
+        ]);
+
+        $partialPayment->assertCreated()
+            ->assertJsonPath('data.invoice.status', 'partial')
+            ->assertJsonPath('data.invoice.outstanding_total', '520000.00');
+
+        $finalPayment = $this->postJson('/api/finance/payments', [
+            'invoice_uid' => $invoiceUid,
+            'amount' => 520000,
+            'payment_date' => now()->toDateString(),
+            'method' => 'cash',
+        ]);
+
+        $finalPayment->assertCreated()
+            ->assertJsonPath('data.invoice.status', 'paid')
+            ->assertJsonPath('data.invoice.outstanding_total', '0.00');
+
+        $creditSummary = $this->getJson("/api/finance/credit/account/{$account->uid}");
+        $creditSummary->assertOk()
+            ->assertJsonPath('data.entity_uid', $account->uid)
+            ->assertJsonPath('data.credit_limit', 5000)
+            ->assertJsonPath('data.outstanding_total', 0);
+
+        $this->postJson('/api/finance/import', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'record_type' => 'invoice_open',
+            'source_system' => 'external_accounting',
+            'external_reference' => 'EXT-OVD-001',
+            'amount' => 100,
+            'outstanding_amount' => 100,
+            'currency' => 'COP',
+            'issued_at' => now()->subDays(20)->toDateString(),
+            'due_at' => now()->subDay()->toDateString(),
+            'status' => 'overdue',
+        ])->assertCreated();
+
+        $blockedQuote = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-BLOCK-001',
+            'title' => 'Debe bloquear',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'price_book_uid' => $priceBookUid,
+            'currency' => 'USD',
+        ]);
+
+        $blockedQuote->assertStatus(422)
+            ->assertJsonValidationErrors(['credit']);
+    }
+
+    public function test_finance_alerts_sync_overdue_and_credit_blocks_invoice_creation(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'accounts.create',
+            'inventory.read',
+            'inventory.manage',
+            'inventory.reserve',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'finance.read',
+            'finance.manage',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Riesgo',
+            'document' => '901000081',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Riesgo',
+            'code' => 'FIN-RISK',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-FIN-02',
+            'name' => 'Producto Riesgo',
+            'cost_price' => 30,
+            'reorder_point' => 0,
+        ]);
+
+        InventoryStock::create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 5,
+            'reserved_stock' => 0,
+        ]);
+
+        $quoteResponse = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-RISK-001',
+            'title' => 'Cotizacion facturable',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'currency' => 'COP',
+        ]);
+
+        $quoteUid = $quoteResponse->json('data.uid');
+
+        $this->postJson("/api/quotations/{$quoteUid}/items", [
+            'product_uid' => $product->uid,
+            'warehouse_uid' => $warehouse->uid,
+            'description' => 'Item riesgo',
+            'quantity' => 2,
+            'unit_price' => 100,
+        ])->assertCreated();
+
+        $this->putJson("/api/quotations/{$quoteUid}", [
+            'status' => 'approved',
+        ])->assertOk();
+
+        $invoiceResponse = $this->postJson('/api/finance/invoices', [
+            'quotation_uid' => $quoteUid,
+            'invoice_number' => 'FAC-RISK-001',
+            'currency' => 'COP',
+            'due_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $invoiceUid = $invoiceResponse->json('data.uid');
+
+        $invoiceResponse->assertCreated()
+            ->assertJsonPath('data.status', 'issued');
+
+        $syncResponse = $this->postJson('/api/finance/sync-overdue');
+        $syncResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.updated_invoices', 1);
+
+        $alertsResponse = $this->getJson('/api/finance/alerts');
+        $alertsResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.summary.overdue_invoices_count', 1)
+            ->assertJsonPath('data.summary.customers_at_risk_count', 1)
+            ->assertJsonPath('data.overdue_invoices.0.external_reference', 'FAC-RISK-001')
+            ->assertJsonPath('data.customer_risk.0.entity_uid', $account->uid)
+            ->assertJsonPath('data.customer_risk.0.risk_level', 'high');
+
+        $secondQuote = $this->postJson('/api/quotations', [
+            'quote_number' => 'COT-RISK-002',
+            'title' => 'Debe bloquear por mora',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'currency' => 'COP',
+        ]);
+
+        $secondQuote->assertStatus(422)
+            ->assertJsonValidationErrors(['credit']);
+
+        $blockedInvoice = $this->postJson('/api/finance/invoices', [
+            'quotation_uid' => $quoteUid,
+            'invoice_number' => 'FAC-RISK-002',
+            'currency' => 'COP',
+        ]);
+
+        $blockedInvoice->assertStatus(422)
+            ->assertJsonValidationErrors(['credit']);
+    }
+
+    public function test_f1_finance_dashboard_currency_and_quote_aliases_work(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'accounts.create',
+            'inventory.read',
+            'inventory.manage',
+            'inventory.reserve',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'finance.read',
+            'finance.manage',
+            'price-books.read',
+            'price-books.manage',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente F1',
+            'document' => '901000082',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega F1',
+            'code' => 'F1-01',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-F1-01',
+            'name' => 'Producto F1',
+            'cost_price' => 70,
+            'reorder_point' => 0,
+        ]);
+
+        InventoryStock::create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 8,
+            'reserved_stock' => 0,
+        ]);
+
+        $this->postJson('/api/currency/rates', [
+            'from_currency' => 'USD',
+            'to_currency' => 'COP',
+            'rate' => 4100,
+            'rate_date' => now()->toDateString(),
+        ])->assertCreated();
+
+        $convertResponse = $this->postJson('/api/currency/convert', [
+            'amount' => 100,
+            'from_currency' => 'USD',
+            'to_currency' => 'COP',
+        ]);
+
+        $convertResponse->assertOk()
+            ->assertJsonPath('data.rate', 4100)
+            ->assertJsonPath('data.converted_amount', 410000);
+
+        $priceBookResponse = $this->postJson('/api/price-books', [
+            'name' => 'Lista F1 B2G',
+            'key' => 'lista-f1-b2g',
+            'channel' => 'B2G',
+            'items' => [
+                [
+                    'product_uid' => $product->uid,
+                    'unit_price' => 150,
+                    'currency' => 'USD',
+                    'min_margin_percent' => 20,
+                ],
+            ],
+        ]);
+
+        $priceBookUid = $priceBookResponse->json('data.uid');
+
+        $quoteResponse = $this->postJson('/api/quotes', [
+            'quote_number' => 'QUOTE-F1-001',
+            'title' => 'Quote alias',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'price_book_uid' => $priceBookUid,
+            'currency' => 'USD',
+            'exchange_rate' => 4100,
+            'local_currency' => 'COP',
+        ]);
+
+        $quoteUid = $quoteResponse->json('data.uid');
+
+        $quoteResponse->assertCreated()
+            ->assertJsonPath('data.currency', 'USD');
+
+        $this->postJson("/api/quotes/{$quoteUid}/items", [
+            'product_uid' => $product->uid,
+            'warehouse_uid' => $warehouse->uid,
+            'description' => 'Item alias',
+            'quantity' => 2,
+            'discount_percent' => 10,
+        ])->assertCreated();
+
+        $this->postJson("/api/quotes/{$quoteUid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $convertInvoice = $this->postJson("/api/quotes/{$quoteUid}/convert", [
+            'invoice_number' => 'FAC-F1-001',
+            'currency' => 'COP',
+            'exchange_rate' => 4100,
+        ]);
+
+        $invoiceUid = $convertInvoice->json('data.uid');
+
+        $convertInvoice->assertCreated()
+            ->assertJsonPath('data.status', 'issued');
+
+        $this->postJson('/api/payments', [
+            'invoice_uid' => $invoiceUid,
+            'amount' => 100000,
+            'payment_date' => now()->toDateString(),
+            'method' => 'transfer',
+        ])->assertCreated();
+
+        $paymentHistory = $this->getJson("/api/payments/{$invoiceUid}");
+        $paymentHistory->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $dashboard = $this->getJson('/api/finance/dashboard');
+        $dashboard->assertOk()
+            ->assertJsonPath('data.monthly_sales', 1107000)
+            ->assertJsonPath('data.pending_invoices.count', 1)
+            ->assertJsonPath('data.average_margin', 48.15);
+    }
+
+    public function test_expenses_and_purchase_orders_work_with_profitability_and_inventory_receipt(): void
+    {
+        $user = $this->authenticate([
+            'expenses.read',
+            'expenses.manage',
+            'expenses.report',
+            'purchases.read',
+            'purchases.manage',
+            'inventory.read',
+            'inventory.manage',
+            'finance.read',
+            'finance.manage',
+            'accounts.read',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Gastos',
+            'document' => '901000200',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $categoryResponse = $this->postJson('/api/expenses/categories', [
+            'name' => 'Viaticos',
+            'key' => 'viaticos',
+        ]);
+
+        $categoryUid = $categoryResponse->json('data.uid');
+
+        $supplierResponse = $this->postJson('/api/expenses/suppliers', [
+            'name' => 'Proveedor Industrial',
+            'email' => 'proveedor@example.com',
+        ]);
+
+        $supplierUid = $supplierResponse->json('data.uid');
+
+        $expenseResponse = $this->postJson('/api/expenses', [
+            'expense_category_uid' => $categoryUid,
+            'supplier_uid' => $supplierUid,
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'cost_center' => 'ventas-b2b',
+            'title' => 'Visita comercial',
+            'amount' => 250,
+            'currency' => 'COP',
+            'expense_date' => now()->toDateString(),
+            'status' => 'approved',
+        ]);
+
+        $expenseResponse->assertCreated()
+            ->assertJsonPath('data.expense_category_uid', $categoryUid)
+            ->assertJsonPath('data.supplier_uid', $supplierUid)
+            ->assertJsonPath('data.expenseable_uid', $account->uid);
+
+        $this->postJson('/api/finance/import', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'record_type' => 'invoice_paid',
+            'source_system' => 'external_accounting',
+            'external_reference' => 'FAC-GASTO-001',
+            'amount' => 1000,
+            'outstanding_amount' => 0,
+            'currency' => 'COP',
+            'issued_at' => now()->toDateString(),
+            'paid_at' => now()->toDateString(),
+            'status' => 'paid',
+        ])->assertCreated();
+
+        $reportResponse = $this->getJson('/api/expenses/report?entity_type=account&entity_uid=' . $account->uid);
+        $reportResponse->assertOk()
+            ->assertJsonPath('data.summary.income_total', 1000)
+            ->assertJsonPath('data.summary.expense_total', 250)
+            ->assertJsonPath('data.summary.real_margin', 750);
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Principal Compras',
+            'code' => 'BOD-COMP-01',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-PO-001',
+            'name' => 'Router Empresarial',
+            'cost_price' => 80,
+        ]);
+
+        $orderResponse = $this->postJson('/api/purchases/orders', [
+            'supplier_uid' => $supplierUid,
+            'purchase_number' => 'OC-0001',
+            'currency' => 'COP',
+            'items' => [
+                [
+                    'product_uid' => $product->uid,
+                    'warehouse_uid' => $warehouse->uid,
+                    'description' => 'Router Empresarial',
+                    'quantity' => 5,
+                    'unit_cost' => 80,
+                ],
+            ],
+        ]);
+
+        $orderUid = $orderResponse->json('data.uid');
+
+        $orderResponse->assertCreated()
+            ->assertJsonPath('data.purchase_number', 'OC-0001')
+            ->assertJsonPath('data.total', 400);
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $receiveResponse = $this->postJson("/api/purchases/orders/{$orderUid}/receive");
+        $receiveResponse->assertOk()
+            ->assertJsonPath('data.status', 'received')
+            ->assertJsonPath('data.items.0.received_quantity', 5);
+
+        $stocksResponse = $this->getJson("/api/inventory/warehouses/{$warehouse->uid}/stocks");
+        $stocksResponse->assertOk()
+            ->assertJsonPath('data.data.0.stock_physical_total', 5);
+    }
+
+    public function test_expense_and_purchase_routes_require_permissions(): void
+    {
+        $this->authenticate([]);
+
+        $expenseResponse = $this->getJson('/api/expenses');
+        $purchaseResponse = $this->postJson('/api/purchases/orders', []);
+
+        $expenseResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: expenses.read');
+
+        $purchaseResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: purchases.manage');
+    }
+
+    public function test_cost_centers_partial_receipts_and_purchase_payables_work(): void
+    {
+        $user = $this->authenticate([
+            'expenses.read',
+            'expenses.manage',
+            'purchases.read',
+            'purchases.manage',
+            'inventory.read',
+            'inventory.manage',
+        ]);
+
+        $costCenterResponse = $this->postJson('/api/expenses/cost-centers', [
+            'name' => 'Implementacion',
+            'key' => 'implementacion',
+        ]);
+
+        $costCenterUid = $costCenterResponse->json('data.uid');
+
+        $costCenterResponse->assertCreated()
+            ->assertJsonPath('data.name', 'Implementacion');
+
+        $supplierResponse = $this->postJson('/api/expenses/suppliers', [
+            'name' => 'Proveedor Parcial',
+            'contact_name' => 'Laura Proveedor',
+            'payment_terms_days' => 15,
+        ]);
+
+        $supplierUid = $supplierResponse->json('data.uid');
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Parcial',
+            'code' => 'BOD-PARCIAL',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-PO-PARCIAL',
+            'name' => 'Switch Parcial',
+            'cost_price' => 100,
+        ]);
+
+        $orderResponse = $this->postJson('/api/purchases/orders', [
+            'supplier_uid' => $supplierUid,
+            'cost_center_uid' => $costCenterUid,
+            'purchase_number' => 'OC-PARCIAL-001',
+            'currency' => 'COP',
+            'items' => [
+                [
+                    'product_uid' => $product->uid,
+                    'warehouse_uid' => $warehouse->uid,
+                    'description' => 'Switch Parcial',
+                    'quantity' => 10,
+                    'unit_cost' => 100,
+                ],
+            ],
+        ]);
+
+        $orderUid = $orderResponse->json('data.uid');
+        $itemUid = $orderResponse->json('data.items.0.uid');
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved')
+            ->assertJsonPath('data.due_date', now()->addDays(15)->startOfDay()->utc()->format('Y-m-d\TH:i:s.000000\Z'));
+
+        $partialReceipt = $this->postJson("/api/purchases/orders/{$orderUid}/receive-partial", [
+            'items' => [
+                [
+                    'item_uid' => $itemUid,
+                    'received_quantity' => 4,
+                ],
+            ],
+        ]);
+
+        $partialReceipt->assertOk()
+            ->assertJsonPath('data.status', 'partial_received')
+            ->assertJsonPath('data.items.0.received_quantity', 4)
+            ->assertJsonPath('data.cost_center_uid', $costCenterUid);
+
+        $stocksResponse = $this->getJson("/api/inventory/warehouses/{$warehouse->uid}/stocks");
+        $stocksResponse->assertOk()
+            ->assertJsonPath('data.data.0.stock_physical_total', 4);
+
+        $paymentResponse = $this->postJson("/api/purchases/orders/{$orderUid}/payments", [
+            'amount' => 300,
+            'payment_date' => now()->toDateString(),
+            'method' => 'transfer',
+            'reference' => 'PAY-PO-001',
+        ]);
+
+        $paymentResponse->assertCreated()
+            ->assertJsonPath('data.status', 'partial_paid')
+            ->assertJsonPath('data.paid_total', '300.00')
+            ->assertJsonPath('data.outstanding_total', 700);
+
+        $this->assertDatabaseHas('purchase_order_payments', [
+            'reference' => 'PAY-PO-001',
+            'amount' => 300,
+        ]);
+
+        $payablesResponse = $this->getJson('/api/purchases/payables');
+        $payablesResponse->assertOk()
+            ->assertJsonPath('data.summary.orders_count', 1)
+            ->assertJsonPath('data.summary.outstanding_total', 700)
+            ->assertJsonPath('data.by_supplier.0.supplier', 'Proveedor Parcial')
+            ->assertJsonPath('data.orders.0.uid', $orderUid)
+            ->assertJsonPath('data.orders.0.cost_center_uid', $costCenterUid);
+    }
+
+    public function test_purchase_order_payment_cannot_exceed_outstanding_total(): void
+    {
+        $user = $this->authenticate([
+            'expenses.read',
+            'expenses.manage',
+            'purchases.read',
+            'purchases.manage',
+        ]);
+
+        $supplier = $this->postJson('/api/expenses/suppliers', [
+            'name' => 'Proveedor Saldo',
+        ])->json('data.uid');
+
+        $orderUid = $this->postJson('/api/purchases/orders', [
+            'supplier_uid' => $supplier,
+            'purchase_number' => 'OC-SALDO-001',
+            'currency' => 'COP',
+            'items' => [
+                [
+                    'description' => 'Servicio tecnico',
+                    'quantity' => 1,
+                    'unit_cost' => 500,
+                ],
+            ],
+        ])->json('data.uid');
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/approve")->assertOk();
+
+        $response = $this->postJson("/api/purchases/orders/{$orderUid}/payments", [
+            'amount' => 600,
+            'payment_date' => now()->toDateString(),
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['amount']);
+    }
+
+    public function test_purchase_order_receipts_are_logged_across_multiple_events_and_close_when_fully_paid(): void
+    {
+        $user = $this->authenticate([
+            'expenses.read',
+            'expenses.manage',
+            'purchases.read',
+            'purchases.manage',
+            'inventory.read',
+            'inventory.manage',
+        ]);
+
+        $supplierUid = $this->postJson('/api/expenses/suppliers', [
+            'name' => 'Proveedor Eventos',
+            'payment_terms_days' => 5,
+        ])->json('data.uid');
+
+        $warehouse = Warehouse::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Eventos',
+            'code' => 'BOD-EVT',
+        ]);
+
+        $product = InventoryProduct::create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-PO-EVT',
+            'name' => 'Firewall Evento',
+            'cost_price' => 200,
+        ]);
+
+        $orderResponse = $this->postJson('/api/purchases/orders', [
+            'supplier_uid' => $supplierUid,
+            'purchase_number' => 'OC-EVT-001',
+            'currency' => 'COP',
+            'items' => [
+                [
+                    'product_uid' => $product->uid,
+                    'warehouse_uid' => $warehouse->uid,
+                    'description' => 'Firewall Evento',
+                    'quantity' => 6,
+                    'unit_cost' => 200,
+                ],
+            ],
+        ]);
+
+        $orderUid = $orderResponse->json('data.uid');
+        $itemUid = $orderResponse->json('data.items.0.uid');
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/approve")->assertOk();
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/receive-partial", [
+            'receipt_date' => now()->subDay()->toDateString(),
+            'reference' => 'REC-001',
+            'comment' => 'Primera entrega',
+            'items' => [
+                [
+                    'item_uid' => $itemUid,
+                    'received_quantity' => 2,
+                ],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'partial_received')
+            ->assertJsonPath('data.items.0.pending_quantity', 4);
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/receive-partial", [
+            'receipt_date' => now()->toDateString(),
+            'reference' => 'REC-002',
+            'comment' => 'Entrega final',
+            'items' => [
+                [
+                    'item_uid' => $itemUid,
+                    'received_quantity' => 4,
+                ],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'received')
+            ->assertJsonPath('data.items.0.received_quantity', 6)
+            ->assertJsonPath('data.received_total', 6)
+            ->assertJsonPath('data.is_fully_received', true);
+
+        $receiptsResponse = $this->getJson("/api/purchases/orders/{$orderUid}/receipts");
+        $receiptsResponse->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.reference', 'REC-002')
+            ->assertJsonPath('data.1.reference', 'REC-001');
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/payments", [
+            'amount' => 1200,
+            'payment_date' => now()->toDateString(),
+            'method' => 'transfer',
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.outstanding_total', 0);
+
+        $showResponse = $this->getJson("/api/purchases/orders/{$orderUid}");
+        $showResponse->assertOk()
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.is_closed', true);
+
+        $this->assertNotNull($showResponse->json('data.closed_at'));
+    }
+
+    public function test_purchase_orders_can_link_to_customer_and_profitability_report_combines_income_expenses_and_purchases(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'expenses.read',
+            'expenses.manage',
+            'expenses.report',
+            'purchases.read',
+            'purchases.manage',
+            'finance.read',
+            'finance.manage',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Rentable',
+            'document' => '901000300',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $categoryUid = $this->postJson('/api/expenses/categories', [
+            'name' => 'Logistica',
+            'key' => 'logistica',
+        ])->json('data.uid');
+
+        $supplierUid = $this->postJson('/api/expenses/suppliers', [
+            'name' => 'Proveedor Cliente',
+        ])->json('data.uid');
+
+        $this->postJson('/api/expenses', [
+            'expense_category_uid' => $categoryUid,
+            'supplier_uid' => $supplierUid,
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'title' => 'Transporte',
+            'amount' => 100,
+            'currency' => 'COP',
+            'expense_date' => now()->toDateString(),
+            'status' => 'approved',
+        ])->assertCreated();
+
+        $orderResponse = $this->postJson('/api/purchases/orders', [
+            'supplier_uid' => $supplierUid,
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'purchase_number' => 'OC-CLI-001',
+            'currency' => 'COP',
+            'items' => [
+                [
+                    'description' => 'Equipos para cliente',
+                    'quantity' => 3,
+                    'unit_cost' => 100,
+                ],
+            ],
+        ]);
+
+        $orderUid = $orderResponse->json('data.uid');
+
+        $orderResponse->assertCreated()
+            ->assertJsonPath('data.source_uid', $account->uid);
+
+        $this->postJson("/api/purchases/orders/{$orderUid}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->postJson('/api/finance/import', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'record_type' => 'invoice_paid',
+            'source_system' => 'external_accounting',
+            'external_reference' => 'FAC-CLI-001',
+            'amount' => 1000,
+            'outstanding_amount' => 0,
+            'currency' => 'COP',
+            'issued_at' => now()->toDateString(),
+            'paid_at' => now()->toDateString(),
+            'status' => 'paid',
+        ])->assertCreated();
+
+        $ordersByEntity = $this->getJson('/api/purchases/orders?entity_type=account&entity_uid=' . $account->uid);
+        $ordersByEntity->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $orderUid);
+
+        $profitabilityResponse = $this->getJson('/api/expenses/profitability?entity_type=account&entity_uid=' . $account->uid);
+        $profitabilityResponse->assertOk()
+            ->assertJsonPath('data.summary.entity_uid', $account->uid)
+            ->assertJsonPath('data.summary.income_total', 1000)
+            ->assertJsonPath('data.summary.expense_total', 100)
+            ->assertJsonPath('data.summary.purchase_total', 300)
+            ->assertJsonPath('data.summary.operational_cost_total', 400)
+            ->assertJsonPath('data.summary.real_margin', 600)
+            ->assertJsonPath('data.purchase_orders.0.uid', $orderUid);
+    }
+
     private function authenticate(?array $permissionKeys = null): User
     {
         $tenant = Tenant::create([
@@ -2373,11 +3882,20 @@ class PublicUidApiTest extends TestCase
             'price-books.manage',
             'commissions.read',
             'commissions.manage',
+            'opportunities.read',
+            'opportunities.manage',
+            'finance.read',
+            'finance.manage',
             'custom-fields.manage',
             'logs.read',
             'metrics.read',
             'plans.manage',
             'users.manage',
+            'expenses.read',
+            'expenses.manage',
+            'expenses.report',
+            'purchases.read',
+            'purchases.manage',
         ];
 
         $this->grantPermissions($user, $permissionKeys);

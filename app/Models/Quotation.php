@@ -23,6 +23,8 @@ class Quotation extends Model
         'title',
         'status',
         'currency',
+        'exchange_rate',
+        'local_currency',
         'valid_until',
         'notes',
     ];
@@ -50,6 +52,7 @@ class Quotation extends Model
 
     protected $casts = [
         'valid_until' => 'date',
+        'exchange_rate' => 'decimal:6',
     ];
 
     public function owner()

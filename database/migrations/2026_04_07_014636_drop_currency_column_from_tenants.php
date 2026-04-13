@@ -8,15 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('tenants', function (Blueprint $table) {
-            $table->dropColumn('currency'); // 🔥 elimina la columna conflictiva
-        });
+        if (Schema::hasColumn('tenants', 'currency')) {
+            Schema::table('tenants', function (Blueprint $table) {
+                $table->dropColumn('currency');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('tenants', function (Blueprint $table) {
-            $table->string('currency')->nullable(); // 🔄 rollback seguro
-        });
+        if (!Schema::hasColumn('tenants', 'currency')) {
+            Schema::table('tenants', function (Blueprint $table) {
+                $table->string('currency')->nullable();
+            });
+        }
     }
 };

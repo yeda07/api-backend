@@ -110,13 +110,14 @@ class PriceBookService
         $validator = Validator::make($data, [
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'key' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
-            'channel' => 'sometimes|string|in:B2B,B2C',
+            'channel' => 'sometimes|string|in:B2B,B2C,B2G',
             'is_active' => 'sometimes|boolean',
             'valid_from' => 'nullable|date',
             'valid_until' => 'nullable|date',
             'items' => 'sometimes|array',
             'items.*.product_uid' => 'required_with:items|uuid',
             'items.*.unit_price' => 'required_with:items|numeric|min:0',
+            'items.*.currency' => 'nullable|string|max:10',
             'items.*.min_margin_percent' => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -147,6 +148,7 @@ class PriceBookService
                 ],
                 [
                     'unit_price' => $item['unit_price'],
+                    'currency' => $item['currency'] ?? 'COP',
                     'min_margin_percent' => $item['min_margin_percent'] ?? 0,
                 ]
             );

@@ -13,6 +13,46 @@ class CommissionController extends Controller
     {
     }
 
+    public function plans()
+    {
+        return $this->successResponse($this->commissionService->plans());
+    }
+
+    public function storePlan(Request $request)
+    {
+        return $this->wrap(fn () => $this->commissionService->createPlan($request->all()), 'Plan de comision creado', 201);
+    }
+
+    public function updatePlan(Request $request, string $uid)
+    {
+        return $this->wrap(fn () => $this->commissionService->updatePlan($uid, $request->all()), 'Plan de comision actualizado');
+    }
+
+    public function assignments(Request $request)
+    {
+        return $this->successResponse($this->commissionService->assignments($request->query()));
+    }
+
+    public function storeAssignment(Request $request)
+    {
+        return $this->wrap(fn () => $this->commissionService->createAssignment($request->all()), 'Asignacion de comision creada', 201);
+    }
+
+    public function updateAssignment(Request $request, string $uid)
+    {
+        return $this->wrap(fn () => $this->commissionService->updateAssignment($uid, $request->all()), 'Asignacion de comision actualizada');
+    }
+
+    public function targets(Request $request)
+    {
+        return $this->successResponse($this->commissionService->targets($request->query('user_uid')));
+    }
+
+    public function storeTarget(Request $request)
+    {
+        return $this->wrap(fn () => $this->commissionService->upsertTarget($request->all()), 'Meta de comision guardada', 201);
+    }
+
     public function rules()
     {
         return $this->successResponse($this->commissionService->rules());
@@ -20,46 +60,26 @@ class CommissionController extends Controller
 
     public function storeRule(Request $request)
     {
-        try {
-            return $this->successResponse($this->commissionService->createRule($request->all()), 201, 'Regla de comision creada');
-        } catch (ValidationException $e) {
-            return $this->errorResponse('Validation error', 422, $e->errors());
-        } catch (\Throwable $e) {
-            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
-        }
+        return $this->wrap(fn () => $this->commissionService->createRule($request->all()), 'Regla de comision creada', 201);
     }
 
     public function updateRule(Request $request, string $uid)
     {
-        try {
-            return $this->successResponse($this->commissionService->updateRule($uid, $request->all()), 200, 'Regla de comision actualizada');
-        } catch (ValidationException $e) {
-            return $this->errorResponse('Validation error', 422, $e->errors());
-        } catch (\Throwable $e) {
-            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
-        }
+        return $this->wrap(fn () => $this->commissionService->updateRule($uid, $request->all()), 'Regla de comision actualizada');
     }
 
     public function destroyRule(string $uid)
     {
-        try {
+        return $this->wrap(function () use ($uid) {
             $this->commissionService->deleteRule($uid);
 
-            return $this->successResponse(null, 200, 'Regla de comision eliminada');
-        } catch (\Throwable $e) {
-            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
-        }
+            return null;
+        }, 'Regla de comision eliminada');
     }
 
     public function recordFinancialEvent(Request $request)
     {
-        try {
-            return $this->successResponse($this->commissionService->recordFinancialEvent($request->all()), 201, 'Recaudo registrado');
-        } catch (ValidationException $e) {
-            return $this->errorResponse('Validation error', 422, $e->errors());
-        } catch (\Throwable $e) {
-            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
-        }
+        return $this->wrap(fn () => $this->commissionService->recordFinancialEvent($request->all()), 'Recaudo registrado', 201);
     }
 
     public function entries(Request $request)
@@ -69,21 +89,52 @@ class CommissionController extends Controller
 
     public function payEntry(Request $request, string $uid)
     {
-        try {
-            return $this->successResponse(
-                $this->commissionService->payEntry($uid, $request->input('paid_at')),
-                200,
-                'Comision marcada como pagada'
-            );
-        } catch (ValidationException $e) {
-            return $this->errorResponse('Validation error', 422, $e->errors());
-        } catch (\Throwable $e) {
-            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
-        }
+        return $this->wrap(fn () => $this->commissionService->payEntry($uid, $request->input('paid_at')), 'Comision marcada como pagada');
     }
 
     public function mySummary()
     {
         return $this->successResponse($this->commissionService->mySummary());
+    }
+
+    public function dashboard(string $userUid)
+    {
+        return $this->successResponse($this->commissionService->dashboard($userUid));
+    }
+
+    public function simulate(Request $request)
+    {
+        return $this->wrap(fn () => $this->commissionService->simulate($request->all()));
+    }
+
+    public function runs(Request $request)
+    {
+        return $this->successResponse($this->commissionService->runs($request->query()));
+    }
+
+    public function storeRun(Request $request)
+    {
+        return $this->wrap(fn () => $this->commissionService->createRun($request->all()), 'Liquidacion de comision creada', 201);
+    }
+
+    public function approveRun(string $uid)
+    {
+        return $this->wrap(fn () => $this->commissionService->approveRun($uid), 'Liquidacion aprobada');
+    }
+
+    public function payRun(Request $request, string $uid)
+    {
+        return $this->wrap(fn () => $this->commissionService->payRun($uid, $request->input('paid_at')), 'Liquidacion pagada');
+    }
+
+    private function wrap(\Closure $callback, ?string $message = null, int $status = 200)
+    {
+        try {
+            return $this->successResponse($callback(), $status, $message);
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
     }
 }

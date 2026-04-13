@@ -214,6 +214,36 @@ class InventoryService
         ];
     }
 
+    public function availability(array $filters): array
+    {
+        $validated = Validator::make($filters, [
+            'product_uid' => 'nullable|uuid',
+            'warehouse_uid' => 'nullable|uuid',
+        ])->validate();
+
+        $product = !empty($validated['product_uid']) ? $this->getProductByUid($validated['product_uid']) : null;
+        $warehouse = !empty($validated['warehouse_uid']) ? $this->getWarehouseByUid($validated['warehouse_uid']) : null;
+
+        $stocks = InventoryStock::query()
+            ->with(['product', 'warehouse'])
+            ->when($product, fn ($query) => $query->where('product_id', $product->getKey()))
+            ->when($warehouse, fn ($query) => $query->where('warehouse_id', $warehouse->getKey()))
+            ->get();
+
+        return [
+            'filters' => [
+                'product_uid' => $product?->uid,
+                'warehouse_uid' => $warehouse?->uid,
+            ],
+            'data' => $stocks,
+            'summary' => [
+                'physical_stock' => (int) $stocks->sum('physical_stock'),
+                'reserved_stock' => (int) $stocks->sum('reserved_stock'),
+                'available_stock' => (int) $stocks->sum(fn (InventoryStock $stock) => $stock->available_stock),
+            ],
+        ];
+    }
+
     public function adjustStock(array $data): array
     {
         $validated = Validator::make($data, [
@@ -305,19 +335,38 @@ class InventoryService
                 ]);
             }
 
-            $reservation = InventoryReservation::query()->create([
-                'product_id' => $product->getKey(),
-                'warehouse_id' => $warehouse->getKey(),
-                'reserved_by_user_id' => auth()->id(),
-                'source_type' => $validated['source_type'],
-                'source_uid' => $validated['source_uid'],
-                'quantity' => (int) $validated['quantity'],
-                'comment' => $validated['comment'] ?? null,
-                'status' => 'active',
-                'meta' => [
-                    'preview' => $preview,
-                ],
-            ]);
+            $reservation = InventoryReservation::query()
+                ->where('product_id', $product->getKey())
+                ->where('warehouse_id', $warehouse->getKey())
+                ->where('source_type', $validated['source_type'])
+                ->where('source_uid', $validated['source_uid'])
+                ->where('status', 'active')
+                ->first();
+
+            if ($reservation) {
+                $reservation->update([
+                    'quantity' => (int) $reservation->quantity + (int) $validated['quantity'],
+                    'comment' => $validated['comment'] ?? $reservation->comment,
+                    'meta' => array_merge($reservation->meta ?? [], [
+                        'preview' => $preview,
+                        'controlled_merge' => true,
+                    ]),
+                ]);
+            } else {
+                $reservation = InventoryReservation::query()->create([
+                    'product_id' => $product->getKey(),
+                    'warehouse_id' => $warehouse->getKey(),
+                    'reserved_by_user_id' => auth()->id(),
+                    'source_type' => $validated['source_type'],
+                    'source_uid' => $validated['source_uid'],
+                    'quantity' => (int) $validated['quantity'],
+                    'comment' => $validated['comment'] ?? null,
+                    'status' => 'active',
+                    'meta' => [
+                        'preview' => $preview,
+                    ],
+                ]);
+            }
 
             $stock->increment('reserved_stock', (int) $validated['quantity']);
 
@@ -383,6 +432,87 @@ class InventoryService
         });
     }
 
+    public function consumeReservation(string $uid, array $data = []): array
+    {
+        $validated = Validator::make($data, [
+            'reference_type' => 'nullable|string|max:255',
+            'reference_uid' => 'nullable|string|max:255',
+            'comment' => 'nullable|string',
+        ])->validate();
+
+        return DB::transaction(function () use ($uid, $validated) {
+            $reservation = InventoryReservation::query()->with(['product', 'warehouse', 'reservedBy'])->where('uid', $uid)->firstOrFail();
+
+            if ($reservation->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'reservation' => ['La reserva ya no esta activa'],
+                ]);
+            }
+
+            $stock = InventoryStock::query()
+                ->where('product_id', $reservation->product_id)
+                ->where('warehouse_id', $reservation->warehouse_id)
+                ->firstOrFail();
+
+            $physical = (int) $stock->physical_stock;
+            $reserved = (int) $stock->reserved_stock;
+            $quantity = (int) $reservation->quantity;
+
+            if ($physical < $quantity) {
+                throw ValidationException::withMessages([
+                    'reservation' => ['No hay stock fisico suficiente para consumir la reserva'],
+                ]);
+            }
+
+            if ($reserved < $quantity) {
+                throw ValidationException::withMessages([
+                    'reservation' => ['El stock reservado es inconsistente para consumir la reserva'],
+                ]);
+            }
+
+            $stock->update([
+                'physical_stock' => $physical - $quantity,
+                'reserved_stock' => $reserved - $quantity,
+            ]);
+
+            $reservation->update([
+                'status' => 'consumed',
+                'consumed_at' => now(),
+                'comment' => $validated['comment'] ?? $reservation->comment,
+            ]);
+
+            $movement = $this->recordMovement([
+                'product_id' => $reservation->product_id,
+                'from_warehouse_id' => $reservation->warehouse_id,
+                'type' => 'reservation_consume',
+                'quantity' => $quantity,
+                'comment' => $validated['comment'] ?? $reservation->comment,
+                'reference_type' => $validated['reference_type'] ?? $reservation->source_type,
+                'reference_uid' => $validated['reference_uid'] ?? $reservation->source_uid,
+                'meta' => [
+                    'reservation_uid' => $reservation->uid,
+                    'stock_actual' => $physical,
+                    'stock_reservado_actual' => $reserved,
+                    'projected_physical_stock' => $physical - $quantity,
+                    'projected_reserved_stock' => $reserved - $quantity,
+                ],
+            ]);
+
+            return [
+                'reservation' => $reservation->fresh(['product', 'warehouse', 'reservedBy']),
+                'movement' => $movement,
+                'preview' => [
+                    'stock_actual' => $physical,
+                    'stock_reservado_actual' => $reserved,
+                    'stock_disponible' => max(0, $physical - $reserved),
+                    'projected_physical_stock' => $physical - $quantity,
+                    'projected_reserved_stock' => $reserved - $quantity,
+                    'projected_available_stock' => max(0, ($physical - $quantity) - ($reserved - $quantity)),
+                ],
+            ];
+        });
+    }
+
     public function reservationsBySource(string $sourceType, string $sourceUid): array
     {
         $reservations = InventoryReservation::query()
@@ -400,6 +530,40 @@ class InventoryService
                 'reserved_units' => (int) $reservations->where('status', 'active')->sum('quantity'),
                 'active_reservations' => (int) $reservations->where('status', 'active')->count(),
             ],
+        ];
+    }
+
+    public function movements(array $filters): array
+    {
+        $validated = Validator::make($filters, [
+            'product_uid' => 'nullable|uuid',
+            'warehouse_uid' => 'nullable|uuid',
+            'reference_type' => 'nullable|string|max:255',
+            'reference_uid' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:255',
+        ])->validate();
+
+        $productId = !empty($validated['product_uid']) ? $this->getProductByUid($validated['product_uid'])->getKey() : null;
+        $warehouseId = !empty($validated['warehouse_uid']) ? $this->getWarehouseByUid($validated['warehouse_uid'])->getKey() : null;
+
+        $movements = InventoryMovement::query()
+            ->with(['product', 'fromWarehouse', 'toWarehouse', 'performedBy'])
+            ->when($productId, fn ($query) => $query->where('product_id', $productId))
+            ->when($warehouseId, function ($query) use ($warehouseId) {
+                $query->where(function ($nested) use ($warehouseId) {
+                    $nested->where('from_warehouse_id', $warehouseId)
+                        ->orWhere('to_warehouse_id', $warehouseId);
+                });
+            })
+            ->when(!empty($validated['reference_type']), fn ($query) => $query->where('reference_type', $validated['reference_type']))
+            ->when(!empty($validated['reference_uid']), fn ($query) => $query->where('reference_uid', $validated['reference_uid']))
+            ->when(!empty($validated['type']), fn ($query) => $query->where('type', $validated['type']))
+            ->latest()
+            ->get();
+
+        return [
+            'filters' => $validated,
+            'data' => $movements,
         ];
     }
 

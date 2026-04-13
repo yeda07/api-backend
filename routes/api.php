@@ -6,9 +6,12 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\CrmEntityController;
+use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\CustomFieldController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\ExpenseController;
+use App\Http\Controllers\Api\FinancialOperationsController;
 use App\Http\Controllers\Api\InventoryCategoryController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\InventoryProductController;
@@ -16,8 +19,11 @@ use App\Http\Controllers\Api\InventoryWarehouseController;
 use App\Http\Controllers\Api\InteractionController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\MetricsController;
+use App\Http\Controllers\Api\OpportunityController;
 use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\PriceBookController;
+use App\Http\Controllers\Api\PurchaseOrderController;
+use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\RelationController;
 use App\Http\Controllers\Api\SearchController;
@@ -152,10 +158,13 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('inventory')->group(function () {
         Route::get('/master', [InventoryController::class, 'master'])->middleware('permission:inventory.read');
+        Route::get('/availability', [InventoryController::class, 'availability'])->middleware('permission:inventory.read');
+        Route::get('/movements', [InventoryController::class, 'movements'])->middleware('permission:inventory.read');
         Route::post('/stocks/adjust', [InventoryController::class, 'adjust'])->middleware('permission:inventory.manage');
         Route::post('/reservations', [InventoryController::class, 'reserve'])->middleware('permission:inventory.reserve');
         Route::get('/reservations/source/{sourceType}/{sourceUid}', [InventoryController::class, 'reservationsBySource'])->middleware('permission:inventory.read');
         Route::delete('/reservations/{uid}', [InventoryController::class, 'releaseReservation'])->middleware('permission:inventory.reserve');
+        Route::post('/reservations/{uid}/consume', [InventoryController::class, 'consumeReservation'])->middleware('permission:inventory.reserve');
         Route::post('/movements/transfer', [InventoryController::class, 'transfer'])->middleware('permission:inventory.manage');
         Route::get('/report', [InventoryController::class, 'report'])->middleware('permission:inventory.report');
         Route::get('/report/export', [InventoryController::class, 'exportReport'])->middleware('permission:inventory.report');
@@ -186,13 +195,24 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('quotations')->group(function () {
         Route::get('/', [QuotationController::class, 'index'])->middleware('permission:quotations.read');
         Route::get('/{uid}', [QuotationController::class, 'show'])->middleware('permission:quotations.read');
+        Route::get('/{uid}/pdf', [QuotationController::class, 'downloadPdf'])->middleware('permission:quotations.read');
         Route::post('/', [QuotationController::class, 'store'])->middleware('permission:quotations.create');
         Route::put('/{uid}', [QuotationController::class, 'update'])->middleware('permission:quotations.update');
+        Route::post('/{uid}/send', [QuotationController::class, 'sendPdf'])->middleware('permission:quotations.update');
         Route::post('/{uid}/items', [QuotationController::class, 'addItem'])->middleware('permission:quotations.update');
         Route::put('/items/{itemUid}', [QuotationController::class, 'updateItem'])->middleware('permission:quotations.update');
         Route::delete('/items/{itemUid}', [QuotationController::class, 'destroyItem'])->middleware('permission:quotations.update');
         Route::post('/items/{itemUid}/reserve-stock', [QuotationController::class, 'reserveItemStock'])->middleware('permission:inventory.reserve');
         Route::delete('/items/{itemUid}/reservations/{reservationUid}', [QuotationController::class, 'releaseItemReservation'])->middleware('permission:inventory.reserve');
+    });
+
+    Route::prefix('quotes')->group(function () {
+        Route::get('/', [QuoteController::class, 'index'])->middleware('permission:quotations.read');
+        Route::post('/', [QuoteController::class, 'store'])->middleware('permission:quotations.create');
+        Route::post('/{uid}/items', [QuoteController::class, 'addItem'])->middleware('permission:quotations.update');
+        Route::post('/{uid}/approve', [QuoteController::class, 'approve'])->middleware('permission:quotations.update');
+        Route::post('/{uid}/reject', [QuoteController::class, 'reject'])->middleware('permission:quotations.update');
+        Route::post('/{uid}/convert', [QuoteController::class, 'convert'])->middleware('permission:finance.manage');
     });
 
     Route::prefix('price-books')->group(function () {
@@ -204,6 +224,14 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('commissions')->group(function () {
+        Route::get('/plans', [CommissionController::class, 'plans'])->middleware('permission:commissions.read');
+        Route::post('/plans', [CommissionController::class, 'storePlan'])->middleware('permission:commissions.manage');
+        Route::put('/plans/{uid}', [CommissionController::class, 'updatePlan'])->middleware('permission:commissions.manage');
+        Route::get('/assignments', [CommissionController::class, 'assignments'])->middleware('permission:commissions.read');
+        Route::post('/assignments', [CommissionController::class, 'storeAssignment'])->middleware('permission:commissions.manage');
+        Route::put('/assignments/{uid}', [CommissionController::class, 'updateAssignment'])->middleware('permission:commissions.manage');
+        Route::get('/targets', [CommissionController::class, 'targets'])->middleware('permission:commissions.read');
+        Route::post('/targets', [CommissionController::class, 'storeTarget'])->middleware('permission:commissions.manage');
         Route::get('/rules', [CommissionController::class, 'rules'])->middleware('permission:commissions.read');
         Route::post('/rules', [CommissionController::class, 'storeRule'])->middleware('permission:commissions.manage');
         Route::put('/rules/{uid}', [CommissionController::class, 'updateRule'])->middleware('permission:commissions.manage');
@@ -212,6 +240,85 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/entries', [CommissionController::class, 'entries'])->middleware('permission:commissions.read');
         Route::put('/entries/{uid}/pay', [CommissionController::class, 'payEntry'])->middleware('permission:commissions.manage');
         Route::get('/my-summary', [CommissionController::class, 'mySummary'])->middleware('permission:commissions.read');
+        Route::get('/dashboard/{userUid}', [CommissionController::class, 'dashboard'])->middleware('permission:commissions.read');
+        Route::post('/simulate', [CommissionController::class, 'simulate'])->middleware('permission:commissions.read');
+        Route::get('/runs', [CommissionController::class, 'runs'])->middleware('permission:commissions.read');
+        Route::post('/runs', [CommissionController::class, 'storeRun'])->middleware('permission:commissions.manage');
+        Route::post('/runs/{uid}/approve', [CommissionController::class, 'approveRun'])->middleware('permission:commissions.manage');
+        Route::post('/runs/{uid}/pay', [CommissionController::class, 'payRun'])->middleware('permission:commissions.manage');
+    });
+
+    Route::prefix('expenses')->group(function () {
+        Route::get('/categories', [ExpenseController::class, 'categories'])->middleware('permission:expenses.read');
+        Route::post('/categories', [ExpenseController::class, 'storeCategory'])->middleware('permission:expenses.manage');
+        Route::put('/categories/{uid}', [ExpenseController::class, 'updateCategory'])->middleware('permission:expenses.manage');
+        Route::delete('/categories/{uid}', [ExpenseController::class, 'destroyCategory'])->middleware('permission:expenses.manage');
+        Route::get('/suppliers', [ExpenseController::class, 'suppliers'])->middleware('permission:expenses.read');
+        Route::post('/suppliers', [ExpenseController::class, 'storeSupplier'])->middleware('permission:expenses.manage');
+        Route::put('/suppliers/{uid}', [ExpenseController::class, 'updateSupplier'])->middleware('permission:expenses.manage');
+        Route::delete('/suppliers/{uid}', [ExpenseController::class, 'destroySupplier'])->middleware('permission:expenses.manage');
+        Route::get('/cost-centers', [ExpenseController::class, 'costCenters'])->middleware('permission:expenses.read');
+        Route::post('/cost-centers', [ExpenseController::class, 'storeCostCenter'])->middleware('permission:expenses.manage');
+        Route::put('/cost-centers/{uid}', [ExpenseController::class, 'updateCostCenter'])->middleware('permission:expenses.manage');
+        Route::delete('/cost-centers/{uid}', [ExpenseController::class, 'destroyCostCenter'])->middleware('permission:expenses.manage');
+        Route::get('/report', [ExpenseController::class, 'report'])->middleware('permission:expenses.report');
+        Route::get('/profitability', [ExpenseController::class, 'profitability'])->middleware('permission:expenses.report');
+        Route::get('/', [ExpenseController::class, 'index'])->middleware('permission:expenses.read');
+        Route::post('/', [ExpenseController::class, 'store'])->middleware('permission:expenses.manage');
+        Route::put('/{uid}', [ExpenseController::class, 'update'])->middleware('permission:expenses.manage');
+        Route::delete('/{uid}', [ExpenseController::class, 'destroy'])->middleware('permission:expenses.manage');
+    });
+
+    Route::prefix('purchases')->group(function () {
+        Route::get('/payables', [PurchaseOrderController::class, 'payables'])->middleware('permission:purchases.read');
+        Route::get('/orders', [PurchaseOrderController::class, 'index'])->middleware('permission:purchases.read');
+        Route::post('/orders', [PurchaseOrderController::class, 'store'])->middleware('permission:purchases.manage');
+        Route::get('/orders/{uid}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchases.read');
+        Route::get('/orders/{uid}/receipts', [PurchaseOrderController::class, 'receipts'])->middleware('permission:purchases.read');
+        Route::put('/orders/{uid}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchases.manage');
+        Route::post('/orders/{uid}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchases.manage');
+        Route::post('/orders/{uid}/receive-partial', [PurchaseOrderController::class, 'receivePartial'])->middleware('permission:purchases.manage');
+        Route::post('/orders/{uid}/receive', [PurchaseOrderController::class, 'markReceived'])->middleware('permission:purchases.manage');
+        Route::post('/orders/{uid}/payments', [PurchaseOrderController::class, 'registerPayment'])->middleware('permission:purchases.manage');
+    });
+
+    Route::prefix('opportunities')->group(function () {
+        Route::get('/stages', [OpportunityController::class, 'stages'])->middleware('permission:opportunities.read');
+        Route::post('/stages', [OpportunityController::class, 'storeStage'])->middleware('permission:opportunities.manage');
+        Route::put('/stages/{uid}', [OpportunityController::class, 'updateStage'])->middleware('permission:opportunities.manage');
+        Route::delete('/stages/{uid}', [OpportunityController::class, 'destroyStage'])->middleware('permission:opportunities.manage');
+        Route::get('/board', [OpportunityController::class, 'board'])->middleware('permission:opportunities.read');
+        Route::get('/summary', [OpportunityController::class, 'summary'])->middleware('permission:opportunities.read');
+        Route::get('/', [OpportunityController::class, 'index'])->middleware('permission:opportunities.read');
+        Route::post('/', [OpportunityController::class, 'store'])->middleware('permission:opportunities.manage');
+        Route::put('/{uid}', [OpportunityController::class, 'update'])->middleware('permission:opportunities.manage');
+        Route::delete('/{uid}', [OpportunityController::class, 'destroy'])->middleware('permission:opportunities.manage');
+    });
+
+    Route::prefix('finance')->group(function () {
+        Route::get('/records', [FinancialOperationsController::class, 'index'])->middleware('permission:finance.read');
+        Route::post('/import', [FinancialOperationsController::class, 'import'])->middleware('permission:finance.manage');
+        Route::get('/invoices', [FinancialOperationsController::class, 'invoices'])->middleware('permission:finance.read');
+        Route::post('/invoices', [FinancialOperationsController::class, 'createInvoice'])->middleware('permission:finance.manage');
+        Route::get('/payments', [FinancialOperationsController::class, 'payments'])->middleware('permission:finance.read');
+        Route::post('/payments', [FinancialOperationsController::class, 'registerPayment'])->middleware('permission:finance.manage');
+        Route::get('/alerts', [FinancialOperationsController::class, 'alerts'])->middleware('permission:finance.read');
+        Route::post('/sync-overdue', [FinancialOperationsController::class, 'syncOverdueInvoices'])->middleware('permission:finance.manage');
+        Route::get('/credit/{type}/{uid}', [FinancialOperationsController::class, 'creditSummary'])->middleware('permission:finance.read');
+        Route::put('/credit/{type}/{uid}', [FinancialOperationsController::class, 'updateCreditProfile'])->middleware('permission:finance.manage');
+        Route::get('/customer/{type}/{uid}/summary', [FinancialOperationsController::class, 'customerSummary'])->middleware('permission:finance.read');
+        Route::get('/dashboard', [FinancialOperationsController::class, 'dashboard'])->middleware('permission:finance.read');
+    });
+
+    Route::prefix('currency')->group(function () {
+        Route::get('/rates', [CurrencyController::class, 'rates'])->middleware('permission:finance.read');
+        Route::post('/rates', [CurrencyController::class, 'storeRate'])->middleware('permission:finance.manage');
+        Route::post('/convert', [CurrencyController::class, 'convert'])->middleware('permission:finance.read');
+    });
+
+    Route::prefix('payments')->group(function () {
+        Route::post('/', [FinancialOperationsController::class, 'registerPayment'])->middleware('permission:finance.manage');
+        Route::get('/{invoiceUid}', [FinancialOperationsController::class, 'paymentHistory'])->middleware('permission:finance.read');
     });
 
     Route::post('/search', [SearchController::class, 'search'])->middleware('permission:search.use');

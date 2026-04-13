@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Tenant;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class RoleSeeder extends Seeder
 {
@@ -61,9 +62,18 @@ class RoleSeeder extends Seeder
                     'price-books.manage',
                     'commissions.read',
                     'commissions.manage',
+                    'opportunities.read',
+                    'opportunities.manage',
+                    'finance.read',
+                    'finance.manage',
                     'custom-fields.manage',
                     'logs.read',
                     'metrics.read',
+                    'expenses.read',
+                    'expenses.manage',
+                    'expenses.report',
+                    'purchases.read',
+                    'purchases.manage',
                 ],
             ],
             'seller' => [
@@ -101,25 +111,36 @@ class RoleSeeder extends Seeder
                     'quotations.update',
                     'price-books.read',
                     'commissions.read',
+                    'opportunities.read',
+                    'opportunities.manage',
+                    'finance.read',
                     'custom-fields.manage',
                     'metrics.read',
+                    'expenses.read',
+                    'expenses.report',
+                    'purchases.read',
                 ],
             ],
         ];
 
         foreach (Tenant::query()->get() as $tenant) {
             foreach ($roleDefinitions as $key => $definition) {
-                $role = Role::withoutGlobalScopes()->updateOrCreate(
-                    [
-                        'tenant_id' => $tenant->getKey(),
-                        'key' => $key,
-                    ],
-                    [
-                        'name' => $definition['name'],
-                        'description' => $definition['description'],
-                        'is_system' => true,
-                    ]
-                );
+                $role = Role::withoutGlobalScopes()->firstOrNew([
+                    'tenant_id' => $tenant->getKey(),
+                    'key' => $key,
+                ]);
+
+                $role->fill([
+                    'name' => $definition['name'],
+                    'description' => $definition['description'],
+                    'is_system' => true,
+                ]);
+
+                if (empty($role->uid)) {
+                    $role->uid = (string) Str::uuid();
+                }
+
+                $role->save();
 
                 $permissionIds = Permission::query()
                     ->whereIn('key', $definition['permissions'])

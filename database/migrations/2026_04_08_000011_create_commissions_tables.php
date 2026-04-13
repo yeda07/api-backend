@@ -30,7 +30,7 @@ return new class extends Migration
             $table->string('external_reference')->nullable();
             $table->decimal('amount', 14, 2);
             $table->string('currency', 10)->nullable();
-            $table->date('paid_at');
+            $table->date('paid_at')->nullable();
             $table->string('status')->default('paid');
             $table->json('meta')->nullable();
             $table->timestamps();

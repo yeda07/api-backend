@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Permission;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class PermissionSeeder extends Seeder
 {
@@ -50,18 +51,31 @@ class PermissionSeeder extends Seeder
             ['key' => 'price-books.manage', 'module' => 'price-books', 'action' => 'manage', 'description' => 'Administrar listas de precios'],
             ['key' => 'commissions.read', 'module' => 'commissions', 'action' => 'read', 'description' => 'Ver comisiones'],
             ['key' => 'commissions.manage', 'module' => 'commissions', 'action' => 'manage', 'description' => 'Administrar comisiones'],
+            ['key' => 'opportunities.read', 'module' => 'opportunities', 'action' => 'read', 'description' => 'Ver oportunidades'],
+            ['key' => 'opportunities.manage', 'module' => 'opportunities', 'action' => 'manage', 'description' => 'Administrar pipeline y oportunidades'],
+            ['key' => 'finance.read', 'module' => 'finance', 'action' => 'read', 'description' => 'Ver finanzas operativas'],
+            ['key' => 'finance.manage', 'module' => 'finance', 'action' => 'manage', 'description' => 'Sincronizar finanzas operativas'],
             ['key' => 'custom-fields.manage', 'module' => 'custom-fields', 'action' => 'manage', 'description' => 'Administrar campos personalizados'],
             ['key' => 'logs.read', 'module' => 'logs', 'action' => 'read', 'description' => 'Ver logs del tenant'],
             ['key' => 'metrics.read', 'module' => 'metrics', 'action' => 'read', 'description' => 'Ver metricas del tenant'],
             ['key' => 'plans.manage', 'module' => 'plans', 'action' => 'manage', 'description' => 'Administrar planes'],
             ['key' => 'users.manage', 'module' => 'users', 'action' => 'manage', 'description' => 'Administrar usuarios'],
+            ['key' => 'expenses.read', 'module' => 'expenses', 'action' => 'read', 'description' => 'Ver gastos y categorias'],
+            ['key' => 'expenses.manage', 'module' => 'expenses', 'action' => 'manage', 'description' => 'Administrar gastos, categorias y proveedores'],
+            ['key' => 'expenses.report', 'module' => 'expenses', 'action' => 'report', 'description' => 'Ver reportes de gastos'],
+            ['key' => 'purchases.read', 'module' => 'purchases', 'action' => 'read', 'description' => 'Ver ordenes de compra'],
+            ['key' => 'purchases.manage', 'module' => 'purchases', 'action' => 'manage', 'description' => 'Administrar ordenes de compra'],
         ];
 
         foreach ($permissions as $permission) {
-            Permission::query()->updateOrCreate(
-                ['key' => $permission['key']],
-                $permission
-            );
+            $model = Permission::query()->firstOrNew(['key' => $permission['key']]);
+            $model->fill($permission);
+
+            if (empty($model->uid)) {
+                $model->uid = (string) Str::uuid();
+            }
+
+            $model->save();
         }
     }
 }

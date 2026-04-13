@@ -23,6 +23,7 @@ class InventoryReservation extends Model
         'comment',
         'meta',
         'released_at',
+        'consumed_at',
     ];
 
     protected $hidden = [
@@ -42,6 +43,7 @@ class InventoryReservation extends Model
     protected $casts = [
         'meta' => 'array',
         'released_at' => 'datetime',
+        'consumed_at' => 'datetime',
     ];
 
     public function product()

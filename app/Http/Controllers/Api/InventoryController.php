@@ -22,6 +22,15 @@ class InventoryController extends Controller
         }
     }
 
+    public function availability(Request $request)
+    {
+        try {
+            return $this->successResponse($this->inventoryService->availability($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
     public function adjust(Request $request)
     {
         try {
@@ -55,6 +64,17 @@ class InventoryController extends Controller
         }
     }
 
+    public function consumeReservation(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->inventoryService->consumeReservation($uid, $request->all()), 200, 'Reserva consumida');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
     public function reservationsBySource(string $sourceType, string $sourceUid)
     {
         return $this->successResponse($this->inventoryService->reservationsBySource($sourceType, $sourceUid));
@@ -68,6 +88,15 @@ class InventoryController extends Controller
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
             return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function movements(Request $request)
+    {
+        try {
+            return $this->successResponse($this->inventoryService->movements($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
         }
     }
 

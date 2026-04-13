@@ -16,10 +16,16 @@ class FinancialRecord extends Model
         'tenant_id',
         'owner_user_id',
         'quotation_id',
+        'financeable_type',
+        'financeable_id',
         'record_type',
+        'source_system',
         'external_reference',
         'amount',
+        'outstanding_amount',
         'currency',
+        'issued_at',
+        'due_at',
         'paid_at',
         'status',
         'meta',
@@ -30,15 +36,20 @@ class FinancialRecord extends Model
         'tenant_id',
         'owner_user_id',
         'quotation_id',
+        'financeable_id',
     ];
 
     protected $appends = [
         'owner_user_uid',
         'quotation_uid',
+        'financeable_uid',
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'outstanding_amount' => 'decimal:2',
+        'issued_at' => 'date',
+        'due_at' => 'date',
         'paid_at' => 'date',
         'meta' => 'array',
     ];
@@ -53,6 +64,11 @@ class FinancialRecord extends Model
         return $this->belongsTo(Quotation::class);
     }
 
+    public function financeable()
+    {
+        return $this->morphTo();
+    }
+
     public function getOwnerUserUidAttribute()
     {
         return $this->owner?->uid
@@ -63,6 +79,11 @@ class FinancialRecord extends Model
     {
         return $this->quotation?->uid
             ?? ($this->quotation_id ? Quotation::query()->whereKey($this->quotation_id)->value('uid') : null);
+    }
+
+    public function getFinanceableUidAttribute()
+    {
+        return $this->financeable?->uid;
     }
 
     public function resolveDefaultOwnerUserId(): ?int

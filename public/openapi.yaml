@@ -1,0 +1,2713 @@
+openapi: 3.0.3
+info:
+  title: API Backend CRM
+  version: 1.1.0
+  description: Documentacion OpenAPI del backend Laravel multi-tenant.
+servers:
+  - url: /api
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: RBAC
+  - name: Plans
+  - name: Accounts
+  - name: Contacts
+  - name: Relations
+  - name: CrmEntities
+  - name: Tags
+  - name: Tasks
+  - name: Interactions
+  - name: Activities
+  - name: Documents
+  - name: Inventory
+  - name: Quotations
+  - name: PriceBooks
+  - name: Commissions
+  - name: Expenses
+  - name: Purchases
+  - name: Opportunities
+  - name: Finance
+  - name: Currency
+  - name: Search
+  - name: Dashboard
+  - name: CustomFields
+  - name: Metrics
+  - name: Logs
+paths:
+  /login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Iniciar sesion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso o respuesta de setup 2FA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /forgot-password:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Solicitar recuperacion de contrasena
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /reset-password:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Restablecer contrasena
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, password, password_confirmation]
+              properties:
+                email: { type: string, format: email }
+                token: { type: string }
+                password: { type: string }
+                password_confirmation: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /logout:
+    post:
+      tags: [Auth]
+      summary: Cerrar sesion
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /2fa/setup:
+    get:
+      tags: [Auth]
+      summary: Obtener datos para configurar 2FA
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /2fa/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirmar 2FA con codigo TOTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, example: '123456' }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /2fa/recovery-codes/regenerate:
+    post:
+      tags: [Auth]
+      summary: Regenerar codigos de recuperacion
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /me:
+    get:
+      tags: [Auth]
+      summary: Usuario autenticado
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users:
+    get:
+      tags: [RBAC]
+      summary: Listar usuarios del tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /rbac/roles:
+    get:
+      tags: [RBAC]
+      summary: Listar roles del tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [RBAC]
+      summary: Crear rol personalizado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /rbac/roles/{roleUid}:
+    put:
+      tags: [RBAC]
+      summary: Actualizar rol personalizado
+      parameters:
+        - $ref: '#/components/parameters/RoleUidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [RBAC]
+      summary: Eliminar rol personalizado
+      parameters:
+        - $ref: '#/components/parameters/RoleUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /rbac/permissions:
+    get:
+      tags: [RBAC]
+      summary: Catalogo de permisos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}/access:
+    get:
+      tags: [RBAC]
+      summary: Ver acceso efectivo de un usuario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}/manager:
+    post:
+      tags: [RBAC]
+      summary: Asignar manager a un usuario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [manager_uid]
+              properties:
+                manager_uid: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}/roles:
+    post:
+      tags: [RBAC]
+      summary: Asignar rol a usuario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_uid]
+              properties:
+                role_uid: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}/roles/{roleUid}:
+    delete:
+      tags: [RBAC]
+      summary: Quitar rol a usuario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - $ref: '#/components/parameters/RoleUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}/permissions:
+    post:
+      tags: [RBAC]
+      summary: Otorgar permiso directo a usuario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission_uid]
+              properties:
+                permission_uid: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}/permissions/{permissionUid}:
+    delete:
+      tags: [RBAC]
+      summary: Revocar permiso directo a usuario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - $ref: '#/components/parameters/PermissionUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /plans:
+    get:
+      tags: [Plans]
+      summary: Listar planes SaaS
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Plans]
+      summary: Crear plan SaaS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: Listar cuentas
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Accounts]
+      summary: Crear cuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /accounts/{uid}:
+    get:
+      tags: [Accounts]
+      summary: Ver cuenta
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Accounts]
+      summary: Actualizar cuenta
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Accounts]
+      summary: Eliminar cuenta
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /accounts/{uid}/owner:
+    post:
+      tags: [Accounts]
+      summary: Asignar propietario de cuenta
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: Listar contactos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Contacts]
+      summary: Crear contacto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /contacts/{uid}:
+    get:
+      tags: [Contacts]
+      summary: Ver contacto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Contacts]
+      summary: Actualizar contacto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Contacts]
+      summary: Eliminar contacto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /contacts/{uid}/owner:
+    post:
+      tags: [Contacts]
+      summary: Asignar propietario de contacto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /relations:
+    get:
+      tags: [Relations]
+      summary: Listar relaciones
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Relations]
+      summary: Crear relacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelationRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /relations/with-entities:
+    get:
+      tags: [Relations]
+      summary: Listar relaciones incluyendo entidades
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /relations/hierarchy/{type}/{uid}:
+    get:
+      tags: [Relations]
+      summary: Obtener jerarquia de relaciones de una entidad
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /relations/{type}/{uid}:
+    get:
+      tags: [Relations]
+      summary: Obtener relaciones por entidad
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /relations/{uid}:
+    delete:
+      tags: [Relations]
+      summary: Eliminar relacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /crm-entities:
+    get:
+      tags: [CrmEntities]
+      summary: Listar entidades CRM
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [CrmEntities]
+      summary: Crear entidad CRM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrmEntityRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /crm-entities/{uid}/owner:
+    post:
+      tags: [CrmEntities]
+      summary: Asignar propietario a entidad CRM
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /tags:
+    get:
+      tags: [Tags]
+      summary: Listar tags
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Tags]
+      summary: Crear tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /tags/{uid}:
+    put:
+      tags: [Tags]
+      summary: Actualizar tag
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Tags]
+      summary: Eliminar tag
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /tags/assign:
+    post:
+      tags: [Tags]
+      summary: Asignar tag a entidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Tags]
+      summary: Desasignar tag a entidad via DELETE
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /tags/unassign:
+    post:
+      tags: [Tags]
+      summary: Desasignar tag a entidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: Listar tareas
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Tasks]
+      summary: Crear tarea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /tasks/{uid}:
+    get:
+      tags: [Tasks]
+      summary: Ver tarea
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Tasks]
+      summary: Actualizar tarea
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Tasks]
+      summary: Eliminar tarea
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /interactions/{type}/{uid}:
+    get:
+      tags: [Interactions]
+      summary: Timeline de interacciones por entidad
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /interactions/notes:
+    post:
+      tags: [Interactions]
+      summary: Registrar nota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteractionRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /interactions/calls:
+    post:
+      tags: [Interactions]
+      summary: Registrar llamada
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteractionRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /interactions/emails:
+    post:
+      tags: [Interactions]
+      summary: Registrar correo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteractionRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /activities:
+    get:
+      tags: [Activities]
+      summary: Listar actividades
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Activities]
+      summary: Crear actividad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /activities/range:
+    get:
+      tags: [Activities]
+      summary: Consultar actividades por rango
+      parameters:
+        - in: query
+          name: start_date
+          schema: { type: string, format: date }
+        - in: query
+          name: end_date
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /activities/{uid}:
+    get:
+      tags: [Activities]
+      summary: Ver actividad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Activities]
+      summary: Actualizar actividad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Activities]
+      summary: Eliminar actividad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /documents/entity/{type}/{uid}:
+    get:
+      tags: [Documents]
+      summary: Listar documentos por entidad
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /documents/download/{uid}:
+    get:
+      tags: [Documents]
+      summary: Descargar documento
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          description: Archivo binario
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /documents:
+    post:
+      tags: [Documents]
+      summary: Subir documento PDF
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [entity_type, entity_uid, file]
+              properties:
+                entity_type: { type: string }
+                entity_uid: { type: string, format: uuid }
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/master:
+    get:
+      tags: [Inventory]
+      summary: Maestro de inventario
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/availability:
+    get:
+      tags: [Inventory]
+      summary: Disponibilidad de inventario
+      parameters:
+        - in: query
+          name: product_uid
+          schema: { type: string, format: uuid }
+        - in: query
+          name: warehouse_uid
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/movements:
+    get:
+      tags: [Inventory]
+      summary: Historial de movimientos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/stocks/adjust:
+    post:
+      tags: [Inventory]
+      summary: Ajustar stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryAdjustRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/reservations:
+    post:
+      tags: [Inventory]
+      summary: Crear reserva de stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryReservationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/reservations/source/{sourceType}/{sourceUid}:
+    get:
+      tags: [Inventory]
+      summary: Consultar reservas por referencia
+      parameters:
+        - $ref: '#/components/parameters/SourceTypePath'
+        - $ref: '#/components/parameters/SourceUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/reservations/{uid}:
+    delete:
+      tags: [Inventory]
+      summary: Liberar reserva
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/reservations/{uid}/consume:
+    post:
+      tags: [Inventory]
+      summary: Consumir reserva
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/movements/transfer:
+    post:
+      tags: [Inventory]
+      summary: Transferir stock entre bodegas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryTransferRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/report:
+    get:
+      tags: [Inventory]
+      summary: Reporte comercial de inventario
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/report/export:
+    get:
+      tags: [Inventory]
+      summary: Exportar reporte de inventario
+      responses:
+        '200':
+          description: Archivo CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+  /inventory/categories:
+    get:
+      tags: [Inventory]
+      summary: Listar categorias de inventario
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Inventory]
+      summary: Crear categoria de inventario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameColorRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/categories/{uid}:
+    put:
+      tags: [Inventory]
+      summary: Actualizar categoria de inventario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameColorRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Inventory]
+      summary: Eliminar categoria de inventario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/products:
+    get:
+      tags: [Inventory]
+      summary: Listar productos de inventario
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Inventory]
+      summary: Crear producto de inventario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryProductRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/products/{uid}:
+    put:
+      tags: [Inventory]
+      summary: Actualizar producto de inventario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryProductRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Inventory]
+      summary: Eliminar producto de inventario
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/warehouses:
+    get:
+      tags: [Inventory]
+      summary: Listar bodegas
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Inventory]
+      summary: Crear bodega
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/warehouses/{uid}:
+    put:
+      tags: [Inventory]
+      summary: Actualizar bodega
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Inventory]
+      summary: Eliminar bodega
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/warehouses/{uid}/stocks:
+    get:
+      tags: [Inventory]
+      summary: Consultar stock por bodega
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations:
+    get:
+      tags: [Quotations]
+      summary: Listar cotizaciones
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Quotations]
+      summary: Crear cotizacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/{uid}:
+    get:
+      tags: [Quotations]
+      summary: Ver cotizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Quotations]
+      summary: Actualizar cotizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/{uid}/pdf:
+    get:
+      tags: [Quotations]
+      summary: Descargar PDF de cotizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          description: PDF de cotizacion
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /quotations/{uid}/send:
+    post:
+      tags: [Quotations]
+      summary: Enviar cotizacion por correo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/{uid}/items:
+    post:
+      tags: [Quotations]
+      summary: Agregar item a cotizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteItemRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/items/{itemUid}:
+    put:
+      tags: [Quotations]
+      summary: Actualizar item de cotizacion
+      parameters:
+        - $ref: '#/components/parameters/ItemUidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteItemRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Quotations]
+      summary: Eliminar item de cotizacion
+      parameters:
+        - $ref: '#/components/parameters/ItemUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/items/{itemUid}/reserve-stock:
+    post:
+      tags: [Quotations]
+      summary: Reservar stock desde item de cotizacion
+      parameters:
+        - $ref: '#/components/parameters/ItemUidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/items/{itemUid}/reservations/{reservationUid}:
+    delete:
+      tags: [Quotations]
+      summary: Liberar reserva de item de cotizacion
+      parameters:
+        - $ref: '#/components/parameters/ItemUidPath'
+        - $ref: '#/components/parameters/ReservationUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotes:
+    get:
+      tags: [Quotations]
+      summary: Listar cotizaciones alias F1
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Quotations]
+      summary: Crear cotizacion alias F1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotes/{uid}/items:
+    post:
+      tags: [Quotations]
+      summary: Agregar item a cotizacion alias F1
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteItemRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotes/{uid}/approve:
+    post:
+      tags: [Quotations]
+      summary: Aprobar cotizacion alias F1
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotes/{uid}/reject:
+    post:
+      tags: [Quotations]
+      summary: Rechazar cotizacion alias F1
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotes/{uid}/convert:
+    post:
+      tags: [Quotations]
+      summary: Convertir cotizacion alias F1 en factura
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /price-books:
+    get:
+      tags: [PriceBooks]
+      summary: Listar price books
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [PriceBooks]
+      summary: Crear price book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceBookRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /price-books/{uid}:
+    get:
+      tags: [PriceBooks]
+      summary: Ver price book
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [PriceBooks]
+      summary: Actualizar price book
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceBookRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [PriceBooks]
+      summary: Eliminar price book
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/plans:
+    get:
+      tags: [Commissions]
+      summary: Listar planes de comision
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Commissions]
+      summary: Crear plan de comision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlanRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/plans/{uid}:
+    put:
+      tags: [Commissions]
+      summary: Actualizar plan de comision
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlanRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/assignments:
+    get:
+      tags: [Commissions]
+      summary: Listar asignaciones de comision
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Commissions]
+      summary: Crear asignacion de plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionAssignmentRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/assignments/{uid}:
+    put:
+      tags: [Commissions]
+      summary: Actualizar asignacion de plan
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionAssignmentRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/targets:
+    get:
+      tags: [Commissions]
+      summary: Listar metas de comision
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Commissions]
+      summary: Crear meta de comision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionTargetRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/rules:
+    get:
+      tags: [Commissions]
+      summary: Listar reglas de comision legacy
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Commissions]
+      summary: Crear regla de comision legacy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionRuleRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/rules/{uid}:
+    put:
+      tags: [Commissions]
+      summary: Actualizar regla de comision legacy
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionRuleRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Commissions]
+      summary: Eliminar regla de comision legacy
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/financial-records:
+    post:
+      tags: [Commissions]
+      summary: Registrar evento financiero para comisiones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionFinancialRecordRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/entries:
+    get:
+      tags: [Commissions]
+      summary: Listar entradas de comision
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/entries/{uid}/pay:
+    put:
+      tags: [Commissions]
+      summary: Marcar entrada de comision como pagada
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/my-summary:
+    get:
+      tags: [Commissions]
+      summary: Resumen de comisiones del usuario actual
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/dashboard/{userUid}:
+    get:
+      tags: [Commissions]
+      summary: Dashboard de comisiones por vendedor
+      parameters:
+        - $ref: '#/components/parameters/UserUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/simulate:
+    post:
+      tags: [Commissions]
+      summary: Simular comision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionSimulationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/runs:
+    get:
+      tags: [Commissions]
+      summary: Listar liquidaciones
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Commissions]
+      summary: Crear liquidacion de comisiones
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionRunRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/runs/{uid}/approve:
+    post:
+      tags: [Commissions]
+      summary: Aprobar liquidacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/runs/{uid}/pay:
+    post:
+      tags: [Commissions]
+      summary: Pagar liquidacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/categories:
+    get:
+      tags: [Expenses]
+      summary: Listar categorias de gasto
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Expenses]
+      summary: Crear categoria de gasto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameColorRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/categories/{uid}:
+    put:
+      tags: [Expenses]
+      summary: Actualizar categoria de gasto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameColorRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Expenses]
+      summary: Eliminar categoria de gasto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/suppliers:
+    get:
+      tags: [Expenses]
+      summary: Listar proveedores
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Expenses]
+      summary: Crear proveedor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/suppliers/{uid}:
+    put:
+      tags: [Expenses]
+      summary: Actualizar proveedor
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Expenses]
+      summary: Eliminar proveedor
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/cost-centers:
+    get:
+      tags: [Expenses]
+      summary: Listar centros de costo
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Expenses]
+      summary: Crear centro de costo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameColorRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/cost-centers/{uid}:
+    put:
+      tags: [Expenses]
+      summary: Actualizar centro de costo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NameColorRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Expenses]
+      summary: Eliminar centro de costo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/report:
+    get:
+      tags: [Expenses]
+      summary: Reporte general de gastos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/profitability:
+    get:
+      tags: [Expenses]
+      summary: Reporte de rentabilidad por cliente o entidad
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses:
+    get:
+      tags: [Expenses]
+      summary: Listar gastos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Expenses]
+      summary: Crear gasto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /expenses/{uid}:
+    put:
+      tags: [Expenses]
+      summary: Actualizar gasto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Expenses]
+      summary: Eliminar gasto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/payables:
+    get:
+      tags: [Purchases]
+      summary: Cuentas por pagar
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders:
+    get:
+      tags: [Purchases]
+      summary: Listar ordenes de compra
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Purchases]
+      summary: Crear orden de compra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders/{uid}:
+    get:
+      tags: [Purchases]
+      summary: Ver orden de compra
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Purchases]
+      summary: Actualizar orden de compra
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseOrderRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders/{uid}/receipts:
+    get:
+      tags: [Purchases]
+      summary: Listar eventos de recepcion de una orden
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders/{uid}/approve:
+    post:
+      tags: [Purchases]
+      summary: Aprobar orden de compra
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders/{uid}/receive-partial:
+    post:
+      tags: [Purchases]
+      summary: Registrar recepcion parcial
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseReceiptRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders/{uid}/receive:
+    post:
+      tags: [Purchases]
+      summary: Marcar orden como recibida
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/orders/{uid}/payments:
+    post:
+      tags: [Purchases]
+      summary: Registrar pago de orden de compra
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchasePaymentRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /opportunities/stages:
+    get:
+      tags: [Opportunities]
+      summary: Listar etapas del pipeline
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Opportunities]
+      summary: Crear etapa del pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportunityStageRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /opportunities/stages/{uid}:
+    put:
+      tags: [Opportunities]
+      summary: Actualizar etapa del pipeline
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportunityStageRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Opportunities]
+      summary: Eliminar etapa del pipeline
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /opportunities/board:
+    get:
+      tags: [Opportunities]
+      summary: Tablero del pipeline
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /opportunities/summary:
+    get:
+      tags: [Opportunities]
+      summary: Resumen del pipeline
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /opportunities:
+    get:
+      tags: [Opportunities]
+      summary: Listar oportunidades
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Opportunities]
+      summary: Crear oportunidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportunityRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /opportunities/{uid}:
+    put:
+      tags: [Opportunities]
+      summary: Actualizar oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpportunityRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Opportunities]
+      summary: Eliminar oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/records:
+    get:
+      tags: [Finance]
+      summary: Listar registros financieros
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/import:
+    post:
+      tags: [Finance]
+      summary: Importar registros financieros
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                records:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/invoices:
+    get:
+      tags: [Finance]
+      summary: Listar facturas
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Finance]
+      summary: Crear factura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/payments:
+    get:
+      tags: [Finance]
+      summary: Listar pagos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Finance]
+      summary: Registrar pago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/alerts:
+    get:
+      tags: [Finance]
+      summary: Alertas financieras
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/sync-overdue:
+    post:
+      tags: [Finance]
+      summary: Sincronizar facturas vencidas
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/credit/{type}/{uid}:
+    get:
+      tags: [Finance]
+      summary: Resumen de credito de cliente o entidad
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Finance]
+      summary: Actualizar perfil de credito
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditProfileRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/customer/{type}/{uid}/summary:
+    get:
+      tags: [Finance]
+      summary: Resumen financiero por cliente
+      parameters:
+        - $ref: '#/components/parameters/TypePath'
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /finance/dashboard:
+    get:
+      tags: [Finance]
+      summary: Dashboard financiero
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /currency/rates:
+    get:
+      tags: [Currency]
+      summary: Listar tasas de cambio
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Currency]
+      summary: Registrar tasa de cambio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyRateRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /currency/convert:
+    post:
+      tags: [Currency]
+      summary: Convertir monto entre monedas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyConvertRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /payments:
+    post:
+      tags: [Finance]
+      summary: Alias para registrar pago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /payments/{invoiceUid}:
+    get:
+      tags: [Finance]
+      summary: Historial de pagos por factura
+      parameters:
+        - $ref: '#/components/parameters/InvoiceUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /search:
+    post:
+      tags: [Search]
+      summary: Busqueda dinamica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /search/export:
+    post:
+      tags: [Search]
+      summary: Exportar resultados de busqueda
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/SearchRequest'
+                - type: object
+                  properties:
+                    format:
+                      type: string
+                      enum: [json, csv]
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /dashboard/core:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard operativo core
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /custom-fields:
+    post:
+      tags: [CustomFields]
+      summary: Crear campo personalizado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomFieldRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /custom-fields/value:
+    post:
+      tags: [CustomFields]
+      summary: Asignar valor a campo personalizado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomFieldValueRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /metrics/my-usage:
+    get:
+      tags: [Metrics]
+      summary: Metricas de uso del tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /logs:
+    get:
+      tags: [Logs]
+      summary: Logs del tenant
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+  parameters:
+    UidPath:
+      in: path
+      name: uid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RoleUidPath:
+      in: path
+      name: roleUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PermissionUidPath:
+      in: path
+      name: permissionUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserUidPath:
+      in: path
+      name: userUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InvoiceUidPath:
+      in: path
+      name: invoiceUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ItemUidPath:
+      in: path
+      name: itemUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReservationUidPath:
+      in: path
+      name: reservationUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TypePath:
+      in: path
+      name: type
+      required: true
+      schema:
+        type: string
+    SourceTypePath:
+      in: path
+      name: sourceType
+      required: true
+      schema:
+        type: string
+    SourceUidPath:
+      in: path
+      name: sourceUid
+      required: true
+      schema:
+        type: string
+  responses:
+    GenericSuccess:
+      description: Respuesta envelope de la API
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/GenericSuccess'
+  schemas:
+    GenericSuccess:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, nullable: true }
+        data:
+          nullable: true
+        errors:
+          nullable: true
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/GenericSuccess'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                requires_two_factor_setup: { type: boolean }
+                token: { type: string }
+                user:
+                  type: object
+                  properties:
+                    uid: { type: string, format: uuid }
+                    name: { type: string }
+                    email: { type: string, format: email }
+                    tenant_uid: { type: string, format: uuid }
+                    two_factor_enabled: { type: boolean }
+                    locked_until: { type: string, nullable: true }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+        two_factor_code: { type: string, nullable: true }
+        recovery_code: { type: string, nullable: true }
+    PlanRequest:
+      type: object
+      properties:
+        name: { type: string }
+        price: { type: number, format: float }
+        max_accounts: { type: integer }
+        max_contacts: { type: integer }
+        max_entities: { type: integer }
+        active: { type: boolean }
+    RoleRequest:
+      type: object
+      required: [name, key]
+      properties:
+        name: { type: string }
+        key: { type: string }
+        description: { type: string }
+        permission_uids:
+          type: array
+          items: { type: string, format: uuid }
+    OwnerAssignmentRequest:
+      type: object
+      required: [owner_user_uid]
+      properties:
+        owner_user_uid: { type: string, format: uuid }
+    AccountRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        document: { type: string }
+        email: { type: string, format: email }
+        industry: { type: string }
+        website: { type: string }
+        phone: { type: string }
+        address: { type: string }
+    ContactRequest:
+      type: object
+      required: [first_name]
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        position: { type: string }
+        account_uid: { type: string, format: uuid }
+    RelationRequest:
+      type: object
+      required: [type, from_type, from_uid, to_type, to_uid]
+      properties:
+        type: { type: string }
+        from_type: { type: string }
+        from_uid: { type: string, format: uuid }
+        to_type: { type: string }
+        to_uid: { type: string, format: uuid }
+        metadata: { type: object }
+    CrmEntityRequest:
+      type: object
+      required: [type, name]
+      properties:
+        type: { type: string }
+        name: { type: string }
+        profile_data: { type: object }
+    TagRequest:
+      type: object
+      required: [name, key]
+      properties:
+        name: { type: string }
+        key: { type: string }
+        color: { type: string }
+    TagAssignmentRequest:
+      type: object
+      required: [tag_uid, entity_type, entity_uid]
+      properties:
+        tag_uid: { type: string, format: uuid }
+        entity_type: { type: string }
+        entity_uid: { type: string, format: uuid }
+    TaskRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        due_date: { type: string, format: date }
+        taskable_type: { type: string }
+        taskable_uid: { type: string, format: uuid }
+    InteractionRequest:
+      type: object
+      required: [entity_type, entity_uid, subject]
+      properties:
+        entity_type: { type: string }
+        entity_uid: { type: string, format: uuid }
+        subject: { type: string }
+        body: { type: string }
+        occurred_at: { type: string, format: date-time }
+        metadata: { type: object }
+    ActivityRequest:
+      type: object
+      required: [title, type, scheduled_at]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string }
+        scheduled_at: { type: string, format: date-time }
+        activityable_type: { type: string }
+        activityable_uid: { type: string, format: uuid }
+    InventoryAdjustRequest:
+      type: object
+      required: [product_uid, warehouse_uid, quantity]
+      properties:
+        product_uid: { type: string, format: uuid }
+        warehouse_uid: { type: string, format: uuid }
+        quantity: { type: integer }
+        movement_type: { type: string, enum: [entry, exit, adjustment] }
+        comment: { type: string }
+        reference_type: { type: string }
+        reference_uid: { type: string }
+    InventoryReservationRequest:
+      type: object
+      required: [product_uid, warehouse_uid, quantity, source_type, source_uid]
+      properties:
+        product_uid: { type: string, format: uuid }
+        warehouse_uid: { type: string, format: uuid }
+        quantity: { type: integer }
+        source_type: { type: string }
+        source_uid: { type: string }
+        comment: { type: string }
+    InventoryTransferRequest:
+      type: object
+      required: [product_uid, origin_warehouse_uid, destination_warehouse_uid, quantity]
+      properties:
+        product_uid: { type: string, format: uuid }
+        origin_warehouse_uid: { type: string, format: uuid }
+        destination_warehouse_uid: { type: string, format: uuid }
+        quantity: { type: integer }
+        comment: { type: string }
+    NameColorRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        color: { type: string }
+        description: { type: string }
+    InventoryProductRequest:
+      type: object
+      required: [sku, name]
+      properties:
+        sku: { type: string }
+        name: { type: string }
+        category_uid: { type: string, format: uuid }
+        cost_price: { type: number, format: float }
+        sale_price: { type: number, format: float }
+        min_stock: { type: integer }
+        unit: { type: string }
+        active: { type: boolean }
+    WarehouseRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        location: { type: string }
+        is_default: { type: boolean }
+    QuoteRequest:
+      type: object
+      properties:
+        quote_number: { type: string }
+        title: { type: string }
+        entity_type: { type: string, example: account }
+        entity_uid: { type: string, format: uuid }
+        price_book_uid: { type: string, format: uuid }
+        currency: { type: string }
+        exchange_rate: { type: number, format: float }
+        local_currency: { type: string }
+        notes: { type: string }
+    QuoteItemRequest:
+      type: object
+      required: [description, quantity]
+      properties:
+        product_uid: { type: string, format: uuid }
+        warehouse_uid: { type: string, format: uuid }
+        description: { type: string }
+        quantity: { type: integer }
+        unit_price: { type: number, format: float }
+        discount_percent: { type: number, format: float }
+        discount_amount: { type: number, format: float }
+    PriceBookRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [public, distributor, bid] }
+        currency: { type: string }
+        active: { type: boolean }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_uid: { type: string, format: uuid }
+              price: { type: number, format: float }
+              min_margin_percent: { type: number, format: float }
+    CommissionPlanRequest:
+      type: object
+      required: [name, type, base_percent]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [sale, margin, target] }
+        base_percent: { type: number, format: float }
+        tiers_json:
+          type: array
+          items: { type: object }
+        starts_at: { type: string, format: date }
+        ends_at: { type: string, format: date }
+        active: { type: boolean }
+    CommissionAssignmentRequest:
+      type: object
+      required: [user_uid, commission_plan_uid, starts_at]
+      properties:
+        user_uid: { type: string, format: uuid }
+        commission_plan_uid: { type: string, format: uuid }
+        starts_at: { type: string, format: date }
+        ends_at: { type: string, format: date }
+        active: { type: boolean }
+    CommissionTargetRequest:
+      type: object
+      required: [user_uid, period, target_amount]
+      properties:
+        user_uid: { type: string, format: uuid }
+        period: { type: string, example: 2026-04 }
+        target_amount: { type: number, format: float }
+    CommissionRuleRequest:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        percent: { type: number, format: float }
+        product_uid: { type: string, format: uuid }
+        customer_type: { type: string }
+        active: { type: boolean }
+    CommissionFinancialRecordRequest:
+      type: object
+      properties:
+        financial_record_uid: { type: string, format: uuid }
+        seller_user_uid: { type: string, format: uuid }
+    CommissionSimulationRequest:
+      type: object
+      required: [user_uid]
+      properties:
+        user_uid: { type: string, format: uuid }
+        sale_amount: { type: number, format: float }
+        margin_amount: { type: number, format: float }
+        period: { type: string }
+    CommissionRunRequest:
+      type: object
+      required: [user_uid, period_start, period_end]
+      properties:
+        user_uid: { type: string, format: uuid }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+    SupplierRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        tax_id: { type: string }
+        address: { type: string }
+    ExpenseRequest:
+      type: object
+      required: [expense_category_uid, title, amount, expense_date]
+      properties:
+        expense_category_uid: { type: string, format: uuid }
+        supplier_uid: { type: string, format: uuid }
+        entity_type: { type: string }
+        entity_uid: { type: string, format: uuid }
+        cost_center_uid: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        amount: { type: number, format: float }
+        currency: { type: string }
+        expense_date: { type: string, format: date }
+        status: { type: string, enum: [draft, submitted, approved, paid] }
+    PurchaseOrderRequest:
+      type: object
+      required: [supplier_uid, purchase_number, items]
+      properties:
+        supplier_uid: { type: string, format: uuid }
+        entity_type: { type: string }
+        entity_uid: { type: string, format: uuid }
+        cost_center_uid: { type: string, format: uuid }
+        purchase_number: { type: string }
+        currency: { type: string }
+        ordered_at: { type: string, format: date }
+        expected_at: { type: string, format: date }
+        due_date: { type: string, format: date }
+        notes: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [description, quantity, unit_cost]
+            properties:
+              product_uid: { type: string, format: uuid }
+              warehouse_uid: { type: string, format: uuid }
+              description: { type: string }
+              quantity: { type: integer }
+              unit_cost: { type: number, format: float }
+    PurchaseReceiptRequest:
+      type: object
+      required: [items]
+      properties:
+        receipt_date: { type: string, format: date }
+        reference: { type: string }
+        comment: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [item_uid, received_quantity]
+            properties:
+              item_uid: { type: string, format: uuid }
+              received_quantity: { type: integer }
+    PurchasePaymentRequest:
+      type: object
+      required: [amount, payment_date]
+      properties:
+        amount: { type: number, format: float }
+        payment_date: { type: string, format: date }
+        method: { type: string }
+        reference: { type: string }
+    OpportunityStageRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        color: { type: string }
+        position: { type: integer }
+        is_closed: { type: boolean }
+        probability: { type: number, format: float }
+    OpportunityRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        entity_type: { type: string }
+        entity_uid: { type: string, format: uuid }
+        contact_uid: { type: string, format: uuid }
+        stage_uid: { type: string, format: uuid }
+        amount: { type: number, format: float }
+        expected_close_date: { type: string, format: date }
+        notes: { type: string }
+    InvoiceRequest:
+      type: object
+      properties:
+        quotation_uid: { type: string, format: uuid }
+        invoice_number: { type: string }
+        currency: { type: string }
+        exchange_rate: { type: number, format: float }
+        due_date: { type: string, format: date }
+    PaymentRequest:
+      type: object
+      required: [invoice_uid, amount, payment_date]
+      properties:
+        invoice_uid: { type: string, format: uuid }
+        amount: { type: number, format: float }
+        payment_date: { type: string, format: date }
+        method: { type: string }
+        external_reference: { type: string }
+    CreditProfileRequest:
+      type: object
+      properties:
+        credit_limit: { type: number, format: float }
+        max_days_overdue: { type: integer }
+        auto_block: { type: boolean }
+        status: { type: string, enum: [ok, blocked] }
+    CurrencyRateRequest:
+      type: object
+      required: [from_currency, to_currency, rate]
+      properties:
+        from_currency: { type: string }
+        to_currency: { type: string }
+        rate: { type: number, format: float }
+        date: { type: string, format: date }
+    CurrencyConvertRequest:
+      type: object
+      required: [amount, from_currency, to_currency]
+      properties:
+        amount: { type: number, format: float }
+        from_currency: { type: string }
+        to_currency: { type: string }
+        date: { type: string, format: date }
+    SearchRequest:
+      type: object
+      properties:
+        entity_types:
+          type: array
+          items: { type: string }
+        text: { type: string }
+        tag_uids:
+          type: array
+          items: { type: string, format: uuid }
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        page: { type: integer }
+        per_page: { type: integer }
+        sort_by: { type: string }
+        sort_direction: { type: string }
+        custom_field_filters:
+          type: array
+          items: { type: object }
+    CustomFieldRequest:
+      type: object
+      required: [entity_type, name, key, type]
+      properties:
+        entity_type: { type: string }
+        name: { type: string }
+        key: { type: string }
+        type: { type: string }
+        options:
+          type: object
+    CustomFieldValueRequest:
+      type: object
+      required: [entity_type, entity_uid, custom_field_uid, value]
+      properties:
+        entity_type: { type: string }
+        entity_uid: { type: string, format: uuid }
+        custom_field_uid: { type: string, format: uuid }
+        value: {}

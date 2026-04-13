@@ -10,23 +10,15 @@ return new class extends Migration
     {
         Schema::create('contacts', function (Blueprint $table) {
             $table->id();
-
-            // 🔥 MULTI-TENANT
-            $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
-
-            // 🔗 RELACIÓN CON ACCOUNT
+            $table->unsignedBigInteger('tenant_id');
             $table->foreignId('account_id')->nullable()->constrained()->nullOnDelete();
-
-            // 📇 DATOS
             $table->string('first_name');
             $table->string('last_name')->nullable();
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('position')->nullable();
-
             $table->timestamps();
 
-            // 🔥 ANTI-DUPLICADO POR EMPRESA
             $table->unique(['tenant_id', 'email'], 'contacts_email_unique');
         });
     }

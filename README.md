@@ -42,6 +42,374 @@ La API no expone `id` como identificador publico.
 
 Prefijo API: `/api`
 
+## Roadmap Fase 1 MVP
+
+### Objetivo
+
+Lanzar una primera version cobrable centrada en:
+
+- CRM comercial
+- cotizador `CPQ`
+- inventario comercial simple
+- comisiones MVP
+- conexion minima con contabilidad externa
+
+El backend de Fase 1 prioriza flujo comercial utilizable y cobro temprano, sin reconstruir un ERP completo.
+
+### Alcance final MVP
+
+Entra en Fase 1:
+
+- CRM comercial base
+  - cuentas
+  - contactos
+  - actividades
+  - interacciones
+  - pipeline de oportunidades con etapas configurables
+- CPQ y Price Books
+  - listas de precios `B2B` y `B2C`
+  - cotizaciones con items
+  - descuentos
+  - margen minimo viable
+  - PDF descargable
+  - envio de cotizacion por correo
+- stock simple
+  - maestro de inventario
+  - stock fisico, reservado y disponible
+  - multi-bodega simple
+  - reservas desde cotizacion
+  - movimientos entre bodegas
+  - reporte comercial base
+- comisiones MVP
+  - reglas simples por producto o tipo de cliente
+  - calculo sobre recaudos o facturas pagadas
+  - resumen por vendedor
+- finanzas operativas minimas
+  - importacion de registros financieros externos
+  - resumen por cliente
+  - dashboard financiero basico
+
+### Hitos
+
+Hito 1. Seguridad y base comercial
+
+- IAM/RBAC
+- Row-Level Security
+- cuentas
+- contactos
+- entidades CRM
+- actividades e interacciones
+
+Hito 2. Inventario comercial simple
+
+- productos
+- categorias
+- bodegas
+- existencias
+- reservas
+- movimientos
+- reporte comercial base
+
+Hito 3. CPQ MVP
+
+- cotizaciones
+- items
+- listas de precios
+- descuentos
+- margen minimo
+- reserva de stock desde cotizacion
+- PDF descargable y enviable
+
+Hito 4. Pipeline y visibilidad comercial
+
+- etapas configurables
+- oportunidades
+- board
+- resumen del pipeline
+
+Hito 5. Finanzas operativas y comisiones
+
+- importacion de facturas y recaudos
+- resumen financiero por cliente
+- dashboard financiero
+- reglas de comision
+- calculo de comisiones
+- resumen por vendedor
+
+### Dependencias
+
+- `CRM base` depende de IAM/RBAC y Row-Level Security.
+- `pipeline` depende de cuentas, contactos o entidades CRM visibles.
+- `CPQ` depende de productos, listas de precios y entidades comerciales.
+- `reserva de stock` depende de inventario + cotizacion.
+- `comisiones` depende de cotizacion cerrada y de registros financieros importados.
+- `finanzas operativas` depende de contrato de importacion externa, no de un ERP interno completo.
+
+### Primer corte cobrable
+
+El primer corte cobrable de Fase 1 queda definido cuando el backend permite:
+
+- registrar y segmentar clientes
+- crear oportunidades
+- cotizar con listas de precios
+- calcular descuentos y margen
+- reservar stock critico
+- generar y enviar cotizacion en PDF
+- importar estado financiero basico del cliente
+- calcular comisiones del vendedor
+
+Ese corte ya habilita operacion comercial cobrable sin requerir contabilidad nativa completa.
+
+### Que entra y que queda fuera
+
+Entra en MVP:
+
+- CRM comercial base
+- pipeline simple
+- cotizador con PDF
+- stock comercial simple
+- comisiones basicas
+- integracion financiera minima por importacion
+
+Queda fuera para fases posteriores:
+
+- ERP contable completo
+- aprobaciones multinivel de cotizaciones
+- pricing avanzado por reglas complejas
+- compras, lotes, series o valuacion contable de inventario
+- nomina o liquidacion completa de comisiones
+- automatizaciones comerciales avanzadas
+- integracion cerrada con un proveedor contable especifico
+
+### Estado actual Fase 1
+
+- [x] CRM comercial base
+- [x] pipeline de oportunidades
+- [x] CPQ y Price Books MVP
+- [x] PDF descargable y enviable de cotizaciones
+- [x] inventario comercial simple
+- [x] reservas de stock desde cotizacion
+- [x] comisiones MVP
+- [x] finanzas operativas minimas
+- [ ] integracion dedicada con proveedor contable especifico
+
+Conclusion:
+
+- el backend funcional del MVP esta implementado
+- la conexion con contabilidad externa existe como capa minima de importacion y consulta
+- una integracion dedicada con un proveedor concreto queda fuera de este corte
+
+## Roadmap Fase 2 y 3
+
+### Objetivo
+
+Extender el producto despues del MVP con dos modulos naturales del backend:
+
+- Fase 2: `Gastos y Compras`
+- Fase 3: `Proyectos`
+
+Estas fases deben construirse como extension del nucleo comercial, financiero e inventario ya existente, sin convertir el sistema en un ERP completo desde el inicio.
+
+### Dependencias entre Fases
+
+#### Fase 1 -> Fase 2
+
+`Gastos y Compras` depende de que Fase 1 ya tenga estables:
+
+- clientes y entidades comerciales
+- cotizaciones e invoices
+- financial records
+- inventory products y warehouses
+- price books y costos base por producto
+
+Dependencias clave:
+
+- `compras` necesita productos, bodegas e inventario para registrar entradas o abastecimiento
+- `gastos` necesita cuentas, CRM entities o centros de costo simples para imputacion
+- `rentabilidad real` necesita ingresos de `invoices/payments` y costos/gastos asociados
+
+#### Fase 1 -> Fase 3
+
+`Proyectos` depende de que Fase 1 ya tenga estables:
+
+- CRM comercial
+- oportunidades
+- cotizaciones
+- facturacion
+- comisiones
+
+Dependencias clave:
+
+- un proyecto debe poder vincularse a `account`, `contact`, `crm_entity`, `opportunity`, `quotation` o `invoice`
+- el control de horas depende de usuarios, equipos y jerarquia ya existente
+- la comision futura por ejecucion o entrega depende de ventas, facturacion y recaudo ya cerrados
+
+#### Fase 2 -> Fase 3
+
+`Proyectos` puede consumir datos de `Gastos y Compras` para medir rentabilidad por proyecto:
+
+- compras asociadas a proyecto
+- gastos operativos asociados a proyecto
+- costo real vs ingreso facturado
+
+### Decisiones de diseño no negociables
+
+Para no bloquear Fase 2 y 3, el backend debe mantener estas decisiones:
+
+- todas las entidades nuevas deben seguir contrato publico por `uid`
+- toda entidad financiera o de costos debe ser `tenant-aware`
+- los modelos nuevos deben respetar RBAC y RLS cuando aplique
+- las referencias entre modulos deben preferir relaciones polimorficas o claves explicitas por `*_uid`
+- no acoplar compras, gastos o proyectos a una contabilidad general completa
+- mantener `financial_records` como capa operativa integrable y no como libro contable total
+- conservar soporte multimoneda a nivel de cotizacion, factura, compra y gasto
+- los eventos que impacten rentabilidad deben quedar trazables por documento fuente
+
+### Roadmap de alto nivel
+
+#### Secuencia sugerida
+
+1. estabilizar Fase 1
+2. construir Fase 2 `Gastos y Compras`
+3. conectar rentabilidad por cliente/proyecto
+4. construir Fase 3 `Proyectos`
+5. conectar horas, hitos y facturacion de proyectos
+
+#### Hitos Fase 2
+
+Hito 2.1. Gastos operativos base
+
+- `expense_categories`
+- `expenses`
+- asociacion opcional a cliente, proyecto o centro de costo
+- estados basicos: `draft`, `submitted`, `approved`, `paid`
+
+Hito 2.2. Compras base
+
+- `purchase_orders`
+- `purchase_order_items`
+- asociacion a proveedor simple
+- asociacion opcional a venta, oportunidad o proyecto
+
+Hito 2.3. Impacto en rentabilidad
+
+- reportes de ingreso vs gasto
+- margen real por cliente
+- margen real por proyecto
+- consolidado de compras vinculadas a ventas
+
+#### Hitos Fase 3
+
+Hito 3.1. Proyectos base
+
+- `projects`
+- vinculacion a oportunidad, cotizacion o factura
+- estados basicos: `planned`, `active`, `on_hold`, `completed`, `cancelled`
+
+Hito 3.2. Planificacion
+
+- `project_milestones`
+- `project_tasks`
+- dependencias simples entre tareas
+- soporte backend para vista tipo Gantt
+
+Hito 3.3. Horas y ejecucion
+
+- `time_entries`
+- horas por usuario, tarea y proyecto
+- resumen de horas consumidas vs presupuestadas
+
+Hito 3.4. Integracion financiera
+
+- facturacion por proyecto
+- costo acumulado por proyecto
+- rentabilidad por proyecto
+- insumos para comisiones futuras cuando aplique
+
+### Riesgos principales
+
+- definir mal el acoplamiento entre compras y stock puede obligar a rehacer inventario
+- mezclar gastos operativos con contabilidad formal puede inflar demasiado Fase 2
+- diseñar proyectos sin vinculo claro a ventas/facturas rompe el caso de negocio
+- si no se modela bien multimoneda en gastos y compras, la rentabilidad real sera inconsistente
+- si horas y tareas nacen sin jerarquia clara, el Gantt despues sera costoso de corregir
+
+### Supuestos clave
+
+- el producto seguira priorizando operacion comercial y servicios, no ERP full
+- el volumen inicial de compras, gastos y proyectos sera moderado
+- se aceptan reportes operativos primero y contabilidad avanzada despues
+- la integracion contable externa seguira siendo complementaria, no reemplazada por libro mayor interno
+
+### Alcance funcional Fase 2 - Gastos y Compras
+
+Entra en Fase 2:
+
+- registro de gastos operativos
+- categorias de gasto
+- asociacion a cliente
+- asociacion a proyecto
+- asociacion a centro de costo simple
+- ordenes de compra basicas
+- items de compra
+- estado basico de compras
+- comparativos ingreso vs gasto por cliente/proyecto
+
+Se pospone:
+
+- contabilidad general completa
+- cuentas por pagar avanzadas
+- conciliacion bancaria
+- recepcion avanzada con lotes/series
+- impuestos complejos
+- proveedores con workflow completo ERP
+
+### Alcance funcional Fase 3 - Proyectos
+
+Entra en Fase 3:
+
+- creacion y gestion de proyectos
+- vinculacion a oportunidad, cotizacion o factura
+- hitos principales
+- tareas principales
+- datos backend para Gantt
+- control de horas por usuario
+- resumen de avance y consumo
+- rentabilidad basica del proyecto
+
+Se pospone:
+
+- PMO avanzada
+- ruta critica avanzada
+- capacidades tipo ERP/PSA enterprise
+- asignacion compleja de recursos
+- planeacion financiera profunda de proyectos
+
+### Criterios de integracion
+
+`Gastos y Compras` debe integrarse con:
+
+- inventario para entradas o abastecimiento cuando aplique
+- finanzas operativas para impacto en rentabilidad
+- CRM para asociacion a cliente o negocio
+
+`Proyectos` debe integrarse con:
+
+- CRM para contexto comercial
+- oportunidades para origen del proyecto
+- facturacion para monetizacion
+- comisiones cuando la politica comercial dependa de entrega o ejecucion
+
+### Estado roadmap
+
+- [x] Fase 1 definida e implementada a nivel backend
+- [x] dependencias Fase 1 -> Fase 2 -> Fase 3 documentadas
+- [x] roadmap de alto nivel documentado
+- [x] alcance funcional de `Gastos y Compras` definido
+- [x] alcance funcional de `Proyectos` definido
+- [ ] implementacion backend de Fase 2 iniciada
+- [ ] implementacion backend de Fase 3 iniciada
+
 ## Autenticacion
 
 La API usa `Bearer Token` con Sanctum.
@@ -1196,6 +1564,53 @@ Notas:
 - la vista maestro ya entrega el equivalente backend de la tabla principal del inventario
 - `stock_indicator` usa `green`, `yellow` y `red`
 
+### `GET /api/inventory/availability`
+
+Auth requerida.
+Permiso: `inventory.read`.
+
+Query params opcionales:
+
+- `product_uid`
+- `warehouse_uid`
+
+Devuelve disponibilidad consolidada usando la regla:
+
+`stock_disponible = stock_fisico - stock_reservado`
+
+Success:
+
+```json
+{
+  "success": true,
+  "message": null,
+  "data": {
+    "filters": {
+      "product_uid": "0c6f2739-f6f4-4cc8-9f86-6726bb4d4d5b",
+      "warehouse_uid": "4d0f1a13-c2a7-41be-9a4f-6db09b95f713"
+    },
+    "data": [
+      {
+        "uid": "8d4fdb08-a5e5-429e-baa5-5c775ca6ef7f",
+        "product_uid": "0c6f2739-f6f4-4cc8-9f86-6726bb4d4d5b",
+        "warehouse_uid": "4d0f1a13-c2a7-41be-9a4f-6db09b95f713",
+        "physical_stock": 10,
+        "reserved_stock": 5,
+        "available_stock": 5,
+        "stock_state": "normal",
+        "stock_indicator": "green"
+      }
+    ],
+    "summary": {
+      "physical_stock": 10,
+      "reserved_stock": 5,
+      "available_stock": 5
+    }
+  },
+  "errors": null
+}
+```
+
 ### `GET /api/inventory/categories`
 
 Auth requerida.
@@ -1353,6 +1768,56 @@ Permiso: `inventory.read`.
 
 Devuelve reservas agrupadas por origen comercial.
 
+Notas:
+
+- si se intenta reservar de nuevo el mismo `product_uid + warehouse_uid + source_type + source_uid`, el backend no duplica sin control
+- en su lugar, consolida la cantidad en la reserva activa existente
+
+### `POST /api/inventory/reservations/{uid}/consume`
+
+Auth requerida.
+Permiso: `inventory.reserve`.
+
+Usa una reserva activa en una venta confirmada:
+
+- descuenta stock fisico
+- descuenta stock reservado
+- cambia el estado de la reserva a `consumed`
+
+Payload opcional:
+
+```json
+{
+  "reference_type": "sale",
+  "reference_uid": "sale-001",
+  "comment": "Venta confirmada"
+}
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "message": "Reserva consumida",
+  "data": {
+    "reservation": {
+      "uid": "7a9865f2-e6ab-4d4f-a2e7-7d30b30a78d0",
+      "status": "consumed"
+    },
+    "preview": {
+      "stock_actual": 10,
+      "stock_reservado_actual": 5,
+      "stock_disponible": 5,
+      "projected_physical_stock": 5,
+      "projected_reserved_stock": 0,
+      "projected_available_stock": 5
+    }
+  },
+  "errors": null
+}
+```
+
 ### `DELETE /api/inventory/reservations/{uid}`
 
 Auth requerida.
@@ -1380,6 +1845,28 @@ Payload:
 Notas:
 
 - devuelve `preview` con resultado proyectado en origen y destino
+
+### `GET /api/inventory/movements`
+
+Auth requerida.
+Permiso: `inventory.read`.
+
+Query params opcionales:
+
+- `product_uid`
+- `warehouse_uid`
+- `reference_type`
+- `reference_uid`
+- `type`
+
+Permite consultar el historico de movimientos:
+
+- entradas
+- salidas
+- transferencias
+- reservas
+- liberaciones
+- consumos de reserva
 
 ### `GET /api/inventory/report`
 
@@ -1435,6 +1922,11 @@ Devuelve la cotizacion con sus items y el indicador de reserva:
 - `reservation_indicator = partial`
 - `reservation_indicator = reserved`
 
+Notas:
+
+- si una cotizacion pasa a estado `approved`, el backend intenta reservar automaticamente el stock pendiente de sus items
+- si un item aprobado no tiene `product_uid` o `warehouse_uid`, la aprobacion responde con error de validacion
+
 ### `POST /api/quotations/{uid}/items`
 
 Auth requerida.
@@ -1478,19 +1970,955 @@ Permiso: `inventory.reserve`.
 
 Libera una reserva hecha desde CPQ para ese item.
 
+### `GET /api/quotations/{uid}/pdf`
+
+Auth requerida.
+Permiso: `quotations.read`.
+
+Devuelve la cotizacion en PDF descargable.
+
+### `POST /api/quotations/{uid}/send`
+
+Auth requerida.
+Permiso: `quotations.update`.
+
+Payload opcional:
+
+```json
+{
+  "recipient_email": "compras@cliente.com",
+  "subject": "Cotizacion comercial",
+  "message": "Adjunto envio la cotizacion para revision."
+}
+```
+
+Notas:
+
+- si no se envia `recipient_email`, el backend intenta resolverlo desde la entidad comercial asociada
+- si la cotizacion estaba en `draft`, al enviarla cambia a `sent`
+
+## Finanzas Operativas
+
+### Price Books y Multimoneda
+
+Las listas de precios soportan canales:
+
+- `B2C`
+- `B2B`
+- `B2G`
+
+Cada item de lista de precios puede incluir:
+
+- `unit_price`
+- `currency`
+- `min_margin_percent`
+
+Las cotizaciones soportan:
+
+- `currency`
+- `exchange_rate`
+- `local_currency`
+
+Esto permite cotizar en moneda extranjera y facturar en moneda local.
+
+### Dashboard Financiero F1
+
+### `GET /api/finance/dashboard`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve el resumen financiero operativo del tenant e incluye:
+
+- `monthly_sales`
+- `pending_invoices`
+- `overdue_invoices`
+- `average_margin`
+- `weekly_sales`
+- `recent_invoices`
+
+Tambien conserva las claves historicas `totals` y `counts` para no romper integraciones anteriores.
+
+### Cotizaciones F1
+
+Ademas de `/api/quotations`, el backend expone aliases funcionales bajo `/api/quotes`.
+
+### `GET /api/quotes`
+
+Auth requerida.
+Permiso: `quotations.read`.
+
+Lista cotizaciones del tenant.
+
+### `POST /api/quotes`
+
+Auth requerida.
+Permiso: `quotations.create`.
+
+Permite crear cotizaciones con validacion de stock, precio y credito.
+
+Payload ejemplo:
+
+```json
+{
+  "entity_type": "account",
+  "entity_uid": "8adf7bb4-5f3f-4d15-84ea-4d6c0bdbdb0a",
+  "price_book_uid": "b1b8a3d3-1f1a-49e7-9bdf-9d4b83d406d2",
+  "currency": "USD",
+  "local_currency": "COP",
+  "exchange_rate": 4000
+}
+```
+
+### `POST /api/quotes/{uid}/items`
+
+Auth requerida.
+Permiso: `quotations.update`.
+
+Agrega items y recalcula precios, descuentos, totales y margen.
+
+### `POST /api/quotes/{uid}/approve`
+
+Auth requerida.
+Permiso: `quotations.update`.
+
+Aprueba la cotizacion y dispara la logica de reserva de stock cuando aplica.
+
+### `POST /api/quotes/{uid}/reject`
+
+Auth requerida.
+Permiso: `quotations.update`.
+
+Marca la cotizacion como rechazada.
+
+### `POST /api/quotes/{uid}/convert`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Convierte la cotizacion a factura.
+
+### `POST /api/price-books`
+
+Auth requerida.
+Permiso: `price-books.manage`.
+
+Payload ejemplo:
+
+```json
+{
+  "name": "Lista B2G USD",
+  "key": "lista-b2g-usd",
+  "channel": "B2G",
+  "items": [
+    {
+      "product_uid": "0c6f2739-f6f4-4cc8-9f86-6726bb4d4d5b",
+      "unit_price": 100,
+      "currency": "USD",
+      "min_margin_percent": 10
+    }
+  ]
+}
+```
+
+### `POST /api/finance/invoices`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Genera factura a partir de una cotizacion.
+
+Payload:
+
+```json
+{
+  "quotation_uid": "8adf7bb4-5f3f-4d15-84ea-4d6c0bdbdb0a",
+  "invoice_number": "FAC-0001",
+  "currency": "COP",
+  "exchange_rate": 4000,
+  "due_date": "2026-05-08"
+}
+```
+
+Reglas:
+
+- valida riesgo de credito del cliente antes de facturar
+- exige stock reservado suficiente para todos los items
+- consume reservas de inventario al confirmar la factura
+- crea/actualiza cartera operativa en `financial_records`
+
+Estados soportados:
+
+- `draft`
+- `issued`
+- `partial`
+- `paid`
+- `overdue`
+
+### `GET /api/finance/invoices`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Query params opcionales:
+
+- `entity_type`
+- `entity_uid`
+- `status`
+
+Permite listar facturas por cliente y estado.
+
+### `POST /api/finance/payments`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Registra pagos parciales o totales.
+
+Payload:
+
+```json
+{
+  "invoice_uid": "8adf7bb4-5f3f-4d15-84ea-4d6c0bdbdb0a",
+  "amount": 200000,
+  "payment_date": "2026-04-08",
+  "method": "transfer",
+  "external_reference": "PAY-0001"
+}
+```
+
+Reglas:
+
+- no permite pagos mayores al saldo pendiente
+- actualiza `paid_total`
+- actualiza `outstanding_total`
+- cambia la factura a `partial` o `paid`
+- registra el movimiento en cartera operativa
+
+### `POST /api/payments`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Alias funcional de `POST /api/finance/payments`.
+
+### `GET /api/finance/payments`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Query params opcionales:
+
+- `invoice_uid`
+
+Devuelve historial de pagos.
+
+### `GET /api/payments/{invoiceUid}`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve historial de pagos asociado a una factura puntual.
+
+### `GET /api/finance/credit/{type}/{uid}`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve resumen de credito del cliente:
+
+- `credit_limit`
+- `status`
+- `outstanding_total`
+- `overdue_total`
+- `has_overdue`
+- `max_days_overdue`
+- `auto_block`
+
+### `PUT /api/finance/credit/{type}/{uid}`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Payload:
+
+```json
+{
+  "credit_limit": 5000,
+  "status": "ok",
+  "max_days_overdue": 30,
+  "auto_block": true
+}
+```
+
+Estados soportados:
+
+- `ok`
+- `blocked`
+
+### Tasas de Cambio
+
+### `GET /api/currency/rates`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Lista tasas de cambio registradas.
+
+### `POST /api/currency/rates`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Registra o actualiza tasas de cambio.
+
+Payload:
+
+```json
+{
+  "from_currency": "USD",
+  "to_currency": "COP",
+  "rate": 4000,
+  "date": "2026-04-08"
+}
+```
+
+### `POST /api/currency/convert`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Convierte montos entre monedas usando la tasa registrada.
+
+Payload:
+
+```json
+{
+  "amount": 100,
+  "from_currency": "USD",
+  "to_currency": "COP",
+  "date": "2026-04-08"
+}
+```
+
+### `GET /api/finance/alerts`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve alertas financieras dedicadas:
+
+- facturas vencidas
+- clientes en riesgo
+- total vencido
+
+Success:
+
+```json
+{
+  "success": true,
+  "message": null,
+  "data": {
+    "summary": {
+      "overdue_invoices_count": 1,
+      "customers_at_risk_count": 1,
+      "overdue_total": 1000
+    },
+    "overdue_invoices": [
+      {
+        "record_uid": "f1c8f0d1-5d5b-4c73-9f0b-7cb3d95e6024",
+        "entity_uid": "c3c2f54c-e8d0-4056-a4ce-ef6550ca4a61",
+        "external_reference": "FAC-0001",
+        "currency": "COP",
+        "outstanding_amount": 1000,
+        "due_at": "2026-04-07"
+      }
+    ],
+    "customer_risk": [
+      {
+        "entity_uid": "c3c2f54c-e8d0-4056-a4ce-ef6550ca4a61",
+        "entity_type": "App\\Models\\Account",
+        "outstanding_amount": 1000,
+        "overdue_amount": 1000,
+        "risk_level": "high"
+      }
+    ]
+  },
+  "errors": null
+}
+```
+
+### `POST /api/finance/sync-overdue`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Sincroniza facturas emitidas o parciales cuyo `due_date` ya vencio y las pasa a `overdue`.
+
+Tambien actualiza la cartera operativa enlazada a esas facturas.
+
+### `GET /api/finance/records`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Permite consultar cartera operativa consolidada.
+
+Query params opcionales:
+
+- `entity_type`
+- `entity_uid`
+- `status`
+- `record_type`
+- `source_system`
+
+### `POST /api/finance/import`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Permite importar registros financieros externos para integracion contable minima.
+
+### `GET /api/finance/customer/{type}/{uid}/summary`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve resumen de cartera por cliente:
+
+- `invoiced`
+- `paid`
+- `outstanding`
+- `overdue`
+
+### `GET /api/finance/dashboard`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve resumen operativo financiero del tenant.
+
+### Bloqueo de Credito
+
+El backend bloquea operaciones comerciales si:
+
+- el perfil de credito esta en `blocked`
+- el cliente tiene deuda vencida
+- el saldo supera el limite de credito definido
+
+El bloqueo se valida en:
+
+- creacion y actualizacion operativa de cotizaciones
+- facturacion desde cotizacion
+
+### Checklist Finanzas Operativas
+
+- [x] precios por canal `B2C`, `B2B`, `B2G`
+- [x] cotizaciones con descuentos y margen
+- [x] aliases F1 en `/api/quotes`
+- [x] cotizaciones en moneda extranjera
+- [x] facturacion en moneda local con tasa de cambio
+- [x] tasas de cambio y conversion de moneda
+- [x] facturas desde cotizacion
+- [x] pagos parciales y totales
+- [x] aliases F1 en `/api/payments`
+- [x] saldo pendiente por factura
+- [x] estado de cartera por cliente
+- [x] bloqueo por riesgo de credito
+- [x] reglas finas de credito con `max_days_overdue` y `auto_block`
+- [x] alertas de morosidad y riesgo
+- [x] sincronizacion formal de facturas `overdue`
+- [x] integracion con inventario al facturar
+- [x] dashboard financiero F1
+
+## Comisiones
+
+### Planes y Asignaciones
+
+El backend soporta planes de comision por:
+
+- `sale`
+- `margin`
+- `target`
+
+Cada plan puede incluir:
+
+- `base_percent`
+- `tiers_json`
+- `starts_at`
+- `ends_at`
+- `active`
+- `role_uids`
+
+### `GET /api/commissions/plans`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Lista planes de comision del tenant.
+
+### `POST /api/commissions/plans`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Payload:
+
+```json
+{
+  "name": "Plan Escalonado",
+  "type": "sale",
+  "base_percent": 5,
+  "tiers_json": [
+    {
+      "threshold": 1000,
+      "percent": 7
+    }
+  ],
+  "active": true
+}
+```
+
+### `PUT /api/commissions/plans/{uid}`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Actualiza plan, vigencia, roles aplicables o tramos.
+
+### `GET /api/commissions/assignments`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Filtros opcionales:
+
+- `user_uid`
+- `manager_uid`
+- `active`
+
+### `POST /api/commissions/assignments`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Payload:
+
+```json
+{
+  "user_uid": "8d7e7c3d-7f8b-4b3a-a2b0-e773f8ed0ed9",
+  "commission_plan_uid": "4c0d9cf6-8a27-4db2-b95d-4a6711ec92bb",
+  "starts_at": "2026-04-01",
+  "ends_at": "2026-04-30",
+  "active": true
+}
+```
+
+Reglas:
+
+- valida solapamientos de asignaciones activas
+- valida que el vendedor cumpla los roles aplicables del plan cuando existan
+
+### `PUT /api/commissions/assignments/{uid}`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Permite ajustar plan, fechas o estado de la asignacion.
+
+### Metas
+
+### `GET /api/commissions/targets`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Filtro opcional:
+
+- `user_uid`
+
+### `POST /api/commissions/targets`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Payload:
+
+```json
+{
+  "user_uid": "8d7e7c3d-7f8b-4b3a-a2b0-e773f8ed0ed9",
+  "period": "2026-04",
+  "target_amount": 2000
+}
+```
+
+### Dashboard y Simulacion
+
+### `GET /api/commissions/dashboard/{userUid}`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Devuelve:
+
+- `monthly_target`
+- `sales_achieved`
+- `projected_commission`
+- `liquidated_commission`
+- `progress_percent`
+- `active_assignment`
+
+### `POST /api/commissions/simulate`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Payload:
+
+```json
+{
+  "user_uid": "8d7e7c3d-7f8b-4b3a-a2b0-e773f8ed0ed9",
+  "sale_amount": 1500,
+  "margin_amount": 300,
+  "period": "2026-04"
+}
+```
+
+Devuelve:
+
+- porcentaje aplicado
+- comision proyectada
+- desglose por tramo en `tier_breakdown`
+
+### Entradas y Liquidaciones
+
+Las entradas de comision siguen generandose desde recaudos pagados. Si el vendedor tiene un plan activo, el backend prioriza ese plan; si no, hace fallback a las reglas historicas de `commission_rules`.
+
+### `GET /api/commissions/entries`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Filtro opcional:
+
+- `user_uid`
+
+### `POST /api/commissions/financial-records`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Registra el recaudo y genera `commission_entries`.
+
+### `PUT /api/commissions/entries/{uid}/pay`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Marca una entrada puntual como pagada.
+
+### `GET /api/commissions/runs`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Filtros opcionales:
+
+- `user_uid`
+- `status`
+
+### `POST /api/commissions/runs`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Payload:
+
+```json
+{
+  "user_uid": "8d7e7c3d-7f8b-4b3a-a2b0-e773f8ed0ed9",
+  "period_start": "2026-04-01",
+  "period_end": "2026-04-30"
+}
+```
+
+Crea una liquidacion a partir de entradas no liquidadas del periodo.
+
+### `POST /api/commissions/runs/{uid}/approve`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Marca la liquidacion como `approved`.
+
+### `POST /api/commissions/runs/{uid}/pay`
+
+Auth requerida.
+Permiso: `commissions.manage`.
+
+Marca la liquidacion como `paid` y sincroniza sus entradas asociadas.
+
+### Checklist Comisiones
+
+- [x] planes de comision
+- [x] tramos escalonados
+- [x] asignacion de planes a vendedores
+- [x] metas por periodo
+- [x] simulador backend
+- [x] dashboard por vendedor
+- [x] entradas de comision desde recaudos
+- [x] historial de comisiones
+- [x] liquidaciones con estados `pending`, `approved`, `paid`
+- [x] compatibilidad con reglas historicas
+
+## Gastos y Compras
+
+### Categorias y Proveedores
+
+El backend soporta categorias de gasto y proveedores simples para Fase 2.
+
+### `GET /api/expenses/categories`
+
+Auth requerida.
+Permiso: `expenses.read`.
+
+### `POST /api/expenses/categories`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+Payload:
+
+```json
+{
+  "name": "Viaticos",
+  "key": "viaticos",
+  "description": "Gastos de desplazamiento"
+}
+```
+
+### `PUT /api/expenses/categories/{uid}`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+### `DELETE /api/expenses/categories/{uid}`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+### `GET /api/expenses/suppliers`
+
+Auth requerida.
+Permiso: `expenses.read`.
+
+### `POST /api/expenses/suppliers`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+Payload:
+
+```json
+{
+  "name": "Proveedor Industrial",
+  "email": "proveedor@example.com",
+  "phone": "3001234567"
+}
+```
+
+### Gastos
+
+Los gastos pueden asociarse opcionalmente a:
+
+- cliente
+- entidad CRM
+- centro de costo simple
+- proveedor
+
+### `GET /api/expenses`
+
+Auth requerida.
+Permiso: `expenses.read`.
+
+Filtros opcionales:
+
+- `category_uid`
+- `supplier_uid`
+- `entity_type`
+- `entity_uid`
+- `status`
+- `cost_center`
+
+### `POST /api/expenses`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+Payload:
+
+```json
+{
+  "expense_category_uid": "8d7e7c3d-7f8b-4b3a-a2b0-e773f8ed0ed9",
+  "supplier_uid": "4c0d9cf6-8a27-4db2-b95d-4a6711ec92bb",
+  "entity_type": "account",
+  "entity_uid": "c3c2f54c-e8d0-4056-a4ce-ef6550ca4a61",
+  "cost_center": "ventas-b2b",
+  "title": "Visita comercial",
+  "amount": 250,
+  "currency": "COP",
+  "expense_date": "2026-04-09",
+  "status": "approved"
+}
+```
+
+Estados soportados:
+
+- `draft`
+- `submitted`
+- `approved`
+- `paid`
+
+### `PUT /api/expenses/{uid}`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+### `DELETE /api/expenses/{uid}`
+
+Auth requerida.
+Permiso: `expenses.manage`.
+
+### Ordenes de Compra
+
+Las ordenes de compra soportan:
+
+- proveedor
+- items
+- costo unitario
+- asociacion opcional a `source_type/source_uid`
+- recepcion con impacto en inventario cuando el item trae `product_uid` y `warehouse_uid`
+
+### `GET /api/purchases/orders`
+
+Auth requerida.
+Permiso: `purchases.read`.
+
+Filtros opcionales:
+
+- `status`
+- `supplier_uid`
+- `source_type`
+- `source_uid`
+
+### `POST /api/purchases/orders`
+
+Auth requerida.
+Permiso: `purchases.manage`.
+
+Payload:
+
+```json
+{
+  "supplier_uid": "4c0d9cf6-8a27-4db2-b95d-4a6711ec92bb",
+  "purchase_number": "OC-0001",
+  "currency": "COP",
+  "items": [
+    {
+      "product_uid": "0c6f2739-f6f4-4cc8-9f86-6726bb4d4d5b",
+      "warehouse_uid": "43e01e15-bdd3-49b9-918e-700a526caa17",
+      "description": "Router Empresarial",
+      "quantity": 5,
+      "unit_cost": 80
+    }
+  ]
+}
+```
+
+### `GET /api/purchases/orders/{uid}`
+
+Auth requerida.
+Permiso: `purchases.read`.
+
+### `PUT /api/purchases/orders/{uid}`
+
+Auth requerida.
+Permiso: `purchases.manage`.
+
+Las lineas solo se reescriben libremente mientras la orden sigue en `draft`.
+
+### `POST /api/purchases/orders/{uid}/approve`
+
+Auth requerida.
+Permiso: `purchases.manage`.
+
+Marca la orden como `approved`.
+
+### `POST /api/purchases/orders/{uid}/receive`
+
+Auth requerida.
+Permiso: `purchases.manage`.
+
+Marca la orden como `received` y aumenta stock fisico cuando los items tienen producto y bodega.
+
+Estados soportados:
+
+- `draft`
+- `approved`
+- `received`
+- `cancelled`
+
+### Rentabilidad basica
+
+### `GET /api/expenses/report`
+
+Auth requerida.
+Permiso: `expenses.report`.
+
+Permite comparar ingreso vs gasto con filtros opcionales:
+
+- `entity_type`
+- `entity_uid`
+- `cost_center`
+
+Devuelve:
+
+- `income_total`
+- `expense_total`
+- `real_margin`
+- desglose de gastos por categoria
+
+### Checklist Gastos y Compras
+
+- [x] categorias de gasto
+- [x] proveedores simples
+- [x] gastos asociados a cliente o centro de costo
+- [x] estados basicos de gasto
+- [x] ordenes de compra
+- [x] items de compra
+- [x] aprobacion de compras
+- [x] recepcion de compras con impacto en inventario
+- [x] reporte simple de rentabilidad ingreso vs gasto
+- [x] permisos y pruebas del modulo
+
 ## Checklist CORE - Inventario Comercial
 
 - [x] Vista maestro de inventario con filtros por categoria, bodega y estado
 - [x] Stock fisico, reservado y disponible
 - [x] Indicador de stock `green`, `yellow`, `red`
+- [x] Consulta de disponibilidad por producto y bodega
 - [x] Reserva de stock integrada a cotizacion B2B real
 - [x] Preview de reserva con resultado proyectado
 - [x] Alerta `422` cuando la reserva excede disponible
+- [x] Control de duplicidad de reservas por referencia
+- [x] Consumo de reservas en venta confirmada
 - [x] Multi-bodega con movimiento y vista previa
+- [x] Historico de movimientos de inventario
 - [x] Reporte comercial con resumen por categoria
 - [x] Productos criticos
 - [x] Export CSV
 - [x] Widget backend de riesgo de ruptura
+- [x] Auto-reserva al aprobar cotizaciones
 - [x] Tests de integracion del modulo
 
 ## Redis para Dashboard

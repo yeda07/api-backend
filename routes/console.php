@@ -4,6 +4,7 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\InvoiceService;
 use App\Services\SearchBenchmarkService;
 use Laravel\Sanctum\Sanctum;
 
@@ -51,3 +52,11 @@ Artisan::command('search:benchmark {--tenant_uid=} {--user_uid=} {--iterations=5
 
     return 0;
 })->purpose('Measure search performance using representative backend scenarios');
+
+Artisan::command('finance:sync-overdue', function () {
+    $result = app(InvoiceService::class)->syncOverdue();
+
+    $this->info('Facturas vencidas sincronizadas: ' . $result['updated_invoices']);
+
+    return 0;
+})->purpose('Mark issued and partial invoices as overdue when due date has passed');
