@@ -7,6 +7,8 @@ use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\CommissionEntry;
 use App\Models\CommissionRule;
+use App\Models\Battlecard;
+use App\Models\Competitor;
 use App\Models\CostCenter;
 use App\Models\CustomField;
 use App\Models\Invoice;
@@ -24,6 +26,7 @@ use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
 use App\Models\InventoryStock;
 use App\Models\Interaction;
+use App\Models\LostReason;
 use App\Models\PriceBook;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
@@ -3825,6 +3828,130 @@ class PublicUidApiTest extends TestCase
             ->assertJsonPath('data.purchase_orders.0.uid', $orderUid);
     }
 
+    public function test_competitive_intelligence_module_supports_competitors_battlecards_lost_reasons_and_report(): void
+    {
+        $user = $this->authenticate();
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Acme SAS',
+            'document' => '900123456',
+            'email' => 'acme@example.com',
+        ]);
+
+        $stage = OpportunityStage::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Lost',
+            'key' => 'lost',
+            'position' => 1,
+            'probability_percent' => 0,
+            'is_lost' => true,
+            'is_active' => true,
+        ]);
+
+        $opportunity = Opportunity::create([
+            'tenant_id' => $user->tenant_id,
+            'stage_id' => $stage->getKey(),
+            'entity_type' => Account::class,
+            'entity_id' => $account->getKey(),
+            'title' => 'Licitacion ACME 2026',
+            'amount' => 15000,
+        ]);
+
+        $competitorResponse = $this->postJson('/api/competitive-intelligence/competitors', [
+            'name' => 'Competidor X',
+            'key' => 'competidor-x',
+            'website' => 'https://competidor-x.test',
+            'strengths' => ['Precio agresivo'],
+            'weaknesses' => ['Soporte limitado'],
+            'notes' => 'Muy fuerte en licitaciones publicas',
+        ]);
+
+        $competitorUid = $competitorResponse->json('data.uid');
+
+        $competitorResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.name', 'Competidor X');
+
+        $battlecardResponse = $this->postJson('/api/competitive-intelligence/battlecards', [
+            'competitor_uid' => $competitorUid,
+            'title' => 'Argumentario contra Competidor X',
+            'summary' => 'Resaltar soporte y tiempo de implementacion',
+            'differentiators' => ['Mejor soporte', 'Menor riesgo operativo'],
+            'objection_handlers' => ['Si comparan precio, volver a TCO'],
+            'recommended_actions' => ['Compartir caso de exito similar'],
+        ]);
+
+        $battlecardResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.competitor_uid', $competitorUid);
+
+        $battlecardsByCompetitor = $this->getJson("/api/competitive-intelligence/competitors/{$competitorUid}/battlecards");
+        $battlecardsByCompetitor->assertOk()
+            ->assertJsonPath('data.0.title', 'Argumentario contra Competidor X')
+            ->assertJsonPath('data.0.competitor_uid', $competitorUid);
+
+        $lostReasonResponse = $this->postJson('/api/competitive-intelligence/lost-reasons', [
+            'competitor_uid' => $competitorUid,
+            'opportunity_uid' => $opportunity->uid,
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'reason_type' => 'price',
+            'summary' => 'Perdido por precio final',
+            'details' => 'El cliente eligio una opcion mas barata',
+            'lost_at' => '2026-04-15',
+            'estimated_value' => 15000,
+        ]);
+
+        $lostReasonResponse->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.reason_type', 'price')
+            ->assertJsonPath('data.competitor_uid', $competitorUid)
+            ->assertJsonPath('data.opportunity_uid', $opportunity->uid)
+            ->assertJsonPath('data.entity_uid', $account->uid);
+
+        $this->getJson('/api/competitive-intelligence/lost-reasons?competitor_uid=' . $competitorUid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.summary', 'Perdido por precio final');
+
+        $this->getJson('/api/competitive-intelligence/lost-reasons/report')
+            ->assertOk()
+            ->assertJsonPath('data.summary.count', 1)
+            ->assertJsonPath('data.summary.estimated_value_total', 15000)
+            ->assertJsonPath('data.by_reason_type.0.reason_type', 'price')
+            ->assertJsonPath('data.by_reason_type.0.count', 1)
+            ->assertJsonPath('data.by_competitor.0.competitor', 'Competidor X');
+
+        $this->assertDatabaseHas('competitors', [
+            'tenant_id' => $user->tenant_id,
+            'key' => 'competidor-x',
+        ]);
+
+        $this->assertDatabaseHas('battlecards', [
+            'tenant_id' => $user->tenant_id,
+            'title' => 'Argumentario contra Competidor X',
+        ]);
+
+        $this->assertDatabaseHas('lost_reasons', [
+            'tenant_id' => $user->tenant_id,
+            'reason_type' => 'price',
+            'opportunity_id' => $opportunity->getKey(),
+        ]);
+    }
+
+    public function test_competitive_intelligence_routes_require_permissions(): void
+    {
+        $this->authenticate(['accounts.read']);
+
+        $this->getJson('/api/competitive-intelligence/competitors')->assertForbidden();
+        $this->postJson('/api/competitive-intelligence/competitors', [
+            'name' => 'Competidor X',
+            'key' => 'competidor-x',
+        ])->assertForbidden();
+        $this->getJson('/api/competitive-intelligence/lost-reasons/report')->assertForbidden();
+    }
+
     private function authenticate(?array $permissionKeys = null): User
     {
         $tenant = Tenant::create([
@@ -3896,6 +4023,9 @@ class PublicUidApiTest extends TestCase
             'expenses.report',
             'purchases.read',
             'purchases.manage',
+            'competitive-intelligence.read',
+            'competitive-intelligence.manage',
+            'competitive-intelligence.report',
         ];
 
         $this->grantPermissions($user, $permissionKeys);

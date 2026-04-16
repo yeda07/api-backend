@@ -65,6 +65,9 @@ class PermissionSeeder extends Seeder
             ['key' => 'expenses.report', 'module' => 'expenses', 'action' => 'report', 'description' => 'Ver reportes de gastos'],
             ['key' => 'purchases.read', 'module' => 'purchases', 'action' => 'read', 'description' => 'Ver ordenes de compra'],
             ['key' => 'purchases.manage', 'module' => 'purchases', 'action' => 'manage', 'description' => 'Administrar ordenes de compra'],
+            ['key' => 'competitive-intelligence.read', 'module' => 'competitive-intelligence', 'action' => 'read', 'description' => 'Ver inteligencia competitiva'],
+            ['key' => 'competitive-intelligence.manage', 'module' => 'competitive-intelligence', 'action' => 'manage', 'description' => 'Administrar competidores, battlecards y lost reasons'],
+            ['key' => 'competitive-intelligence.report', 'module' => 'competitive-intelligence', 'action' => 'report', 'description' => 'Ver analitica de inteligencia competitiva'],
         ];
 
         foreach ($permissions as $permission) {

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AccessControlController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CommissionController;
+use App\Http\Controllers\Api\CompetitiveIntelligenceController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\CrmEntityController;
 use App\Http\Controllers\Api\CurrencyController;
@@ -246,6 +247,25 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/runs', [CommissionController::class, 'storeRun'])->middleware('permission:commissions.manage');
         Route::post('/runs/{uid}/approve', [CommissionController::class, 'approveRun'])->middleware('permission:commissions.manage');
         Route::post('/runs/{uid}/pay', [CommissionController::class, 'payRun'])->middleware('permission:commissions.manage');
+    });
+
+    Route::prefix('competitive-intelligence')->group(function () {
+        Route::get('/competitors', [CompetitiveIntelligenceController::class, 'competitors'])->middleware('permission:competitive-intelligence.read');
+        Route::post('/competitors', [CompetitiveIntelligenceController::class, 'storeCompetitor'])->middleware('permission:competitive-intelligence.manage');
+        Route::put('/competitors/{uid}', [CompetitiveIntelligenceController::class, 'updateCompetitor'])->middleware('permission:competitive-intelligence.manage');
+        Route::delete('/competitors/{uid}', [CompetitiveIntelligenceController::class, 'destroyCompetitor'])->middleware('permission:competitive-intelligence.manage');
+
+        Route::get('/battlecards', [CompetitiveIntelligenceController::class, 'battlecards'])->middleware('permission:competitive-intelligence.read');
+        Route::get('/competitors/{uid}/battlecards', [CompetitiveIntelligenceController::class, 'battlecardsByCompetitor'])->middleware('permission:competitive-intelligence.read');
+        Route::post('/battlecards', [CompetitiveIntelligenceController::class, 'storeBattlecard'])->middleware('permission:competitive-intelligence.manage');
+        Route::put('/battlecards/{uid}', [CompetitiveIntelligenceController::class, 'updateBattlecard'])->middleware('permission:competitive-intelligence.manage');
+        Route::delete('/battlecards/{uid}', [CompetitiveIntelligenceController::class, 'destroyBattlecard'])->middleware('permission:competitive-intelligence.manage');
+
+        Route::get('/lost-reasons', [CompetitiveIntelligenceController::class, 'lostReasons'])->middleware('permission:competitive-intelligence.read');
+        Route::post('/lost-reasons', [CompetitiveIntelligenceController::class, 'storeLostReason'])->middleware('permission:competitive-intelligence.manage');
+        Route::put('/lost-reasons/{uid}', [CompetitiveIntelligenceController::class, 'updateLostReason'])->middleware('permission:competitive-intelligence.manage');
+        Route::delete('/lost-reasons/{uid}', [CompetitiveIntelligenceController::class, 'destroyLostReason'])->middleware('permission:competitive-intelligence.manage');
+        Route::get('/lost-reasons/report', [CompetitiveIntelligenceController::class, 'lostReasonsReport'])->middleware('permission:competitive-intelligence.report');
     });
 
     Route::prefix('expenses')->group(function () {

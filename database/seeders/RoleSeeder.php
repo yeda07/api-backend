@@ -74,6 +74,9 @@ class RoleSeeder extends Seeder
                     'expenses.report',
                     'purchases.read',
                     'purchases.manage',
+                    'competitive-intelligence.read',
+                    'competitive-intelligence.manage',
+                    'competitive-intelligence.report',
                 ],
             ],
             'seller' => [
@@ -119,6 +122,8 @@ class RoleSeeder extends Seeder
                     'expenses.read',
                     'expenses.report',
                     'purchases.read',
+                    'competitive-intelligence.read',
+                    'competitive-intelligence.manage',
                 ],
             ],
         ];
