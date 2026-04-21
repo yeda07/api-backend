@@ -10,10 +10,9 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
 COPY . .
 
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 RUN chmod +x /app/docker/render-start.sh
 
 EXPOSE 10000
