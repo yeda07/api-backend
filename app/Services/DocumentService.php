@@ -286,8 +286,14 @@ class DocumentService
 
     private function storeFile(UploadedFile $file): array
     {
-        $disk = config('filesystems.default', 'local');
+        $disk = config('filesystems.documents_disk', config('filesystems.default', 'local'));
         $path = $file->store('documents/' . auth()->user()->tenant_id, $disk);
+
+        if (!$path) {
+            throw ValidationException::withMessages([
+                'file' => ['No fue posible almacenar el archivo'],
+            ]);
+        }
 
         return [
             'disk' => $disk,

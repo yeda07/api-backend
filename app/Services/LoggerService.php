@@ -15,44 +15,48 @@ class LoggerService
         'warning',
         'notice',
         'info',
-        'debug'
+        'debug',
     ];
 
     public static function log($level, $message, $context = [])
     {
-        //  Validar nivel
-        if (!in_array($level, self::$allowedLevels)) {
+        if (!in_array($level, self::$allowedLevels, true)) {
             $level = 'info';
         }
 
         $tenantId = auth()->user()?->tenant_id ?? null;
 
-        // PROTECCIÓN (evita loop infinito si falla DB)
         try {
             SystemLog::create([
                 'tenant_id' => $tenantId,
-                'level'     => $level,
-                'message'   => $message,
-                'context'   => $context
+                'level' => $level,
+                'message' => $message,
+                'context' => $context,
             ]);
         } catch (\Throwable $e) {
-            // no hacer nada (evita crash total)
+            // Best effort only: never break the request because system logging failed.
         }
 
-        // Log Laravel (siempre seguro)
-        Log::log($level, $message, $context);
+        try {
+            Log::log($level, $message, $context);
+        } catch (\Throwable $e) {
+            // File/stream logging can fail in restricted environments; ignore it safely.
+        }
 
-        // ALERTAS SOLO CRÍTICAS
-        if (in_array($level, ['error', 'critical'])) {
-            self::notify($message, $context);
+        if (in_array($level, ['error', 'critical'], true)) {
+            try {
+                self::notify($message, $context);
+            } catch (\Throwable $e) {
+                // Notifications are optional and must not affect application behavior.
+            }
         }
     }
 
     private static function notify($message, $context)
     {
-        Log::alert('ALERTA CRÍTICA', [
+        Log::alert('ALERTA CRITICA', [
             'message' => $message,
-            'context' => $context
+            'context' => $context,
         ]);
     }
 }
