@@ -15,12 +15,17 @@ use App\Models\Invoice;
 use App\Models\Permission;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\Product;
+use App\Models\ProductVersion;
 use App\Models\Relation;
 use App\Models\Role;
 use App\Models\Tag;
 use App\Models\Tenant;
 use App\Models\Activity;
 use App\Models\Document;
+use App\Models\DocumentAlert;
+use App\Models\DocumentType;
+use App\Models\DocumentVersion;
 use App\Models\InventoryCategory;
 use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
@@ -1701,6 +1706,176 @@ class PublicUidApiTest extends TestCase
             ->assertJsonPath('errors.file.0', 'Solo se permiten archivos PDF');
     }
 
+    public function test_b2g_documents_support_types_versions_and_account_queries(): void
+    {
+        Storage::fake('local');
+
+        $user = $this->authenticate(['documents.read', 'documents.create', 'documents.manage']);
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente B2G',
+            'document' => '900400010',
+        ]);
+
+        $typeResponse = $this->postJson('/api/document-types', [
+            'name' => 'RUT',
+            'description' => 'Registro tributario',
+            'validity_days' => 365,
+            'is_required' => true,
+            'alert_rules' => [
+                ['days_before' => 5, 'notification_channel' => 'system'],
+            ],
+        ]);
+
+        $typeUid = $typeResponse->json('data.uid');
+
+        $typeResponse->assertCreated()
+            ->assertJsonPath('data.name', 'RUT');
+
+        $uploadResponse = $this->postJson('/api/documents', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'document_type_uid' => $typeUid,
+            'issue_date' => now()->subDays(10)->toDateString(),
+            'expiration_date' => now()->addDays(2)->toDateString(),
+            'file' => UploadedFile::fake()->create('rut-v1.pdf', 100, 'application/pdf'),
+        ]);
+
+        $documentUid = $uploadResponse->json('data.uid');
+
+        $uploadResponse->assertCreated()
+            ->assertJsonPath('data.account_uid', $account->uid)
+            ->assertJsonPath('data.document_type_uid', $typeUid)
+            ->assertJsonPath('data.version_number', 1)
+            ->assertJsonPath('data.status', 'expiring');
+
+        $replaceResponse = $this->putJson("/api/documents/{$documentUid}", [
+            'issue_date' => now()->toDateString(),
+            'expiration_date' => now()->addDays(60)->toDateString(),
+            'file' => UploadedFile::fake()->create('rut-v2.pdf', 100, 'application/pdf'),
+        ]);
+
+        $replaceResponse->assertOk()
+            ->assertJsonPath('data.version_number', 2)
+            ->assertJsonPath('data.original_name', 'rut-v2.pdf')
+            ->assertJsonPath('data.status', 'valid');
+
+        $versionsResponse = $this->getJson("/api/documents/{$documentUid}/versions");
+        $versionsResponse->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['version_number' => 1, 'status' => 'replaced'])
+            ->assertJsonFragment(['version_number' => 2, 'status' => 'valid']);
+
+        $accountResponse = $this->getJson("/api/documents/account/{$account->uid}");
+        $accountResponse->assertOk()
+            ->assertJsonFragment(['uid' => $documentUid]);
+
+        $this->assertDatabaseHas('document_types', [
+            'name' => 'RUT',
+            'tenant_id' => $user->tenant_id,
+        ]);
+        $this->assertDatabaseHas('document_versions', [
+            'document_id' => Document::query()->where('uid', $documentUid)->value('id'),
+            'version_number' => 2,
+            'original_name' => 'rut-v2.pdf',
+        ]);
+    }
+
+    public function test_b2g_document_alerts_and_missing_validation_work(): void
+    {
+        Storage::fake('local');
+
+        $user = $this->authenticate(['documents.read', 'documents.create', 'documents.manage']);
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Entidad Estatal',
+            'document' => '900400011',
+        ]);
+
+        $rutType = $this->postJson('/api/document-types', [
+            'name' => 'RUT',
+            'is_required' => true,
+            'alert_rules' => [
+                ['days_before' => 10],
+            ],
+        ])->json('data.uid');
+
+        $this->postJson('/api/document-types', [
+            'name' => 'Camara de comercio',
+            'is_required' => true,
+        ])->assertCreated();
+
+        $this->postJson('/api/documents', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'document_type_uid' => $rutType,
+            'issue_date' => now()->subDays(20)->toDateString(),
+            'expiration_date' => now()->addDay()->toDateString(),
+            'file' => UploadedFile::fake()->create('rut.pdf', 100, 'application/pdf'),
+        ])->assertCreated();
+
+        $missingResponse = $this->getJson("/api/documents/missing/{$account->uid}");
+        $missingResponse->assertOk()
+            ->assertJsonFragment([
+                'document_type_name' => 'Camara de comercio',
+                'status' => 'missing',
+            ]);
+
+        $generateResponse = $this->postJson('/api/document-alerts/generate');
+        $alertUid = $generateResponse->json('data.alerts.0.uid');
+
+        $generateResponse->assertOk()
+            ->assertJsonPath('data.generated', 1);
+
+        $alertsResponse = $this->getJson("/api/document-alerts?account_uid={$account->uid}");
+        $alertsResponse->assertOk()
+            ->assertJsonFragment(['uid' => $alertUid, 'status' => 'pending']);
+
+        $this->postJson("/api/document-alerts/{$alertUid}/read")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'read');
+
+        $this->assertDatabaseHas('document_alerts', [
+            'uid' => $alertUid,
+            'status' => 'read',
+        ]);
+    }
+
+    public function test_required_b2g_documents_can_block_quote_creation(): void
+    {
+        $user = $this->authenticate([
+            'documents.read',
+            'documents.manage',
+            'quotations.create',
+            'quotations.read',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Licitacion',
+            'document' => '900400012',
+        ]);
+
+        DocumentType::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Poliza',
+            'is_required' => true,
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/quotes', [
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'quote_number' => 'Q-B2G-001',
+            'title' => 'Oferta B2G',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Validation error')
+            ->assertJsonPath('errors.documents.0', 'Faltan documentos requeridos para continuar');
+    }
+
     public function test_interactions_activities_and_documents_require_permissions(): void
     {
         $this->authenticate([]);
@@ -1717,6 +1892,20 @@ class PublicUidApiTest extends TestCase
 
         $documentResponse->assertStatus(403)
             ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: documents.create');
+    }
+
+    public function test_document_types_and_alert_generation_require_documents_manage_permission(): void
+    {
+        $this->authenticate(['documents.read', 'documents.create']);
+
+        $typeResponse = $this->postJson('/api/document-types', ['name' => 'RUT']);
+        $alertResponse = $this->postJson('/api/document-alerts/generate');
+
+        $typeResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: documents.manage');
+
+        $alertResponse->assertStatus(403)
+            ->assertJsonPath('errors.permission.0', 'No tienes el permiso requerido: documents.manage');
     }
 
     public function test_inventory_master_view_returns_aggregated_stock_and_filters(): void
@@ -3952,6 +4141,256 @@ class PublicUidApiTest extends TestCase
         $this->getJson('/api/competitive-intelligence/lost-reasons/report')->assertForbidden();
     }
 
+    public function test_product_catalog_supports_versions_dependencies_and_account_installations(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'products.read',
+            'products.manage',
+            'products.install',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Catalogo',
+            'document' => '901200100',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $baseProductResponse = $this->postJson('/api/products', [
+            'name' => 'Suite ERP Base',
+            'type' => 'product',
+            'sku' => 'CAT-ERP-BASE',
+            'description' => 'Modulo base',
+            'status' => 'active',
+            'initial_version' => '1.0',
+            'initial_release_date' => '2026-04-01',
+        ]);
+
+        $baseProductUid = $baseProductResponse->json('data.uid');
+
+        $baseProductResponse->assertCreated()
+            ->assertJsonPath('data.name', 'Suite ERP Base')
+            ->assertJsonPath('data.type', 'product')
+            ->assertJsonPath('data.versions.0.version', '1.0');
+
+        $serviceProductUid = $this->postJson('/api/products', [
+            'name' => 'Soporte Premium',
+            'type' => 'service',
+            'sku' => 'CAT-SOP-PREM',
+            'description' => 'Servicio asociado',
+            'status' => 'active',
+        ])->json('data.uid');
+
+        $versionResponse = $this->postJson("/api/products/{$baseProductUid}/versions", [
+            'version' => '2.0',
+            'release_date' => '2026-05-01',
+            'status' => 'active',
+        ]);
+
+        $versionUid = $versionResponse->json('data.uid');
+
+        $versionResponse->assertCreated()
+            ->assertJsonPath('data.product_uid', $baseProductUid)
+            ->assertJsonPath('data.version', '2.0');
+
+        $dependencyResponse = $this->postJson("/api/products/{$baseProductUid}/dependencies", [
+            'depends_on_product_uid' => $serviceProductUid,
+            'dependency_type' => 'required',
+            'message' => 'Debe incluir soporte',
+        ]);
+
+        $dependencyUid = $dependencyResponse->json('data.uid');
+
+        $dependencyResponse->assertCreated()
+            ->assertJsonPath('data.product_uid', $baseProductUid)
+            ->assertJsonPath('data.depends_on_product_uid', $serviceProductUid)
+            ->assertJsonPath('data.dependency_type', 'required');
+
+        $this->getJson("/api/products/{$baseProductUid}/dependencies")
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $dependencyUid)
+            ->assertJsonPath('data.0.depends_on_product_uid', $serviceProductUid);
+
+        $accountProductResponse = $this->postJson("/api/accounts/{$account->uid}/products", [
+            'product_uid' => $baseProductUid,
+            'product_version_uid' => $versionUid,
+            'installed_at' => '2026-04-15',
+            'status' => 'maintenance',
+            'notes' => 'Instalacion piloto',
+        ]);
+
+        $accountProductResponse->assertCreated()
+            ->assertJsonPath('data.account_uid', $account->uid)
+            ->assertJsonPath('data.product_uid', $baseProductUid)
+            ->assertJsonPath('data.product_version_uid', $versionUid)
+            ->assertJsonPath('data.status', 'maintenance');
+
+        $this->getJson("/api/accounts/{$account->uid}/products")
+            ->assertOk()
+            ->assertJsonPath('data.0.account_uid', $account->uid)
+            ->assertJsonPath('data.0.product_uid', $baseProductUid)
+            ->assertJsonPath('data.0.product_version_uid', $versionUid);
+
+        $this->assertDatabaseHas('products', [
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'CAT-ERP-BASE',
+        ]);
+
+        $this->assertDatabaseHas('product_versions', [
+            'tenant_id' => $user->tenant_id,
+            'version' => '2.0',
+        ]);
+
+        $this->assertDatabaseHas('product_dependencies', [
+            'tenant_id' => $user->tenant_id,
+            'dependency_type' => 'required',
+        ]);
+
+        $this->assertDatabaseHas('account_products', [
+            'tenant_id' => $user->tenant_id,
+            'status' => 'maintenance',
+        ]);
+    }
+
+    public function test_product_dependencies_block_duplicates_and_cycles(): void
+    {
+        $this->authenticate([
+            'products.read',
+            'products.manage',
+        ]);
+
+        $productAUid = $this->postJson('/api/products', [
+            'name' => 'Producto A',
+            'type' => 'product',
+            'sku' => 'CAT-A',
+        ])->json('data.uid');
+
+        $productBUid = $this->postJson('/api/products', [
+            'name' => 'Producto B',
+            'type' => 'product',
+            'sku' => 'CAT-B',
+        ])->json('data.uid');
+
+        $this->postJson("/api/products/{$productAUid}/dependencies", [
+            'depends_on_product_uid' => $productBUid,
+            'dependency_type' => 'required',
+        ])->assertCreated();
+
+        $this->postJson("/api/products/{$productAUid}/dependencies", [
+            'depends_on_product_uid' => $productBUid,
+            'dependency_type' => 'required',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['depends_on_product_uid']);
+
+        $this->postJson("/api/products/{$productBUid}/dependencies", [
+            'depends_on_product_uid' => $productAUid,
+            'dependency_type' => 'required',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors(['depends_on_product_uid']);
+    }
+
+    public function test_quote_with_catalog_product_auto_adds_required_dependency_and_blocks_incompatibilities(): void
+    {
+        $user = $this->authenticate([
+            'accounts.read',
+            'quotations.read',
+            'quotations.create',
+            'quotations.update',
+            'products.read',
+            'products.manage',
+        ]);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Dependencias',
+            'document' => '901200200',
+            'owner_user_id' => $user->getKey(),
+        ]);
+
+        $primaryUid = $this->postJson('/api/products', [
+            'name' => 'Plataforma Core',
+            'type' => 'product',
+            'sku' => 'CAT-CORE',
+        ])->json('data.uid');
+
+        $requiredUid = $this->postJson('/api/products', [
+            'name' => 'Servicio de Implementacion',
+            'type' => 'service',
+            'sku' => 'CAT-IMPL',
+        ])->json('data.uid');
+
+        $incompatibleUid = $this->postJson('/api/products', [
+            'name' => 'Motor Legado',
+            'type' => 'product',
+            'sku' => 'CAT-LEGACY',
+        ])->json('data.uid');
+
+        $this->postJson("/api/products/{$primaryUid}/dependencies", [
+            'depends_on_product_uid' => $requiredUid,
+            'dependency_type' => 'required',
+        ])->assertCreated();
+
+        $this->postJson("/api/products/{$primaryUid}/dependencies", [
+            'depends_on_product_uid' => $incompatibleUid,
+            'dependency_type' => 'incompatible',
+        ])->assertCreated();
+
+        $quoteUid = $this->postJson('/api/quotations', [
+            'quote_number' => 'CAT-QUOTE-001',
+            'title' => 'Cotizacion catalogo',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'status' => 'draft',
+        ])->json('data.uid');
+
+        $this->postJson("/api/quotations/{$quoteUid}/items", [
+            'catalog_product_uid' => $primaryUid,
+            'description' => 'Plataforma Core',
+            'quantity' => 1,
+            'unit_price' => 1000,
+        ])->assertCreated()
+            ->assertJsonPath('data.catalog_product_uid', $primaryUid);
+
+        $quoteAfterRequiredSync = $this->getJson("/api/quotations/{$quoteUid}");
+        $quoteAfterRequiredSync->assertOk()
+            ->assertJsonCount(2, 'data.items');
+
+        $catalogProductUids = collect($quoteAfterRequiredSync->json('data.items'))->pluck('catalog_product_uid')->filter()->values()->all();
+        $this->assertContains($primaryUid, $catalogProductUids);
+        $this->assertContains($requiredUid, $catalogProductUids);
+
+        $this->postJson("/api/quotations/{$quoteUid}/items", [
+            'catalog_product_uid' => $incompatibleUid,
+            'description' => 'Motor Legado',
+            'quantity' => 1,
+            'unit_price' => 200,
+        ])->assertCreated();
+
+        $this->postJson("/api/quotes/{$quoteUid}/approve")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['catalog_dependencies', 'incompatibilities']);
+    }
+
+    public function test_product_catalog_routes_require_permissions(): void
+    {
+        $user = $this->authenticate(['accounts.read']);
+
+        $account = Account::create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente Sin Permiso',
+            'document' => '901200300',
+        ]);
+
+        $this->getJson('/api/products')->assertForbidden();
+        $this->postJson('/api/products', [
+            'name' => 'Bloqueado',
+            'type' => 'product',
+            'sku' => 'CAT-BLOCK',
+        ])->assertForbidden();
+        $this->getJson("/api/accounts/{$account->uid}/products")->assertForbidden();
+    }
+
     private function authenticate(?array $permissionKeys = null): User
     {
         $tenant = Tenant::create([
@@ -3998,6 +4437,7 @@ class PublicUidApiTest extends TestCase
             'activities.delete',
             'documents.read',
             'documents.create',
+            'documents.manage',
             'inventory.read',
             'inventory.manage',
             'inventory.reserve',
@@ -4005,6 +4445,9 @@ class PublicUidApiTest extends TestCase
             'quotations.read',
             'quotations.create',
             'quotations.update',
+            'products.read',
+            'products.manage',
+            'products.install',
             'price-books.read',
             'price-books.manage',
             'commissions.read',

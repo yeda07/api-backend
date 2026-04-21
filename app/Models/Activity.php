@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Models\Traits\AppliesRowLevelSecurity;
 use App\Models\Traits\HasPublicUid;
+use App\Models\Traits\HasTenantRelation;
 use App\Models\Traits\HasUserTimezone;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
 class Activity extends Model
 {
-    use HasPublicUid, TenantScope, AppliesRowLevelSecurity, HasUserTimezone;
+    use HasPublicUid, HasTenantRelation, TenantScope, AppliesRowLevelSecurity, HasUserTimezone;
 
     protected $fillable = [
         'uid',
@@ -81,3 +82,4 @@ class Activity extends Model
         return auth()->id();
     }
 }
+

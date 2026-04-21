@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Traits\HasPublicUid;
+use App\Models\Traits\HasTenantRelation;
 use App\Models\Traits\HasUserTimezone;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
 class Interaction extends Model
 {
-    use HasPublicUid, TenantScope, HasUserTimezone;
+    use HasPublicUid, HasTenantRelation, TenantScope, HasUserTimezone;
 
     protected $fillable = [
         'uid',

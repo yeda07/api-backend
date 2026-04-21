@@ -10,7 +10,9 @@ use App\Http\Controllers\Api\CrmEntityController;
 use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\CustomFieldController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DocumentAlertController;
 use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\DocumentTypeController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\FinancialOperationsController;
 use App\Http\Controllers\Api\InventoryCategoryController;
@@ -23,6 +25,7 @@ use App\Http\Controllers\Api\MetricsController;
 use App\Http\Controllers\Api\OpportunityController;
 use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\PriceBookController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\QuotationController;
@@ -87,7 +90,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('accounts')->group(function () {
         Route::get('/', [AccountController::class, 'index'])->middleware('permission:accounts.read');
         Route::get('/{uid}', [AccountController::class, 'show'])->middleware('permission:accounts.read');
+        Route::get('/{uid}/products', [ProductController::class, 'accountProducts'])->middleware('permission:products.read');
         Route::post('/', [AccountController::class, 'store'])->middleware('permission:accounts.create');
+        Route::post('/{uid}/products', [ProductController::class, 'storeAccountProduct'])->middleware('permission:products.install');
         Route::put('/{uid}', [AccountController::class, 'update'])->middleware('permission:accounts.update');
         Route::post('/{uid}/owner', [AccountController::class, 'assignOwner'])->middleware('permission:accounts.update');
         Route::delete('/{uid}', [AccountController::class, 'destroy'])->middleware('permission:accounts.delete');
@@ -153,8 +158,25 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('documents')->group(function () {
         Route::get('/entity/{type}/{uid}', [DocumentController::class, 'index'])->middleware('permission:documents.read');
+        Route::get('/account/{accountUid}', [DocumentController::class, 'accountDocuments'])->middleware('permission:documents.read');
+        Route::get('/missing/{accountUid}', [DocumentController::class, 'missingDocuments'])->middleware('permission:documents.read');
         Route::get('/download/{uid}', [DocumentController::class, 'download'])->middleware('permission:documents.read');
+        Route::get('/{uid}/versions', [DocumentController::class, 'versions'])->middleware('permission:documents.read');
+        Route::get('/{uid}', [DocumentController::class, 'show'])->middleware('permission:documents.read');
         Route::post('/', [DocumentController::class, 'upload'])->middleware('permission:documents.create');
+        Route::put('/{uid}', [DocumentController::class, 'update'])->middleware('permission:documents.manage');
+    });
+
+    Route::prefix('document-types')->group(function () {
+        Route::get('/', [DocumentTypeController::class, 'index'])->middleware('permission:documents.read');
+        Route::post('/', [DocumentTypeController::class, 'store'])->middleware('permission:documents.manage');
+        Route::put('/{uid}', [DocumentTypeController::class, 'update'])->middleware('permission:documents.manage');
+    });
+
+    Route::prefix('document-alerts')->group(function () {
+        Route::get('/', [DocumentAlertController::class, 'index'])->middleware('permission:documents.read');
+        Route::post('/generate', [DocumentAlertController::class, 'generate'])->middleware('permission:documents.manage');
+        Route::post('/{uid}/read', [DocumentAlertController::class, 'markAsRead'])->middleware('permission:documents.manage');
     });
 
     Route::prefix('inventory')->group(function () {
@@ -222,6 +244,20 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/', [PriceBookController::class, 'store'])->middleware('permission:price-books.manage');
         Route::put('/{uid}', [PriceBookController::class, 'update'])->middleware('permission:price-books.manage');
         Route::delete('/{uid}', [PriceBookController::class, 'destroy'])->middleware('permission:price-books.manage');
+    });
+
+    Route::prefix('products')->group(function () {
+        Route::get('/', [ProductController::class, 'index'])->middleware('permission:products.read');
+        Route::get('/{uid}', [ProductController::class, 'show'])->middleware('permission:products.read');
+        Route::get('/{uid}/versions', [ProductController::class, 'versions'])->middleware('permission:products.read');
+        Route::get('/{uid}/dependencies', [ProductController::class, 'dependencies'])->middleware('permission:products.read');
+        Route::post('/', [ProductController::class, 'store'])->middleware('permission:products.manage');
+        Route::post('/{uid}/versions', [ProductController::class, 'storeVersion'])->middleware('permission:products.manage');
+        Route::put('/versions/{versionUid}', [ProductController::class, 'updateVersion'])->middleware('permission:products.manage');
+        Route::post('/{uid}/dependencies', [ProductController::class, 'storeDependency'])->middleware('permission:products.manage');
+        Route::delete('/dependencies/{dependencyUid}', [ProductController::class, 'destroyDependency'])->middleware('permission:products.manage');
+        Route::put('/{uid}', [ProductController::class, 'update'])->middleware('permission:products.manage');
+        Route::delete('/{uid}', [ProductController::class, 'destroy'])->middleware('permission:products.manage');
     });
 
     Route::prefix('commissions')->group(function () {

@@ -3,18 +3,20 @@
 namespace App\Models;
 
 use App\Models\Traits\HasPublicUid;
+use App\Models\Traits\HasTenantRelation;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
 class QuotationItem extends Model
 {
-    use HasPublicUid, TenantScope;
+    use HasPublicUid, HasTenantRelation, TenantScope;
 
     protected $fillable = [
         'uid',
         'tenant_id',
         'quotation_id',
         'product_id',
+        'catalog_product_id',
         'warehouse_id',
         'sku',
         'description',
@@ -36,12 +38,14 @@ class QuotationItem extends Model
         'tenant_id',
         'quotation_id',
         'product_id',
+        'catalog_product_id',
         'warehouse_id',
     ];
 
     protected $appends = [
         'quotation_uid',
         'product_uid',
+        'catalog_product_uid',
         'warehouse_uid',
         'line_total',
         'list_line_total',
@@ -74,6 +78,11 @@ class QuotationItem extends Model
         return $this->belongsTo(InventoryProduct::class, 'product_id');
     }
 
+    public function catalogProduct()
+    {
+        return $this->belongsTo(Product::class, 'catalog_product_id');
+    }
+
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class);
@@ -89,6 +98,12 @@ class QuotationItem extends Model
     {
         return $this->product?->uid
             ?? ($this->product_id ? InventoryProduct::query()->whereKey($this->product_id)->value('uid') : null);
+    }
+
+    public function getCatalogProductUidAttribute()
+    {
+        return $this->catalogProduct?->uid
+            ?? ($this->catalog_product_id ? Product::query()->whereKey($this->catalog_product_id)->value('uid') : null);
     }
 
     public function getWarehouseUidAttribute()

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Invoice;
 use App\Models\InventoryReservation;
 use App\Models\Quotation;
+use App\Models\Account;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +15,8 @@ class InvoiceService
     public function __construct(
         private readonly InventoryService $inventoryService,
         private readonly CreditService $creditService,
-        private readonly FinancialOperationsService $financialOperationsService
+        private readonly FinancialOperationsService $financialOperationsService,
+        private readonly DocumentValidationService $documentValidationService
     ) {
     }
 
@@ -63,6 +65,9 @@ class InvoiceService
             }
 
             $this->creditService->ensureCanOperate($entity);
+            if ($entity instanceof Account) {
+                $this->documentValidationService->ensureReadyForAccount($entity);
+            }
 
             foreach ($quotation->items as $item) {
                 if ($item->quantity <= 0) {

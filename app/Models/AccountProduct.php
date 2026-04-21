@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use App\Models\Traits\HasPublicUid;
+use App\Models\Traits\HasTenantRelation;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
 class AccountProduct extends Model
 {
-    use HasPublicUid, TenantScope;
+    use HasPublicUid, HasTenantRelation, TenantScope;
 
     protected $fillable = [
         'uid',

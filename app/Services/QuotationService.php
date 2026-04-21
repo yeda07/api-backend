@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
+use App\Models\Account;
 use App\Models\PriceBook;
+use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Warehouse;
@@ -18,19 +20,22 @@ class QuotationService
         private readonly InventoryService $inventoryService,
         private readonly PriceBookService $priceBookService,
         private readonly PricingService $pricingService,
-        private readonly CreditService $creditService
+        private readonly CreditService $creditService,
+        private readonly DocumentValidationService $documentValidationService,
+        private readonly ProductService $productService,
+        private readonly DependencyService $dependencyService
     )
     {
     }
 
     public function getAll()
     {
-        return Quotation::query()->with(['priceBook', 'items.product', 'items.warehouse', 'quoteable'])->latest()->get();
+        return Quotation::query()->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->latest()->get();
     }
 
     public function getByUid(string $uid): Quotation
     {
-        return Quotation::query()->with(['priceBook', 'items.product', 'items.warehouse', 'quoteable'])->where('uid', $uid)->firstOrFail();
+        return Quotation::query()->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->where('uid', $uid)->firstOrFail();
     }
 
     public function create(array $data): Quotation
@@ -42,6 +47,7 @@ class QuotationService
             $priceBook = $this->resolvePriceBook($validated['price_book_uid'] ?? null);
             if ($quoteable) {
                 $this->creditService->ensureCanOperate($quoteable);
+                $this->ensureDocumentsReady($quoteable);
             }
 
             $quotation = Quotation::query()->create([
@@ -60,7 +66,7 @@ class QuotationService
                 'notes' => $validated['notes'] ?? null,
             ]);
 
-            return $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+            return $quotation->fresh(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable']);
         });
     }
 
@@ -94,18 +100,27 @@ class QuotationService
                 $quotation->update($payload);
             }
 
-            $quotation = $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+            $quotation = $quotation->fresh(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable']);
             if ($quotation->quoteable) {
                 $this->creditService->ensureCanOperate($quotation->quoteable);
+                $this->ensureDocumentsReady($quotation->quoteable);
             }
 
             if (($payload['status'] ?? null) === 'approved' && $previousStatus !== 'approved') {
+                $this->validateQuotationDependencies($quotation);
                 $this->reservePendingQuotationStock($quotation);
-                $quotation = $quotation->fresh(['priceBook', 'items.product', 'items.warehouse', 'quoteable']);
+                $quotation = $quotation->fresh(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable']);
             }
 
             return $quotation;
         });
+    }
+
+    private function ensureDocumentsReady(object $entity): void
+    {
+        if ($entity instanceof Account) {
+            $this->documentValidationService->ensureReadyForAccount($entity);
+        }
     }
 
     public function addItem(string $quotationUid, array $data): QuotationItem
@@ -114,7 +129,10 @@ class QuotationService
         $validated = $this->validateItem($data);
 
         return DB::transaction(function () use ($quotation, $validated) {
-            $product = $this->resolveProduct($validated['product_uid'] ?? null);
+            $catalogProduct = $this->resolveCatalogProduct($validated['catalog_product_uid'] ?? null);
+            $product = $this->resolveProduct(
+                $validated['product_uid'] ?? $catalogProduct?->inventoryProduct?->uid
+            );
             $warehouse = $this->resolveWarehouse($validated['warehouse_uid'] ?? null);
             $pricing = $this->buildPricingPayload(
                 $quotation->priceBook,
@@ -125,12 +143,13 @@ class QuotationService
                 $validated['discount_amount'] ?? null
             );
 
-            return QuotationItem::query()->create([
+            $item = QuotationItem::query()->create([
                 'quotation_id' => $quotation->getKey(),
                 'product_id' => $product?->getKey(),
+                'catalog_product_id' => $catalogProduct?->getKey(),
                 'warehouse_id' => $warehouse?->getKey(),
-                'sku' => $validated['sku'] ?? $product?->sku,
-                'description' => $validated['description'],
+                'sku' => $validated['sku'] ?? $catalogProduct?->sku ?? $product?->sku,
+                'description' => $validated['description'] ?? $catalogProduct?->name,
                 'quantity' => $validated['quantity'],
                 'list_unit_price' => $pricing['list_unit_price'],
                 'discount_percent' => $pricing['discount_percent'],
@@ -142,7 +161,13 @@ class QuotationService
                 'margin_percent' => $pricing['margin_percent'],
                 'min_margin_percent' => $pricing['min_margin_percent'],
                 'below_min_margin' => $pricing['below_min_margin'],
-            ])->fresh(['quotation', 'product', 'warehouse']);
+            ]);
+
+            if ($catalogProduct) {
+                $this->syncRequiredDependencies($quotation, $catalogProduct, $item);
+            }
+
+            return $item->fresh(['quotation', 'product', 'catalogProduct', 'warehouse']);
         });
     }
 
@@ -154,10 +179,21 @@ class QuotationService
         return DB::transaction(function () use ($item, $validated) {
             $payload = [];
             $product = $item->product;
+            $catalogProduct = $item->catalogProduct;
 
             if (array_key_exists('product_uid', $validated)) {
                 $product = $this->resolveProduct($validated['product_uid']);
                 $payload['product_id'] = $product?->getKey();
+            }
+
+            if (array_key_exists('catalog_product_uid', $validated)) {
+                $catalogProduct = $this->resolveCatalogProduct($validated['catalog_product_uid']);
+                $payload['catalog_product_id'] = $catalogProduct?->getKey();
+
+                if (!array_key_exists('product_uid', $validated)) {
+                    $product = $this->resolveProduct($catalogProduct?->inventoryProduct?->uid);
+                    $payload['product_id'] = $product?->getKey();
+                }
             }
 
             if (array_key_exists('warehouse_uid', $validated)) {
@@ -210,7 +246,11 @@ class QuotationService
 
             $item->update($payload);
 
-            return $item->fresh(['quotation', 'product', 'warehouse']);
+            if ($catalogProduct) {
+                $this->syncRequiredDependencies($item->quotation, $catalogProduct, $item);
+            }
+
+            return $item->fresh(['quotation', 'product', 'catalogProduct', 'warehouse']);
         });
     }
 
@@ -320,9 +360,10 @@ class QuotationService
     {
         $validator = Validator::make($data, [
             'product_uid' => 'nullable|uuid',
+            'catalog_product_uid' => 'nullable|uuid',
             'warehouse_uid' => 'nullable|uuid',
             'sku' => 'nullable|string|max:255',
-            'description' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'description' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:255'],
             'quantity' => [$partial ? 'sometimes' : 'required', 'integer', 'min:1'],
             'unit_price' => 'sometimes|numeric|min:0',
             'discount_percent' => 'sometimes|numeric|min:0|max:100',
@@ -335,7 +376,13 @@ class QuotationService
 
         $validated = $validator->validated();
 
-        if (!empty($validated['warehouse_uid']) && empty($validated['product_uid']) && !$partial) {
+        if (!$partial && empty($validated['product_uid']) && empty($validated['catalog_product_uid'])) {
+            throw ValidationException::withMessages([
+                'catalog_product_uid' => ['Debes asociar un producto de inventario o un producto del catalogo'],
+            ]);
+        }
+
+        if (!empty($validated['warehouse_uid']) && empty($validated['product_uid']) && empty($validated['catalog_product_uid'])) {
             throw ValidationException::withMessages([
                 'product_uid' => ['Debes asociar un producto si vas a definir bodega'],
             ]);
@@ -374,6 +421,21 @@ class QuotationService
         });
     }
 
+    private function resolveCatalogProduct(?string $uid): ?Product
+    {
+        if (!$uid) {
+            return null;
+        }
+
+        try {
+            return $this->productService->findByUid($uid);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'catalog_product_uid' => ['El producto del catalogo no existe o no pertenece a este tenant'],
+            ]);
+        }
+    }
+
     private function resolveWarehouse(?string $uid): ?Warehouse
     {
         if (!$uid) {
@@ -389,7 +451,7 @@ class QuotationService
 
     private function getItemByUid(string $uid): QuotationItem
     {
-        return QuotationItem::query()->with(['quotation', 'product', 'warehouse'])->where('uid', $uid)->firstOrFail();
+        return QuotationItem::query()->with(['quotation', 'product', 'catalogProduct', 'warehouse'])->where('uid', $uid)->firstOrFail();
     }
 
     private function resolvePriceBook(?string $uid): ?PriceBook
@@ -441,7 +503,7 @@ class QuotationService
 
     private function reservePendingQuotationStock(Quotation $quotation): void
     {
-        foreach ($quotation->items as $item) {
+        foreach ($quotation->items()->with(['product', 'catalogProduct', 'warehouse'])->get() as $item) {
             $pendingQuantity = max(0, (int) $item->quantity - (int) $item->reserved_quantity);
 
             if ($pendingQuantity === 0) {
@@ -461,6 +523,77 @@ class QuotationService
                 'source_type' => 'quotation_item',
                 'source_uid' => $item->uid,
                 'comment' => 'Reserva automatica por aprobacion de cotizacion',
+            ]);
+        }
+    }
+
+    private function syncRequiredDependencies(Quotation $quotation, Product $catalogProduct, QuotationItem $sourceItem): void
+    {
+        $requiredProducts = $this->dependencyService->getRequiredDependencies($catalogProduct);
+
+        foreach ($requiredProducts as $requiredProduct) {
+            $alreadyPresent = $quotation->items()
+                ->where('catalog_product_id', $requiredProduct->getKey())
+                ->exists();
+
+            if ($alreadyPresent) {
+                continue;
+            }
+
+            $linkedInventoryProduct = $requiredProduct->inventoryProduct;
+            $pricing = $this->buildPricingPayload(
+                $quotation->priceBook,
+                $linkedInventoryProduct,
+                (int) $sourceItem->quantity,
+                null,
+                0,
+                null
+            );
+
+            QuotationItem::query()->create([
+                'quotation_id' => $quotation->getKey(),
+                'product_id' => $linkedInventoryProduct?->getKey(),
+                'catalog_product_id' => $requiredProduct->getKey(),
+                'warehouse_id' => $sourceItem->warehouse_id,
+                'sku' => $requiredProduct->sku,
+                'description' => $requiredProduct->name,
+                'quantity' => $sourceItem->quantity,
+                'list_unit_price' => $pricing['list_unit_price'],
+                'discount_percent' => 0,
+                'discount_amount' => 0,
+                'net_unit_price' => $pricing['net_unit_price'],
+                'unit_price' => $pricing['net_unit_price'],
+                'unit_cost' => $pricing['unit_cost'],
+                'margin_amount' => $pricing['margin_amount'],
+                'margin_percent' => $pricing['margin_percent'],
+                'min_margin_percent' => $pricing['min_margin_percent'],
+                'below_min_margin' => $pricing['below_min_margin'],
+            ]);
+        }
+    }
+
+    private function validateQuotationDependencies(Quotation $quotation): void
+    {
+        $catalogProducts = $quotation->items()
+            ->with('catalogProduct')
+            ->get()
+            ->pluck('catalogProduct')
+            ->filter()
+            ->values();
+
+        if ($catalogProducts->isEmpty()) {
+            return;
+        }
+
+        $validation = $this->dependencyService->validateDependencies($catalogProducts);
+
+        if (!empty($validation['required_missing']) || !empty($validation['incompatibilities'])) {
+            throw ValidationException::withMessages([
+                'catalog_dependencies' => [
+                    'La cotizacion tiene dependencias invalidas o productos incompatibles',
+                ],
+                'required_missing' => $validation['required_missing'],
+                'incompatibilities' => $validation['incompatibilities'],
             ]);
         }
     }

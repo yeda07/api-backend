@@ -48,6 +48,16 @@ class Account extends Model
         return $this->hasMany(Contact::class);
     }
 
+    public function products()
+    {
+        return $this->hasMany(AccountProduct::class);
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(Document::class);
+    }
+
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_user_id');

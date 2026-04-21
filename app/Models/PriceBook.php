@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use App\Models\Traits\HasPublicUid;
+use App\Models\Traits\HasTenantRelation;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
 class PriceBook extends Model
 {
-    use HasPublicUid, TenantScope;
+    use HasPublicUid, HasTenantRelation, TenantScope;
 
     protected $fillable = [
         'uid',
@@ -37,3 +38,4 @@ class PriceBook extends Model
         return $this->hasMany(PriceBookItem::class);
     }
 }
+

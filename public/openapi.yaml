@@ -23,6 +23,7 @@ tags:
   - name: Inventory
   - name: Quotations
   - name: PriceBooks
+  - name: Products
   - name: Commissions
   - name: Expenses
   - name: Purchases
@@ -356,6 +357,29 @@ paths:
               $ref: '#/components/schemas/OwnerAssignmentRequest'
       responses:
         '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /accounts/{uid}/products:
+    get:
+      tags: [Products]
+      summary: Listar productos instalados en una cuenta
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Products]
+      summary: Asignar producto a una cuenta
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountProductRequest'
+      responses:
+        '201':
           $ref: '#/components/responses/GenericSuccess'
   /contacts:
     get:
@@ -1299,6 +1323,133 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/GenericSuccess'
+  /products:
+    get:
+      tags: [Products]
+      summary: Listar productos y servicios del catalogo
+      parameters:
+        - in: query
+          name: type
+          schema: { type: string, enum: [product, service] }
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, inactive] }
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Products]
+      summary: Crear producto o servicio de catalogo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /products/{uid}:
+    get:
+      tags: [Products]
+      summary: Ver producto o servicio de catalogo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Products]
+      summary: Actualizar producto o servicio de catalogo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Products]
+      summary: Eliminar producto o servicio de catalogo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /products/{uid}/versions:
+    get:
+      tags: [Products]
+      summary: Listar versiones de un producto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Products]
+      summary: Crear version para un producto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductVersionRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /products/versions/{versionUid}:
+    put:
+      tags: [Products]
+      summary: Actualizar version de producto
+      parameters:
+        - $ref: '#/components/parameters/VersionUidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductVersionRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /products/{uid}/dependencies:
+    get:
+      tags: [Products]
+      summary: Listar dependencias de un producto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Products]
+      summary: Crear dependencia de producto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductDependencyRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /products/dependencies/{dependencyUid}:
+    delete:
+      tags: [Products]
+      summary: Eliminar dependencia de producto
+      parameters:
+        - $ref: '#/components/parameters/DependencyUidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
   /commissions/plans:
     get:
       tags: [Commissions]
@@ -2203,6 +2354,20 @@ components:
       schema:
         type: string
         format: uuid
+    VersionUidPath:
+      in: path
+      name: versionUid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DependencyUidPath:
+      in: path
+      name: dependencyUid
+      required: true
+      schema:
+        type: string
+        format: uuid
     ItemUidPath:
       in: path
       name: itemUid
@@ -2461,12 +2626,49 @@ components:
       required: [description, quantity]
       properties:
         product_uid: { type: string, format: uuid }
+        catalog_product_uid: { type: string, format: uuid }
         warehouse_uid: { type: string, format: uuid }
         description: { type: string }
         quantity: { type: integer }
         unit_price: { type: number, format: float }
         discount_percent: { type: number, format: float }
         discount_amount: { type: number, format: float }
+    ProductRequest:
+      type: object
+      required: [name, type, sku]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [product, service] }
+        sku: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [active, inactive] }
+        inventory_product_uid: { type: string, format: uuid, nullable: true }
+        initial_version: { type: string }
+        initial_release_date: { type: string, format: date }
+    ProductVersionRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string }
+        release_date: { type: string, format: date }
+        status: { type: string, enum: [active, deprecated] }
+        notes: { type: string }
+    ProductDependencyRequest:
+      type: object
+      required: [depends_on_product_uid, dependency_type]
+      properties:
+        depends_on_product_uid: { type: string, format: uuid }
+        dependency_type: { type: string, enum: [required, optional, incompatible] }
+        message: { type: string }
+    AccountProductRequest:
+      type: object
+      required: [product_uid]
+      properties:
+        product_uid: { type: string, format: uuid }
+        product_version_uid: { type: string, format: uuid, nullable: true }
+        installed_at: { type: string, format: date }
+        status: { type: string, enum: [active, expired, maintenance] }
+        notes: { type: string }
     PriceBookRequest:
       type: object
       required: [name, type]

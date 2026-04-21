@@ -813,6 +813,30 @@ Payload:
 }
 ```
 
+### `GET /api/accounts/{uid}/products`
+
+Auth requerida.
+Permiso: `products.read`.
+
+Lista los productos o servicios instalados en la cuenta.
+
+### `POST /api/accounts/{uid}/products`
+
+Auth requerida.
+Permiso: `products.install`.
+
+Payload:
+
+```json
+{
+  "product_uid": "e4db1242-ae51-4fa2-b5c7-14d7f42f5611",
+  "product_version_uid": "f5c81f64-1f7a-4d58-a7e2-e7a560706af2",
+  "installed_at": "2026-04-15",
+  "status": "active",
+  "notes": "Instalacion inicial"
+}
+```
+
 ### `DELETE /api/accounts/{uid}`
 
 Auth requerida.
@@ -893,6 +917,145 @@ Auth requerida.
 Permiso: `contacts.update`.
 
 Payload igual a create.
+
+## Catalogo de Productos y Servicios Complejos
+
+El backend soporta un catalogo comercial independiente del inventario fisico para modelar:
+
+- productos `product`
+- servicios `service`
+- versiones por producto
+- dependencias entre productos
+- productos instalados por cliente
+
+Puede enlazarse opcionalmente a `inventory_products` cuando el item tambien requiere stock.
+
+### `GET /api/products`
+
+Auth requerida.
+Permiso: `products.read`.
+
+Filtros opcionales:
+
+- `type`
+- `status`
+
+### `POST /api/products`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+Payload:
+
+```json
+{
+  "name": "Suite ERP Base",
+  "type": "product",
+  "sku": "CAT-ERP-BASE",
+  "description": "Modulo base",
+  "status": "active",
+  "initial_version": "1.0",
+  "initial_release_date": "2026-04-01"
+}
+```
+
+### `GET /api/products/{uid}`
+
+Auth requerida.
+Permiso: `products.read`.
+
+### `PUT /api/products/{uid}`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+### `DELETE /api/products/{uid}`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+### `GET /api/products/{uid}/versions`
+
+Auth requerida.
+Permiso: `products.read`.
+
+### `POST /api/products/{uid}/versions`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+Payload:
+
+```json
+{
+  "version": "2.0",
+  "release_date": "2026-05-01",
+  "status": "active",
+  "notes": "Release mayor"
+}
+```
+
+### `PUT /api/products/versions/{versionUid}`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+### `GET /api/products/{uid}/dependencies`
+
+Auth requerida.
+Permiso: `products.read`.
+
+### `POST /api/products/{uid}/dependencies`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+Payload:
+
+```json
+{
+  "depends_on_product_uid": "06de5270-6412-44d0-a6ff-9d8a9d7f2b75",
+  "dependency_type": "required",
+  "message": "Debe incluir soporte"
+}
+```
+
+### `DELETE /api/products/dependencies/{dependencyUid}`
+
+Auth requerida.
+Permiso: `products.manage`.
+
+### Integracion con cotizaciones
+
+`POST /api/quotations/{uid}/items` ahora tambien acepta:
+
+```json
+{
+  "catalog_product_uid": "e4db1242-ae51-4fa2-b5c7-14d7f42f5611",
+  "description": "Suite ERP Base",
+  "quantity": 1,
+  "unit_price": 1000
+}
+```
+
+Reglas:
+
+- agrega dependencias `required` automaticamente
+- sugiere `optional` a nivel de servicio
+- bloquea `incompatible` al aprobar la cotizacion
+- si el producto esta enlazado a inventario, reutiliza el flujo de stock existente
+
+### Checklist Catalogo Complejo
+
+- [x] productos y servicios
+- [x] versiones por producto
+- [x] dependencias `required`, `optional`, `incompatible`
+- [x] validacion de duplicados
+- [x] validacion anti-ciclos
+- [x] productos instalados por cuenta
+- [x] integracion con cotizaciones
+- [x] autoagregado de dependencias requeridas
+- [x] bloqueo de incompatibilidades al aprobar cotizacion
 
 ### `POST /api/contacts/{uid}/owner`
 
@@ -2901,6 +3064,21 @@ Devuelve:
 - [x] reporte simple de rentabilidad ingreso vs gasto
 - [x] permisos y pruebas del modulo
 
+## Integridad multi-tenant y base de datos
+
+Los ultimos ajustes estructurales del backend dejaron:
+
+- `custom_field_values` con FK real hacia `tenants` y `custom_fields`
+- `system_logs` amarrado a `tenant_id`
+- eliminacion de la tabla legacy `duplicate_logs`
+- relacion `tenant()` estandarizada en el nucleo de modelos multi-tenant
+
+Para reiniciar base de datos local y reaplicar todo:
+
+```bash
+php artisan migrate:fresh --force
+```
+
 ## Checklist CORE - Inventario Comercial
 
 - [x] Vista maestro de inventario con filtros por categoria, bodega y estado
@@ -3102,6 +3280,47 @@ Success:
     "updated_at": "2026-04-08T03:00:00.000000Z"
   },
   "errors": null
+}
+```
+
+## Gestion Documental B2G
+
+El backend extiende la boveda existente de `documents` para soportar documentos legales por cliente con versionado, alertas y validacion documental.
+
+Rutas principales:
+
+- `GET /api/document-types`
+- `POST /api/document-types`
+- `PUT /api/document-types/{uid}`
+- `POST /api/documents`
+- `PUT /api/documents/{uid}`
+- `GET /api/documents/{uid}`
+- `GET /api/documents/{uid}/versions`
+- `GET /api/documents/account/{accountUid}`
+- `GET /api/documents/missing/{accountUid}`
+- `GET /api/document-alerts`
+- `POST /api/document-alerts/generate`
+- `POST /api/document-alerts/{uid}/read`
+
+Capacidades:
+
+- tipos de documento por tenant (`RUT`, camara de comercio, polizas, certificados)
+- control de vigencia con estados `valid`, `expiring`, `expired`
+- versionado de reemplazos sin perder historial
+- alertas configurables por tipo y dias antes del vencimiento
+- validacion de documentos requeridos por cuenta
+- bloqueo de cotizaciones y facturacion cuando el tenant define documentos obligatorios y faltan para la cuenta
+
+Payload base de carga:
+
+```json
+{
+  "entity_type": "account",
+  "entity_uid": "c3c2f54c-e8d0-4056-a4ce-ef6550ca4a61",
+  "document_type_uid": "d1a8c0f2-8f8c-4d32-b2d0-6c2ebc9a0011",
+  "issue_date": "2026-04-20",
+  "expiration_date": "2026-07-20",
+  "file": "contrato.pdf"
 }
 ```
 
