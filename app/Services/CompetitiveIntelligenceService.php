@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\Battlecard;
 use App\Models\Competitor;
 use App\Models\LostReason;
@@ -12,9 +13,13 @@ use Illuminate\Validation\ValidationException;
 
 class CompetitiveIntelligenceService
 {
-    public function competitors()
+    public function competitors(array $filters = [])
     {
-        return Competitor::query()->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            Competitor::query()->orderBy('name'),
+            $filters,
+            'competitors_page'
+        );
     }
 
     public function createCompetitor(array $data): Competitor
@@ -87,7 +92,7 @@ class CompetitiveIntelligenceService
             $query->where('is_active', (bool) $validated['is_active']);
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'battlecards_page');
     }
 
     public function createBattlecard(array $data): Battlecard
@@ -174,7 +179,7 @@ class CompetitiveIntelligenceService
             $query->where('reason_type', $validated['reason_type']);
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'lost_reasons_page');
     }
 
     public function createLostReason(array $data): LostReason

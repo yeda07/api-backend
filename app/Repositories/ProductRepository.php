@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Product;
+use App\Support\ApiIndex;
 
 class ProductRepository
 {
@@ -23,7 +24,7 @@ class ProductRepository
             $query->where('status', $filters['status']);
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'products_page');
     }
 
     public function findByUid(string $uid): Product

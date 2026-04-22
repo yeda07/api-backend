@@ -23,6 +23,8 @@ use App\Http\Controllers\Api\InteractionController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\MetricsController;
 use App\Http\Controllers\Api\OpportunityController;
+use App\Http\Controllers\Api\PartnerController;
+use App\Http\Controllers\Api\PartnerResourceController;
 use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\PriceBookController;
 use App\Http\Controllers\Api\ProductController;
@@ -349,6 +351,26 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/', [OpportunityController::class, 'store'])->middleware('permission:opportunities.manage');
         Route::put('/{uid}', [OpportunityController::class, 'update'])->middleware('permission:opportunities.manage');
         Route::delete('/{uid}', [OpportunityController::class, 'destroy'])->middleware('permission:opportunities.manage');
+    });
+
+    Route::prefix('partners')->group(function () {
+        Route::get('/', [PartnerController::class, 'index'])->middleware('permission:partners.read');
+        Route::post('/', [PartnerController::class, 'store'])->middleware('permission:partners.manage');
+        Route::put('/{uid}', [PartnerController::class, 'update'])->middleware('permission:partners.manage');
+
+        Route::prefix('opportunities')->group(function () {
+            Route::get('/', [PartnerController::class, 'opportunities'])->middleware('permission:partners.opportunities.read');
+            Route::post('/', [PartnerController::class, 'storeOpportunity'])->middleware('permission:partners.opportunities.manage');
+            Route::get('/{uid}', [PartnerController::class, 'showOpportunity'])->middleware('permission:partners.opportunities.read');
+            Route::post('/validate', [PartnerController::class, 'validateOpportunity'])->middleware('permission:partners.opportunities.manage');
+            Route::post('/{uid}/close', [PartnerController::class, 'closeOpportunity'])->middleware('permission:partners.opportunities.manage');
+        });
+    });
+
+    Route::prefix('partner-resources')->group(function () {
+        Route::get('/', [PartnerResourceController::class, 'index'])->middleware('permission:partners.resources.read');
+        Route::post('/', [PartnerResourceController::class, 'store'])->middleware('permission:partners.resources.manage');
+        Route::post('/{uid}/assign', [PartnerResourceController::class, 'assign'])->middleware('permission:partners.resources.manage');
     });
 
     Route::prefix('finance')->group(function () {

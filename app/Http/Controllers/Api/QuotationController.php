@@ -18,9 +18,9 @@ class QuotationController extends Controller
     ) {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->quotationService->getAll());
+        return $this->successResponse($this->quotationService->getAll($request->query()));
     }
 
     public function show(string $uid)

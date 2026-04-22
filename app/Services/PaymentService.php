@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ class PaymentService
     {
     }
 
-    public function list(?string $invoiceUid = null)
+    public function list(?string $invoiceUid = null, array $filters = [])
     {
         $query = Payment::query()->with('invoice')->latest('payment_date');
 
@@ -23,7 +24,7 @@ class PaymentService
             $query->where('invoice_id', $invoiceId ?: 0);
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'payments_page');
     }
 
     public function register(array $data): array

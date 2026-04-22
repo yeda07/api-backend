@@ -72,6 +72,12 @@ class PermissionSeeder extends Seeder
             ['key' => 'competitive-intelligence.read', 'module' => 'competitive-intelligence', 'action' => 'read', 'description' => 'Ver inteligencia competitiva'],
             ['key' => 'competitive-intelligence.manage', 'module' => 'competitive-intelligence', 'action' => 'manage', 'description' => 'Administrar competidores, battlecards y lost reasons'],
             ['key' => 'competitive-intelligence.report', 'module' => 'competitive-intelligence', 'action' => 'report', 'description' => 'Ver analitica de inteligencia competitiva'],
+            ['key' => 'partners.read', 'module' => 'partners', 'action' => 'read', 'description' => 'Ver partners y canales'],
+            ['key' => 'partners.manage', 'module' => 'partners', 'action' => 'manage', 'description' => 'Administrar partners y canales'],
+            ['key' => 'partners.opportunities.read', 'module' => 'partners', 'action' => 'opportunities.read', 'description' => 'Ver oportunidades de partners'],
+            ['key' => 'partners.opportunities.manage', 'module' => 'partners', 'action' => 'opportunities.manage', 'description' => 'Administrar oportunidades de partners'],
+            ['key' => 'partners.resources.read', 'module' => 'partners', 'action' => 'resources.read', 'description' => 'Ver recursos para partners'],
+            ['key' => 'partners.resources.manage', 'module' => 'partners', 'action' => 'resources.manage', 'description' => 'Administrar recursos para partners'],
         ];
 
         foreach ($permissions as $permission) {

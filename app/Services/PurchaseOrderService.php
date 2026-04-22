@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\InventoryProduct;
 use App\Models\PurchaseOrderPayment;
 use App\Models\PurchaseOrder;
@@ -55,7 +56,7 @@ class PurchaseOrderService
             }
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'purchase_orders_page');
     }
 
     public function show(string $uid): PurchaseOrder

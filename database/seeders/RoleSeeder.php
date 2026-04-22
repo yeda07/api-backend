@@ -81,6 +81,12 @@ class RoleSeeder extends Seeder
                     'competitive-intelligence.read',
                     'competitive-intelligence.manage',
                     'competitive-intelligence.report',
+                    'partners.read',
+                    'partners.manage',
+                    'partners.opportunities.read',
+                    'partners.opportunities.manage',
+                    'partners.resources.read',
+                    'partners.resources.manage',
                 ],
             ],
             'seller' => [
@@ -131,6 +137,10 @@ class RoleSeeder extends Seeder
                     'purchases.read',
                     'competitive-intelligence.read',
                     'competitive-intelligence.manage',
+                    'partners.read',
+                    'partners.opportunities.read',
+                    'partners.opportunities.manage',
+                    'partners.resources.read',
                 ],
             ],
         ];

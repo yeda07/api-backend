@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\Activity;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
@@ -13,11 +14,15 @@ class ActivityService
     {
     }
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
         $this->syncOverdueStatuses();
 
-        return Activity::query()->with(['owner', 'assignedUser', 'activityable'])->latest('scheduled_at')->get();
+        return ApiIndex::paginateOrGet(
+            Activity::query()->with(['owner', 'assignedUser', 'activityable'])->latest('scheduled_at'),
+            $filters,
+            'activities_page'
+        );
     }
 
     public function getByUid(string $uid): Activity

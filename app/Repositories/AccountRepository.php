@@ -2,14 +2,19 @@
 
 namespace App\Repositories;
 
+use App\Support\ApiIndex;
 use App\Models\Account;
 use Exception;
 
 class AccountRepository
 {
-    public function all()
+    public function all(array $filters = [])
     {
-        return Account::all();
+        return ApiIndex::paginateOrGet(
+            Account::query()->orderBy('name'),
+            $filters,
+            'accounts_page'
+        );
     }
 
     public function findByUid(string $uid)

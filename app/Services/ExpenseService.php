@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\CostCenter;
@@ -170,7 +171,7 @@ class ExpenseService
             }
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'expenses_page');
     }
 
     public function create(array $data): Expense

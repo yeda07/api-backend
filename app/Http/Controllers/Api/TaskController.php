@@ -13,9 +13,9 @@ class TaskController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->taskService->getAll());
+        return $this->successResponse($this->taskService->getAll($request->query()));
     }
 
     public function show(string $uid)

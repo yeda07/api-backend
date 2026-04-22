@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\FinancialRecord;
 use App\Models\Quotation;
 use Illuminate\Support\Facades\Validator;
@@ -37,7 +38,7 @@ class FinancialOperationsService
             }
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'financial_records_page');
     }
 
     public function importRecord(array $data): FinancialRecord

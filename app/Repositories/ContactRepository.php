@@ -3,12 +3,17 @@
 namespace App\Repositories;
 
 use App\Models\Contact;
+use App\Support\ApiIndex;
 
 class ContactRepository
 {
-    public function all()
+    public function all(array $filters = [])
     {
-        return Contact::with('account')->get();
+        return ApiIndex::paginateOrGet(
+            Contact::query()->with('account')->orderBy('first_name')->orderBy('last_name'),
+            $filters,
+            'contacts_page'
+        );
     }
 
     public function findByUid(string $uid)

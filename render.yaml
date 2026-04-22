@@ -3,7 +3,7 @@ services:
     name: api-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /docs
+    healthCheckPath: /up
     autoDeploy: true
     envVars:
       - key: APP_ENV
@@ -25,15 +25,37 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: SESSION_DRIVER
-        value: database
+        value: file
+      - key: REDIS_CLIENT
+        value: phpredis
+      - key: REDIS_URL
+        sync: false
       - key: CACHE_STORE
-        value: database
+        value: redis
       - key: QUEUE_CONNECTION
-        value: database
+        value: redis
+      - key: API_FORCE_INDEX_PAGINATION
+        value: "true"
+      - key: API_DEFAULT_PER_PAGE
+        value: "25"
+      - key: API_MAX_PER_PAGE
+        value: "100"
+      - key: API_RATE_LIMIT_PER_MINUTE
+        value: "240"
+      - key: API_GUEST_RATE_LIMIT_PER_MINUTE
+        value: "60"
       - key: DASHBOARD_CACHE_STORE
-        value: database
+        value: redis
+      - key: REDIS_QUEUE_CONNECTION
+        value: default
+      - key: REDIS_CACHE_CONNECTION
+        value: cache
       - key: FILESYSTEM_DISK
         value: local
+      - key: DOCUMENTS_DISK
+        value: documents
+      - key: DOCUMENTS_ROOT
+        value: /app/storage/app/documents
       - key: MAIL_MAILER
         value: log
 

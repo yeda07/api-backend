@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
@@ -9,9 +10,13 @@ use Illuminate\Validation\ValidationException;
 
 class TaskService
 {
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return Task::query()->with(['owner', 'assignedUser', 'taskable'])->latest()->get();
+        return ApiIndex::paginateOrGet(
+            Task::query()->with(['owner', 'assignedUser', 'taskable'])->latest(),
+            $filters,
+            'tasks_page'
+        );
     }
 
     public function getByUid(string $uid): Task

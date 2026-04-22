@@ -13,9 +13,9 @@ class CompetitiveIntelligenceController extends Controller
     {
     }
 
-    public function competitors()
+    public function competitors(Request $request)
     {
-        return $this->successResponse($this->service->competitors());
+        return $this->successResponse($this->service->competitors($request->query()));
     }
 
     public function storeCompetitor(Request $request)
@@ -58,9 +58,9 @@ class CompetitiveIntelligenceController extends Controller
         return $this->successResponse($this->service->battlecards($request->query()));
     }
 
-    public function battlecardsByCompetitor(string $uid)
+    public function battlecardsByCompetitor(Request $request, string $uid)
     {
-        return $this->successResponse($this->service->battlecards(['competitor_uid' => $uid]));
+        return $this->successResponse($this->service->battlecards(array_merge($request->query(), ['competitor_uid' => $uid])));
     }
 
     public function storeBattlecard(Request $request)

@@ -13,9 +13,9 @@ class ActivityController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->activityService->getAll());
+        return $this->successResponse($this->activityService->getAll($request->query()));
     }
 
     public function show(string $uid)

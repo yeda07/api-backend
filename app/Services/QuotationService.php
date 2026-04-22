@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
 use App\Models\Account;
@@ -28,9 +29,13 @@ class QuotationService
     {
     }
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return Quotation::query()->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->latest()->get();
+        return ApiIndex::paginateOrGet(
+            Quotation::query()->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->latest(),
+            $filters,
+            'quotations_page'
+        );
     }
 
     public function getByUid(string $uid): Quotation

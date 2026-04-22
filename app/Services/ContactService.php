@@ -16,9 +16,9 @@ class ContactService
         $this->repo = $repo;
     }
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->repo->all();
+        return $this->repo->all($filters);
     }
 
     public function getByUid(string $uid)

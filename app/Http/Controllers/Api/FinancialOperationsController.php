@@ -81,12 +81,12 @@ class FinancialOperationsController extends Controller
 
     public function payments(Request $request)
     {
-        return $this->successResponse($this->paymentService->list($request->query('invoice_uid')));
+        return $this->successResponse($this->paymentService->list($request->query('invoice_uid'), $request->query()));
     }
 
-    public function paymentHistory(string $invoiceUid)
+    public function paymentHistory(Request $request, string $invoiceUid)
     {
-        return $this->successResponse($this->paymentService->list($invoiceUid));
+        return $this->successResponse($this->paymentService->list($invoiceUid, $request->query()));
     }
 
     public function registerPayment(Request $request)

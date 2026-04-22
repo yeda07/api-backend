@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ApiIndex;
 use App\Models\Invoice;
 use App\Models\InventoryReservation;
 use App\Models\Quotation;
@@ -40,7 +41,7 @@ class InvoiceService
             $query->where('status', $validated['status']);
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'invoices_page');
     }
 
     public function createFromQuotation(array $data): Invoice
