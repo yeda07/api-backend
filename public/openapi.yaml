@@ -121,7 +121,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/AccountRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -1256,7 +1256,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/ContactRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -1713,9 +1713,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/DocumentUploadRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -1936,7 +1936,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/ExpenseRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -2520,7 +2520,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PaymentRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -2883,7 +2883,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/InventoryProductRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -3240,7 +3240,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -3347,7 +3347,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/OpportunityRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -4019,7 +4019,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/ProductRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -4293,7 +4293,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PurchaseOrderRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -4842,7 +4842,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/QuoteRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -5779,6 +5779,299 @@ components:
       type: object
       description: Payload generico. Revise las reglas del endpoint en el backend.
       example: {}
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@empresa.com
+        password:
+          type: string
+          format: password
+          example: secret123
+    AccountRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Acme SAS
+        document:
+          type: string
+          example: "900123456"
+        email:
+          type: string
+          format: email
+          example: contacto@acme.com
+        industry:
+          type: string
+          example: Manufactura
+        website:
+          type: string
+          format: uri
+          example: https://acme.com
+        phone:
+          type: string
+          example: "+57 3000000000"
+        address:
+          type: string
+          example: Bogota
+    ContactRequest:
+      type: object
+      required: [first_name, last_name]
+      properties:
+        first_name:
+          type: string
+          example: Ana
+        last_name:
+          type: string
+          example: Gomez
+        email:
+          type: string
+          format: email
+          example: ana@acme.com
+        phone:
+          type: string
+          example: "+57 3001111111"
+        position:
+          type: string
+          example: Gerente
+        account_uid:
+          type: string
+          format: uuid
+    ProductRequest:
+      type: object
+      required: [name, type, status]
+      properties:
+        name:
+          type: string
+          example: Suite ERP Base
+        type:
+          type: string
+          enum: [product, service]
+          example: product
+        sku:
+          type: string
+          example: CAT-ERP-BASE
+        description:
+          type: string
+          example: Modulo base
+        status:
+          type: string
+          enum: [active, inactive]
+          example: active
+        initial_version:
+          type: string
+          example: "1.0"
+        initial_release_date:
+          type: string
+          format: date
+          example: "2026-04-01"
+    QuoteRequest:
+      type: object
+      required: [entity_type, entity_uid, currency]
+      properties:
+        entity_type:
+          type: string
+          example: account
+        entity_uid:
+          type: string
+          format: uuid
+        price_book_uid:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: USD
+        local_currency:
+          type: string
+          example: COP
+        exchange_rate:
+          type: number
+          format: float
+          example: 4000
+    InventoryProductRequest:
+      type: object
+      required: [category_uid, sku, name]
+      properties:
+        category_uid:
+          type: string
+          format: uuid
+        sku:
+          type: string
+          example: SKU-001
+        name:
+          type: string
+          example: Router Empresarial
+        description:
+          type: string
+          example: Router para cliente B2B
+        reorder_point:
+          type: integer
+          example: 5
+        warehouse_stocks:
+          type: array
+          items:
+            type: object
+            properties:
+              warehouse_uid:
+                type: string
+                format: uuid
+              physical_stock:
+                type: integer
+                example: 8
+    ExpenseRequest:
+      type: object
+      required: [expense_category_uid, title, amount, currency, expense_date]
+      properties:
+        expense_category_uid:
+          type: string
+          format: uuid
+        supplier_uid:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+          example: account
+        entity_uid:
+          type: string
+          format: uuid
+        cost_center:
+          type: string
+          example: ventas-b2b
+        title:
+          type: string
+          example: Visita comercial
+        amount:
+          type: number
+          format: float
+          example: 250
+        currency:
+          type: string
+          example: COP
+        expense_date:
+          type: string
+          format: date
+          example: "2026-04-09"
+        status:
+          type: string
+          enum: [draft, submitted, approved, paid]
+          example: approved
+    PaymentRequest:
+      type: object
+      required: [invoice_uid, amount, payment_date, method]
+      properties:
+        invoice_uid:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+          example: 200000
+        payment_date:
+          type: string
+          format: date
+          example: "2026-04-08"
+        method:
+          type: string
+          example: transfer
+        external_reference:
+          type: string
+          example: PAY-0001
+    PurchaseOrderRequest:
+      type: object
+      required: [supplier_uid, purchase_number, currency, items]
+      properties:
+        supplier_uid:
+          type: string
+          format: uuid
+        purchase_number:
+          type: string
+          example: OC-0001
+        currency:
+          type: string
+          example: COP
+        items:
+          type: array
+          items:
+            type: object
+            required: [description, quantity, unit_cost]
+            properties:
+              product_uid:
+                type: string
+                format: uuid
+              warehouse_uid:
+                type: string
+                format: uuid
+              description:
+                type: string
+                example: Router Empresarial
+              quantity:
+                type: integer
+                example: 5
+              unit_cost:
+                type: number
+                format: float
+                example: 80
+    OpportunityRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          example: Renovacion anual Acme
+        account_uid:
+          type: string
+          format: uuid
+        contact_uid:
+          type: string
+          format: uuid
+        crm_entity_uid:
+          type: string
+          format: uuid
+        stage_uid:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+          example: 50000
+        currency:
+          type: string
+          example: COP
+        expected_close_date:
+          type: string
+          format: date
+          example: "2026-05-30"
+        status:
+          type: string
+          example: open
+    DocumentUploadRequest:
+      type: object
+      required: [entity_type, entity_uid, file]
+      properties:
+        entity_type:
+          type: string
+          example: account
+        entity_uid:
+          type: string
+          format: uuid
+        document_type_uid:
+          type: string
+          format: uuid
+        issue_date:
+          type: string
+          format: date
+          example: "2026-04-20"
+        expiration_date:
+          type: string
+          format: date
+          example: "2026-07-20"
+        file:
+          type: string
+          format: binary
     PartnerRequest:
       type: object
       required: [name, type]
