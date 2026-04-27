@@ -3539,9 +3539,10 @@ paths:
   /partner-resources:
     get:
       description: >-
-        Requiere permiso partners.resources.read.
+        Lista materiales comerciales o de capacitacion compartidos con partners.
+        Acepta filtros por tipo, estado y partner.
       tags: [Partners]
-      summary: 'Listar - partner-resources'
+      summary: Listar recursos de partners
       responses:
         '200':
           description: Operacion exitosa
@@ -3554,14 +3555,17 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
+      description: >-
+        Sube un nuevo recurso para el canal. El archivo se registra con metadatos
+        y puede asignarse a uno o varios partners.
       tags: [Partners]
-      summary: 'Crear - partner-resources'
+      summary: Crear recurso de partners
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerResourceRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -3576,9 +3580,9 @@ paths:
   /partner-resources/{uid}/assign:
     post:
       description: >-
-        Requiere permiso partners.resources.manage.
+        Asigna un recurso existente a uno o varios partners.
       tags: [Partners]
-      summary: 'Crear o ejecutar - partner-resources/{id}/assign'
+      summary: Asignar recurso a partners
       parameters:
         - in: path
           name: uid
@@ -3592,7 +3596,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerResourceAssignRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -3607,9 +3611,9 @@ paths:
   /partners:
     get:
       description: >-
-        Requiere permiso partners.read.
+        Lista partners del tenant con filtros opcionales por tipo y estado.
       tags: [Partners]
-      summary: 'Listar - partners'
+      summary: Listar partners
       responses:
         '200':
           description: Operacion exitosa
@@ -3622,14 +3626,16 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
+      description: >-
+        Crea un partner del canal y opcionalmente lo enlaza a una cuenta existente.
       tags: [Partners]
-      summary: 'Crear - partners'
+      summary: Crear partner
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -3644,9 +3650,9 @@ paths:
   /partners/opportunities:
     get:
       description: >-
-        Requiere permiso partners.opportunities.read.
+        Lista oportunidades de canal con filtros por partner, cuenta y estado.
       tags: [Partners]
-      summary: 'Consultar - partners/opportunities'
+      summary: Listar oportunidades de partners
       responses:
         '200':
           description: Operacion exitosa
@@ -3659,16 +3665,19 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
+      description: >-
+        Registra una oportunidad creada por un partner y valida conflictos segun
+        el alcance configurado.
       tags: [Partners]
-      summary: 'Crear o ejecutar - partners/opportunities'
+      summary: Crear oportunidad de partner
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerOpportunityRequest'
       responses:
-        '200':
+        '201':
           description: Operacion exitosa
           content:
             application/json:
@@ -3681,15 +3690,15 @@ paths:
   /partners/opportunities/validate:
     post:
       description: >-
-        Requiere permiso partners.opportunities.manage.
+        Valida si una oportunidad nueva generaria conflicto por cliente activo.
       tags: [Partners]
-      summary: 'Crear o ejecutar - partners/opportunities/validate'
+      summary: Validar conflicto de oportunidad
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerOpportunityValidateRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -3704,9 +3713,9 @@ paths:
   /partners/opportunities/{uid}:
     get:
       description: >-
-        Requiere permiso partners.opportunities.read.
+        Devuelve el detalle de una oportunidad registrada por partner.
       tags: [Partners]
-      summary: 'Consultar - partners/opportunities/{id}'
+      summary: Ver oportunidad de partner
       parameters:
         - in: path
           name: uid
@@ -3729,9 +3738,9 @@ paths:
   /partners/opportunities/{uid}/close:
     post:
       description: >-
-        Requiere permiso partners.opportunities.manage.
+        Cierra una oportunidad de partner marcandola como ganada o perdida.
       tags: [Partners]
-      summary: 'Crear o ejecutar - partners/opportunities/{id}/close'
+      summary: Cerrar oportunidad de partner
       parameters:
         - in: path
           name: uid
@@ -3745,7 +3754,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerOpportunityCloseRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -3760,9 +3769,9 @@ paths:
   /partners/{uid}:
     put:
       description: >-
-        Requiere permiso partners.manage.
+        Actualiza datos del partner, su estado o su cuenta asociada.
       tags: [Partners]
-      summary: 'Actualizar - partners/{id}'
+      summary: Actualizar partner
       parameters:
         - in: path
           name: uid
@@ -3776,7 +3785,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PartnerRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -5770,6 +5779,116 @@ components:
       type: object
       additionalProperties: true
       description: Payload generico. Revise las reglas del endpoint en el backend.
+    PartnerRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          example: Aliado Norte SAS
+        type:
+          type: string
+          enum: [distributor, reseller, ally]
+          example: reseller
+        status:
+          type: string
+          enum: [active, inactive]
+          example: active
+        account_uid:
+          type: string
+          format: uuid
+        contact_info:
+          type: object
+          additionalProperties: true
+          example:
+            email: comercial@aliadonorte.com
+            phone: "+57 3000000000"
+    PartnerOpportunityRequest:
+      type: object
+      required: [partner_uid, account_uid, title]
+      properties:
+        partner_uid:
+          type: string
+          format: uuid
+        account_uid:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: Licitacion alcaldia zona norte
+        status:
+          type: string
+          enum: [open, won, lost]
+          example: open
+        conflict_scope:
+          type: string
+          enum: [global, partner]
+          example: global
+        amount:
+          type: number
+          format: float
+          example: 150000000
+        currency:
+          type: string
+          example: COP
+        description:
+          type: string
+    PartnerOpportunityValidateRequest:
+      type: object
+      required: [partner_uid, account_uid]
+      properties:
+        partner_uid:
+          type: string
+          format: uuid
+        account_uid:
+          type: string
+          format: uuid
+        conflict_scope:
+          type: string
+          enum: [global, partner]
+          example: global
+        current_opportunity_uid:
+          type: string
+          format: uuid
+    PartnerOpportunityCloseRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [won, lost]
+          example: won
+    PartnerResourceRequest:
+      type: object
+      required: [title, type, file]
+      properties:
+        title:
+          type: string
+          example: Presentacion comercial sector publico
+        type:
+          type: string
+          enum: [sales, training]
+          example: sales
+        partner_uids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        is_active:
+          type: boolean
+          example: true
+        file:
+          type: string
+          format: binary
+    PartnerResourceAssignRequest:
+      type: object
+      required: [partner_uids]
+      properties:
+        partner_uids:
+          type: array
+          items:
+            type: string
+            format: uuid
     SuccessEnvelope:
       type: object
       properties:
