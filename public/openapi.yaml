@@ -5777,8 +5777,8 @@ components:
   schemas:
     GenericRequest:
       type: object
-      additionalProperties: true
       description: Payload generico. Revise las reglas del endpoint en el backend.
+      example: {}
     PartnerRequest:
       type: object
       required: [name, type]
@@ -5891,6 +5891,12 @@ components:
             format: uuid
     SuccessEnvelope:
       type: object
+      example:
+        success: true
+        message: null
+        data: {}
+        errors: null
+        meta: null
       properties:
         success:
           type: boolean
@@ -5901,13 +5907,12 @@ components:
           example: null
         data:
           nullable: true
+          example: {}
           oneOf:
             - type: object
-              additionalProperties: true
             - type: array
               items:
                 type: object
-                additionalProperties: true
             - type: string
             - type: number
             - type: boolean
@@ -5918,6 +5923,13 @@ components:
           $ref: '#/components/schemas/MetaEnvelope'
     ErrorEnvelope:
       type: object
+      example:
+        success: false
+        message: Validation error
+        data: null
+        errors:
+          field_name:
+            - El campo es obligatorio.
       properties:
         success:
           type: boolean
@@ -5930,6 +5942,9 @@ components:
           example: null
         errors:
           type: object
+          example:
+            field_name:
+              - El campo es obligatorio.
           additionalProperties:
             type: array
             items:
