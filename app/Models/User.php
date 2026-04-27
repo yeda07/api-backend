@@ -19,6 +19,7 @@ class User extends Authenticatable
         'email',
         'password',
         'tenant_id',
+        'is_platform_admin',
         'manager_id',
         'failed_login_attempts',
         'locked_until',
@@ -33,6 +34,7 @@ class User extends Authenticatable
         'id',
         'password',
         'tenant_id',
+        'is_platform_admin',
         'manager_id',
         'two_factor_secret',
         'two_factor_recovery_codes',
@@ -44,6 +46,7 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
+        'is_platform_admin' => 'boolean',
         'locked_until' => 'datetime',
         'last_login_at' => 'datetime',
         'two_factor_confirmed_at' => 'datetime',

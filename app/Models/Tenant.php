@@ -13,6 +13,13 @@ class Tenant extends Model
     protected $fillable = [
         'uid',
         'name',
+        'domain',
+        'country',
+        'contact_email',
+        'status',
+        'mrr',
+        'storage_used_gb',
+        'storage_limit_gb',
         'plan_id',
         'currency_id',
         'is_active',
@@ -28,6 +35,9 @@ class Tenant extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'expires_at' => 'datetime',
+        'mrr' => 'decimal:2',
+        'storage_used_gb' => 'decimal:2',
+        'storage_limit_gb' => 'decimal:2',
     ];
 
     public function users()

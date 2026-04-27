@@ -14,6 +14,7 @@ class AccessControlService
     {
         return Role::query()
             ->with('permissions')
+            ->withCount('users as total_usuarios')
             ->orderBy('name')
             ->get();
     }

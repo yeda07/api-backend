@@ -13,9 +13,9 @@ class PriceBookController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->priceBookService->getAll());
+        return $this->successResponse($this->priceBookService->getAll($request->query()));
     }
 
     public function show(string $uid)

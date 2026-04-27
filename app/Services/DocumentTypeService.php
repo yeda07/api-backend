@@ -16,9 +16,9 @@ class DocumentTypeService
     ) {
     }
 
-    public function getTypes()
+    public function getTypes(array $filters = [])
     {
-        return $this->documentTypeRepository->all();
+        return $this->documentTypeRepository->all($filters);
     }
 
     public function createType(array $data): DocumentType

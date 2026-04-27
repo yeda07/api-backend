@@ -3,24 +3,52 @@
 namespace App\Repositories;
 
 use App\Models\User;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\Hash;
 
 class UserRepository
 {
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return User::all();
+        $query = User::query()->with(['roles', 'permissions'])->latest();
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('email', 'like', '%' . $search . '%');
+            });
+        }
+
+        if (!empty($filters['role_uid'])) {
+            $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('uid', $filters['role_uid']));
+        }
+
+        if (!empty($filters['estado'])) {
+            if ($filters['estado'] === 'ACTIVO') {
+                $query->where(function ($builder) {
+                    $builder->whereNull('locked_until')->orWhere('locked_until', '<=', now());
+                });
+            }
+
+            if ($filters['estado'] === 'INACTIVO') {
+                $query->where('locked_until', '>', now());
+            }
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'users_page');
     }
 
     public function findByUid(string $uid)
     {
-        return User::where('uid', $uid)->first();
+        return User::query()->with(['roles', 'permissions'])->where('uid', $uid)->first();
     }
 
     public function create(array $data)
     {
         $data['password'] = Hash::make($data['password']);
-        return User::create($data);
+        return User::create($data)->fresh(['roles', 'permissions']);
     }
 
     public function update(string $uid, array $data)
@@ -37,7 +65,7 @@ class UserRepository
 
         $user->update($data);
 
-        return $user;
+        return $user->fresh(['roles', 'permissions']);
     }
 
     public function delete(string $uid)

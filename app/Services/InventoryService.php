@@ -8,6 +8,7 @@ use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
 use App\Models\InventoryStock;
 use App\Models\Warehouse;
+use App\Support\ApiIndex;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -15,9 +16,13 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
-    public function listCategories()
+    public function listCategories(array $filters = [])
     {
-        return InventoryCategory::query()->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            InventoryCategory::query()->orderBy('name'),
+            $filters,
+            'inventory_categories_page'
+        );
     }
 
     public function createCategory(array $data): InventoryCategory
@@ -50,12 +55,13 @@ class InventoryService
         $this->getCategoryByUid($uid)->delete();
     }
 
-    public function listProducts()
+    public function listProducts(array $filters = [])
     {
-        return InventoryProduct::query()
-            ->with(['category', 'stocks.warehouse'])
-            ->orderBy('name')
-            ->get();
+        return ApiIndex::paginateOrGet(
+            InventoryProduct::query()->with(['category', 'stocks.warehouse'])->orderBy('name'),
+            $filters,
+            'inventory_products_page'
+        );
     }
 
     public function createProduct(array $data): InventoryProduct
@@ -113,9 +119,13 @@ class InventoryService
         $this->getProductByUid($uid)->delete();
     }
 
-    public function listWarehouses()
+    public function listWarehouses(array $filters = [])
     {
-        return Warehouse::query()->withCount('stocks')->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            Warehouse::query()->withCount('stocks')->orderBy('name'),
+            $filters,
+            'inventory_warehouses_page'
+        );
     }
 
     public function createWarehouse(array $data): Warehouse

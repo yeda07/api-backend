@@ -13,9 +13,9 @@ class InventoryProductController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->inventoryService->listProducts());
+        return $this->successResponse($this->inventoryService->listProducts($request->query()));
     }
 
     public function store(Request $request)

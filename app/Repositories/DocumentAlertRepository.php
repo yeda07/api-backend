@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\DocumentAlert;
+use App\Support\ApiIndex;
 
 class DocumentAlertRepository
 {
@@ -27,7 +28,7 @@ class DocumentAlertRepository
             $query->whereHas('document', fn ($builder) => $builder->where('status', $filters['state']));
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'document_alerts_page');
     }
 
     public function findOpen(int $documentId, ?int $ruleId, string $alertDate): ?DocumentAlert

@@ -2,12 +2,17 @@
 namespace App\Repositories;
 
 use App\Models\CrmEntity;
+use App\Support\ApiIndex;
 
 class CrmEntityRepository
 {
-    public function all()
+    public function all(array $filters = [])
     {
-        return CrmEntity::all();
+        return ApiIndex::paginateOrGet(
+            CrmEntity::query()->latest(),
+            $filters,
+            'crm_entities_page'
+        );
     }
 
     public function create(array $data)

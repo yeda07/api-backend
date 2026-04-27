@@ -34,6 +34,10 @@ use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\RelationController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\AdminBillingController;
+use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminTelemetryController;
+use App\Http\Controllers\Api\AdminTenantController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\UserController;
@@ -72,6 +76,10 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::post('/2fa/recovery-codes/regenerate', [AuthController::class, 'regenerateRecoveryCodes']);
 
     Route::get('/users', [UserController::class, 'index'])->middleware('permission:users.manage');
+    Route::post('/users', [UserController::class, 'store'])->middleware('permission:users.manage');
+    Route::get('/users/{uid}', [UserController::class, 'show'])->middleware('permission:users.manage');
+    Route::put('/users/{uid}', [UserController::class, 'update'])->middleware('permission:users.manage');
+    Route::delete('/users/{uid}', [UserController::class, 'destroy'])->middleware('permission:users.manage');
     Route::get('/rbac/roles', [AccessControlController::class, 'roles'])->middleware('permission:users.manage');
     Route::post('/rbac/roles', [AccessControlController::class, 'storeRole'])->middleware('permission:users.manage');
     Route::put('/rbac/roles/{roleUid}', [AccessControlController::class, 'updateRole'])->middleware('permission:users.manage');
@@ -87,6 +95,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('plans')->group(function () {
         Route::get('/', [PlanController::class, 'index'])->middleware('permission:plans.manage');
         Route::post('/', [PlanController::class, 'store'])->middleware('permission:plans.manage');
+        Route::put('/{uid}', [PlanController::class, 'update'])->middleware('permission:plans.manage');
     });
 
     Route::prefix('accounts')->group(function () {
@@ -410,4 +419,32 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::get('/metrics/my-usage', [MetricsController::class, 'myUsage'])->middleware('permission:metrics.read');
     Route::get('/logs', [LogController::class, 'index'])->middleware('permission:logs.read');
+});
+
+Route::middleware(['auth:sanctum', 'full.access', 'platform.admin', 'permission:plans.manage'])->prefix('admin')->group(function () {
+    Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+
+    Route::prefix('tenants')->group(function () {
+        Route::get('/', [AdminTenantController::class, 'index']);
+        Route::post('/', [AdminTenantController::class, 'store']);
+        Route::get('/{uid}', [AdminTenantController::class, 'show']);
+        Route::put('/{uid}', [AdminTenantController::class, 'update']);
+        Route::post('/{uid}/suspend', [AdminTenantController::class, 'suspend']);
+        Route::post('/{uid}/activate', [AdminTenantController::class, 'activate']);
+        Route::post('/{uid}/users', [AdminTenantController::class, 'createUser']);
+    });
+
+    Route::prefix('billing')->group(function () {
+        Route::get('/', [AdminBillingController::class, 'index']);
+        Route::post('/mark-paid-bulk', [AdminBillingController::class, 'markPaidBulk']);
+        Route::post('/{uid}/mark-paid', [AdminBillingController::class, 'markPaid']);
+    });
+
+    Route::prefix('telemetry')->group(function () {
+        Route::get('/logs', [AdminTelemetryController::class, 'logs']);
+        Route::get('/alerts', [AdminTelemetryController::class, 'alerts']);
+        Route::post('/alerts', [AdminTelemetryController::class, 'storeAlert']);
+        Route::put('/alerts/{uid}', [AdminTelemetryController::class, 'updateAlert']);
+        Route::post('/alerts/{uid}/toggle', [AdminTelemetryController::class, 'toggleAlert']);
+    });
 });

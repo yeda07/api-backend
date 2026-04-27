@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\DocumentType;
+use App\Support\ApiIndex;
 
 class DocumentTypeRepository
 {
@@ -11,9 +12,9 @@ class DocumentTypeRepository
         return DocumentType::query()->with('alertRules')->orderBy('name');
     }
 
-    public function all()
+    public function all(array $filters = [])
     {
-        return $this->query()->get();
+        return ApiIndex::paginateOrGet($this->query(), $filters, 'document_types_page');
     }
 
     public function activeRequired()

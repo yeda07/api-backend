@@ -3,13 +3,18 @@
 namespace App\Services;
 
 use App\Models\Tag;
+use App\Support\ApiIndex;
 use Illuminate\Validation\ValidationException;
 
 class TagService
 {
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return Tag::query()->orderBy('category')->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            Tag::query()->orderBy('category')->orderBy('name'),
+            $filters,
+            'tags_page'
+        );
     }
 
     public function create(array $data): Tag

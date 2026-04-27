@@ -13,6 +13,10 @@ class Plan extends Model
         'name',
         'price',
         'max_users',
+        'tier',
+        'billing_interval',
+        'status',
+        'features',
         'max_records',
         'max_accounts',
         'max_contacts',
@@ -21,6 +25,10 @@ class Plan extends Model
 
     protected $hidden = [
         'id',
+    ];
+
+    protected $casts = [
+        'features' => 'array',
     ];
 
     public function tenants()

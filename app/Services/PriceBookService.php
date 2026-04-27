@@ -5,15 +5,20 @@ namespace App\Services;
 use App\Models\InventoryProduct;
 use App\Models\PriceBook;
 use App\Models\PriceBookItem;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class PriceBookService
 {
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return PriceBook::query()->with(['items.product'])->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            PriceBook::query()->with(['items.product'])->orderBy('name'),
+            $filters,
+            'price_books_page'
+        );
     }
 
     public function getByUid(string $uid): PriceBook

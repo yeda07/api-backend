@@ -13,9 +13,9 @@ class DocumentTypeController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->documentTypeService->getTypes());
+        return $this->successResponse($this->documentTypeService->getTypes($request->query()));
     }
 
     public function store(Request $request)

@@ -17,9 +17,9 @@ class CrmEntityController extends Controller
         $this->service = $service;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->service->getAll());
+        return $this->successResponse($this->service->getAll($request->query()));
     }
 
     public function store(Request $request)

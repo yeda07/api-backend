@@ -16,7 +16,7 @@ class DocumentAlertController extends Controller
     public function index(Request $request)
     {
         try {
-            return $this->successResponse($this->documentAlertService->getPendingAlerts($request->all()));
+            return $this->successResponse($this->documentAlertService->getPendingAlerts($request->query()));
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {

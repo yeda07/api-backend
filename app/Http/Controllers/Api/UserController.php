@@ -17,9 +17,9 @@ class UserController extends Controller
         $this->userService = $userService;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->userService->getAll());
+        return $this->successResponse($this->userService->getAll($request->query()));
     }
 
     public function store(Request $request)
@@ -28,8 +28,10 @@ class UserController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email',
-                'password' => 'required|string|min:6',
+                'password' => 'nullable|string|min:6',
             ]);
+
+            $validated['password'] = $validated['password'] ?? \Illuminate\Support\Str::random(24);
 
             return $this->successResponse($this->userService->create($validated), 201);
         } catch (ValidationException $e) {
