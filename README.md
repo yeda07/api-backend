@@ -718,6 +718,171 @@ Payload:
 }
 ```
 
+### `PUT /api/plans/{uid}`
+
+Auth requerida.  
+Permiso: `plans.manage`.
+
+Permite actualizar:
+
+- `name`
+- `price`
+- `max_users`
+- `tier`
+- `billing_interval`
+- `status`
+- `features`
+- `max_accounts`
+- `max_contacts`
+- `max_entities`
+- `max_records`
+
+### `POST /api/users`
+
+Auth requerida.  
+Permiso: `users.manage`.
+
+Payload:
+
+```json
+{
+  "name": "Ana Gomez",
+  "email": "ana@empresa.com",
+  "password": "secret123"
+}
+```
+
+### `GET /api/users/{uid}`
+
+Auth requerida.  
+Permiso: `users.manage`.
+
+### `PUT /api/users/{uid}`
+
+Auth requerida.  
+Permiso: `users.manage`.
+
+Permite actualizar:
+
+- `name`
+- `email`
+- `password`
+
+### `DELETE /api/users/{uid}`
+
+Auth requerida.  
+Permiso: `users.manage`.
+
+Elimina el usuario del tenant actual.
+
+## Endpoints administrativos
+
+Estos endpoints requieren:
+
+- token con acceso completo
+- acceso de plataforma
+- permiso `plans.manage`
+
+### `GET /api/admin/dashboard`
+
+Dashboard operativo del superadmin.
+
+### `GET /api/admin/tenants`
+
+Lista tenants con filtros administrativos.
+
+### `POST /api/admin/tenants`
+
+Payload:
+
+```json
+{
+  "nombre": "Tenant Demo",
+  "dominio": "demo.empresa.com",
+  "pais": "Colombia",
+  "email_contacto": "contacto@empresa.com",
+  "plan_uid": "df6b9f59-f371-4851-a9fa-18570f6d8310",
+  "estado": "ACTIVO"
+}
+```
+
+### `GET /api/admin/tenants/{uid}`
+
+Ver detalle del tenant.
+
+### `PUT /api/admin/tenants/{uid}`
+
+Actualizar datos del tenant.
+
+### `POST /api/admin/tenants/{uid}/activate`
+
+Activa el tenant.
+
+### `POST /api/admin/tenants/{uid}/suspend`
+
+Suspende el tenant.
+
+### `POST /api/admin/tenants/{uid}/users`
+
+Payload:
+
+```json
+{
+  "name": "Admin Tenant",
+  "email": "admin@tenant.com",
+  "role": "owner"
+}
+```
+
+### `GET /api/admin/billing`
+
+Lista facturas administrativas.
+
+### `POST /api/admin/billing/{uid}/mark-paid`
+
+Marca una factura como pagada.
+
+### `POST /api/admin/billing/mark-paid-bulk`
+
+Payload:
+
+```json
+{
+  "ids": [
+    "7e0b4f17-9d7f-49c5-a2d3-dfd0f4f2a001"
+  ]
+}
+```
+
+### `GET /api/admin/telemetry/logs`
+
+Consulta logs globales de plataforma.
+
+### `GET /api/admin/telemetry/alerts`
+
+Lista reglas administrativas de alerta.
+
+### `POST /api/admin/telemetry/alerts`
+
+Payload:
+
+```json
+{
+  "nombre": "Error rate alta",
+  "condicion": "errores > 10 por hora",
+  "canales": ["EMAIL", "SLACK"],
+  "estado": "ACTIVO"
+}
+```
+
+### `PUT /api/admin/telemetry/alerts/{uid}`
+
+Actualiza una regla administrativa de alerta.
+
+### `POST /api/admin/telemetry/alerts/{uid}/toggle`
+
+Activa o inactiva una regla administrativa.
+
 Success:
 
 ```json

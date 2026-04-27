@@ -26,6 +26,7 @@ tags:
   - name: Inventory
   - name: Logs
   - name: Metrics
+  - name: Admin
   - name: Opportunities
   - name: Partners
   - name: Plans
@@ -96,6 +97,183 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Dashboard administrativo
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants:
+    get:
+      tags: [Admin]
+      summary: Listar tenants
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Admin]
+      summary: Crear tenant
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminTenantRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}:
+    get:
+      tags: [Admin]
+      summary: Ver tenant
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Admin]
+      summary: Actualizar tenant
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminTenantRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/activate:
+    post:
+      tags: [Admin]
+      summary: Activar tenant
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspender tenant
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/users:
+    post:
+      tags: [Admin]
+      summary: Crear usuario de tenant
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminTenantUserRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/billing:
+    get:
+      tags: [Admin]
+      summary: Listar facturacion administrativa
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/billing/{uid}/mark-paid:
+    post:
+      tags: [Admin]
+      summary: Marcar factura como pagada
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/billing/mark-paid-bulk:
+    post:
+      tags: [Admin]
+      summary: Marcar facturas como pagadas en lote
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminBillingBulkRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/telemetry/logs:
+    get:
+      tags: [Admin]
+      summary: Listar logs de plataforma
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/telemetry/alerts:
+    get:
+      tags: [Admin]
+      summary: Listar alertas administrativas
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Admin]
+      summary: Crear alerta administrativa
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAlertRuleRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/telemetry/alerts/{uid}:
+    put:
+      tags: [Admin]
+      summary: Actualizar alerta administrativa
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAlertRuleRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/telemetry/alerts/{uid}/toggle:
+    post:
+      tags: [Admin]
+      summary: Alternar alerta administrativa
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
   /accounts:
     get:
       description: >-
@@ -1585,15 +1763,9 @@ paths:
   /document-alerts/generate:
     post:
       description: >-
-        Requiere permiso documents.manage.
+        Genera alertas pendientes para documentos proximos a vencer o vencidos.
       tags: [Documents]
-      summary: 'Crear o ejecutar - document-alerts/generate'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenericRequest'
+      summary: Generar alertas documentales
       responses:
         '200':
           description: Operacion exitosa
@@ -1608,9 +1780,9 @@ paths:
   /document-alerts/{uid}/read:
     post:
       description: >-
-        Requiere permiso documents.manage.
+        Marca una alerta documental como leida.
       tags: [Documents]
-      summary: 'Marcar como leida - document-alerts/{id}/read'
+      summary: Marcar alerta documental como leida
       parameters:
         - in: path
           name: uid
@@ -1619,12 +1791,6 @@ paths:
           schema:
             type: string
             format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenericRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -1654,14 +1820,16 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
+      description: >-
+        Crea un tipo documental B2G con vigencia y reglas de alerta opcionales.
       tags: [Documents]
-      summary: 'Crear - document-types'
+      summary: Crear tipo documental
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/DocumentTypeRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -1676,9 +1844,9 @@ paths:
   /document-types/{uid}:
     put:
       description: >-
-        Requiere permiso documents.manage.
+        Actualiza un tipo documental existente.
       tags: [Documents]
-      summary: 'Actualizar - document-types/{id}'
+      summary: Actualizar tipo documental
       parameters:
         - in: path
           name: uid
@@ -1692,7 +1860,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/DocumentTypeRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -1859,8 +2027,10 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     put:
+      description: >-
+        Actualiza metadatos o reemplaza el archivo de un documento existente.
       tags: [Documents]
-      summary: 'Actualizar - documents/{id}'
+      summary: Actualizar documento
       parameters:
         - in: path
           name: uid
@@ -1872,9 +2042,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/DocumentUpdateRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -3850,7 +4020,7 @@ paths:
       description: >-
         Requiere permiso plans.manage.
       tags: [Plans]
-      summary: 'Listar - plans'
+      summary: Listar planes
       responses:
         '200':
           description: Operacion exitosa
@@ -3863,14 +4033,16 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
+      description: >-
+        Crea un plan comercial del sistema.
       tags: [Plans]
-      summary: 'Crear - plans'
+      summary: Crear plan
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/PlanRequest'
       responses:
         '201':
           description: Operacion exitosa
@@ -3882,6 +4054,22 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /plans/{uid}:
+    put:
+      tags: [Plans]
+      summary: Actualizar plan
+      description: Requiere permiso `plans.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
   /price-books:
     get:
       description: >-
@@ -5561,7 +5749,7 @@ paths:
       description: >-
         Requiere permiso users.manage.
       tags: [RBAC]
-      summary: 'Listar - users'
+      summary: Listar usuarios
       responses:
         '200':
           description: Operacion exitosa
@@ -5573,6 +5761,53 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+    post:
+      tags: [RBAC]
+      summary: Crear usuario
+      description: Requiere permiso `users.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /users/{uid}:
+    get:
+      tags: [RBAC]
+      summary: Ver usuario
+      description: Requiere permiso `users.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [RBAC]
+      summary: Actualizar usuario
+      description: Requiere permiso `users.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [RBAC]
+      summary: Eliminar usuario
+      description: Requiere permiso `users.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
   /users/{uid}/access:
     get:
       description: >-
@@ -5841,6 +6076,186 @@ components:
         account_uid:
           type: string
           format: uuid
+    UserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Ana Gomez
+        email:
+          type: string
+          format: email
+          example: ana@empresa.com
+        password:
+          type: string
+          format: password
+          example: secret123
+    PlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Pro
+        price:
+          type: number
+          format: float
+          example: 49.99
+        max_users:
+          type: integer
+          example: 10
+        tier:
+          type: string
+          enum: [STARTER, PRO, BUSINESS, ENTERPRISE]
+          example: PRO
+        billing_interval:
+          type: string
+          enum: [MENSUAL, ANUAL]
+          example: MENSUAL
+        status:
+          type: string
+          enum: [ACTIVO, INACTIVO, LEGADO]
+          example: ACTIVO
+        features:
+          type: object
+          additionalProperties: true
+        max_accounts:
+          type: integer
+        max_contacts:
+          type: integer
+        max_entities:
+          type: integer
+        max_records:
+          type: integer
+    DocumentTypeRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: RUT
+        description:
+          type: string
+        validity_days:
+          type: integer
+          example: 365
+        is_required:
+          type: boolean
+          example: true
+        is_active:
+          type: boolean
+          example: true
+        alert_rules:
+          type: array
+          items:
+            type: object
+            properties:
+              days_before:
+                type: integer
+                example: 15
+              notification_channel:
+                type: string
+                example: system
+              is_active:
+                type: boolean
+                example: true
+    DocumentUpdateRequest:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          example: account
+        entity_uid:
+          type: string
+          format: uuid
+        account_uid:
+          type: string
+          format: uuid
+        document_type_uid:
+          type: string
+          format: uuid
+        issue_date:
+          type: string
+          format: date
+        expiration_date:
+          type: string
+          format: date
+        file:
+          type: string
+          format: binary
+    AdminTenantRequest:
+      type: object
+      properties:
+        nombre:
+          type: string
+          example: Tenant Demo
+        dominio:
+          type: string
+          example: demo.empresa.com
+        pais:
+          type: string
+          example: Colombia
+        email_contacto:
+          type: string
+          format: email
+          example: contacto@empresa.com
+        plan_uid:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          enum: [ACTIVO, TRIAL, VENCIDO, SUSPENDIDO, INACTIVO]
+          example: ACTIVO
+        mrr:
+          type: number
+          format: float
+        almacenamiento_usado_gb:
+          type: number
+          format: float
+        limite_almacenamiento_gb:
+          type: number
+          format: float
+    AdminTenantUserRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          example: Admin Tenant
+        email:
+          type: string
+          format: email
+          example: admin@tenant.com
+        role:
+          type: string
+          enum: [owner, manager, seller]
+          example: owner
+    AdminBillingBulkRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    AdminAlertRuleRequest:
+      type: object
+      properties:
+        nombre:
+          type: string
+          example: Error rate alta
+        condicion:
+          type: string
+          example: errores > 10 por hora
+        canales:
+          type: array
+          items:
+            type: string
+            enum: [EMAIL, SLACK, PUSH]
+        estado:
+          type: string
+          enum: [ACTIVO, INACTIVO]
+          example: ACTIVO
     ProductRequest:
       type: object
       required: [name, type, status]
