@@ -6,7 +6,9 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\InvoiceService;
 use App\Services\SearchBenchmarkService;
+use App\Models\Permission;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\Hash;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -60,3 +62,56 @@ Artisan::command('finance:sync-overdue', function () {
 
     return 0;
 })->purpose('Mark issued and partial invoices as overdue when due date has passed');
+
+Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--password=} {--regenerate-password}', function (string $email) {
+    $name = (string) $this->option('name');
+    $password = $this->option('password');
+    $regeneratePassword = (bool) $this->option('regenerate-password');
+    $shouldShowPassword = false;
+
+    if (!$password) {
+        $password = \Illuminate\Support\Str::random(16);
+    }
+
+    $user = User::withoutGlobalScopes()->where('email', $email)->first();
+
+    if ($user && !$regeneratePassword) {
+        $this->warn('El usuario ya existe. Se mantuvo su password actual.');
+    }
+
+    if (!$user || $regeneratePassword || $this->option('password')) {
+        $shouldShowPassword = true;
+    }
+
+    $user = User::withoutGlobalScopes()->updateOrCreate(
+        ['email' => $email],
+        [
+            'name' => $name,
+            'password' => $user && !$regeneratePassword ? $user->password : Hash::make($password),
+            'tenant_id' => null,
+            'is_platform_admin' => true,
+        ]
+    );
+
+    $permission = Permission::query()->where('key', 'plans.manage')->first();
+
+    if (!$permission) {
+        $this->error('No existe el permiso plans.manage. Ejecuta primero los seeders de permisos.');
+        return 1;
+    }
+
+    $user->givePermissionTo($permission);
+
+    $this->info('Superadmin global listo.');
+    $this->line('Email: ' . $user->email);
+    $this->line('Nombre: ' . $user->name);
+    $this->line('UID: ' . $user->uid);
+    $this->line('is_platform_admin: true');
+    $this->line('tenant_id: null');
+
+    if ($shouldShowPassword) {
+        $this->line('Password temporal: ' . $password);
+    }
+
+    return 0;
+})->purpose('Create or update the first global platform superadmin user');

@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\PartnerResourceController;
 use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\PriceBookController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\QuotationController;
@@ -381,6 +382,19 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/', [PartnerResourceController::class, 'store'])->middleware('permission:partners.resources.manage');
         Route::post('/{uid}/assign', [PartnerResourceController::class, 'assign'])->middleware('permission:partners.resources.manage');
     });
+
+    Route::prefix('projects')->group(function () {
+        Route::get('/', [ProjectController::class, 'index'])->middleware('permission:projects.read');
+        Route::post('/', [ProjectController::class, 'store'])->middleware('permission:projects.manage');
+        Route::get('/{uid}', [ProjectController::class, 'show'])->middleware('permission:projects.read');
+        Route::put('/{uid}', [ProjectController::class, 'update'])->middleware('permission:projects.manage');
+        Route::post('/{uid}/milestones', [ProjectController::class, 'storeMilestone'])->middleware('permission:projects.manage');
+        Route::post('/{uid}/assignments', [ProjectController::class, 'storeAssignment'])->middleware('permission:projects.manage');
+        Route::get('/{uid}/team', [ProjectController::class, 'team'])->middleware('permission:projects.read');
+        Route::get('/{uid}/progress', [ProjectController::class, 'progress'])->middleware('permission:projects.read');
+    });
+
+    Route::put('/milestones/{uid}', [ProjectController::class, 'updateMilestone'])->middleware('permission:projects.manage');
 
     Route::prefix('finance')->group(function () {
         Route::get('/records', [FinancialOperationsController::class, 'index'])->middleware('permission:finance.read');

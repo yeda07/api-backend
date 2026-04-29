@@ -11,6 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class OpportunityService
 {
+    public function __construct(private readonly ProjectService $projectService)
+    {
+    }
+
     public function stages()
     {
         return OpportunityStage::query()->orderBy('position')->get();
@@ -74,7 +78,7 @@ class OpportunityService
             $stage = $this->resolveStage($validated['stage_uid']);
             $entity = $this->resolveEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
 
-            return Opportunity::query()->create([
+            $opportunity = Opportunity::query()->create([
                 'owner_user_id' => $this->resolveOwnerUserId($validated['owner_user_uid'] ?? null, $entity?->owner_user_id),
                 'stage_id' => $stage->getKey(),
                 'opportunityable_type' => $entity ? get_class($entity) : null,
@@ -86,7 +90,13 @@ class OpportunityService
                 'description' => $validated['description'] ?? null,
                 'won_at' => $stage->is_won ? now() : null,
                 'lost_at' => $stage->is_lost ? now() : null,
-            ])->fresh(['stage', 'owner', 'opportunityable']);
+            ]);
+
+            if ($stage->is_won) {
+                $this->projectService->createFromOpportunityModel($opportunity->fresh(['opportunityable']), quietIfNoAccount: true);
+            }
+
+            return $opportunity->fresh(['stage', 'owner', 'opportunityable']);
         });
     }
 
@@ -123,7 +133,13 @@ class OpportunityService
 
             $opportunity->update($payload);
 
-            return $opportunity->fresh(['stage', 'owner', 'opportunityable']);
+            $opportunity = $opportunity->fresh(['stage', 'owner', 'opportunityable']);
+
+            if ($opportunity->stage?->is_won) {
+                $this->projectService->createFromOpportunityModel($opportunity, quietIfNoAccount: true);
+            }
+
+            return $opportunity;
         });
     }
 

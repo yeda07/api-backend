@@ -53,6 +53,11 @@ class Account extends Model
         return $this->hasMany(AccountProduct::class);
     }
 
+    public function projects()
+    {
+        return $this->hasMany(Project::class);
+    }
+
     public function documents()
     {
         return $this->hasMany(Document::class);

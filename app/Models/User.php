@@ -74,6 +74,11 @@ class User extends Authenticatable
         return $this->hasMany(User::class, 'manager_id');
     }
 
+    public function projectAssignments()
+    {
+        return $this->hasMany(ProjectAssignment::class);
+    }
+
     public function getTenantUidAttribute()
     {
         return $this->tenant?->uid;

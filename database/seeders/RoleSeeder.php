@@ -87,6 +87,8 @@ class RoleSeeder extends Seeder
                     'partners.opportunities.manage',
                     'partners.resources.read',
                     'partners.resources.manage',
+                    'projects.read',
+                    'projects.manage',
                 ],
             ],
             'seller' => [
@@ -141,6 +143,7 @@ class RoleSeeder extends Seeder
                     'partners.opportunities.read',
                     'partners.opportunities.manage',
                     'partners.resources.read',
+                    'projects.read',
                 ],
             ],
         ];

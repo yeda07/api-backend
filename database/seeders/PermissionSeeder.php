@@ -78,6 +78,8 @@ class PermissionSeeder extends Seeder
             ['key' => 'partners.opportunities.manage', 'module' => 'partners', 'action' => 'opportunities.manage', 'description' => 'Administrar oportunidades de partners'],
             ['key' => 'partners.resources.read', 'module' => 'partners', 'action' => 'resources.read', 'description' => 'Ver recursos para partners'],
             ['key' => 'partners.resources.manage', 'module' => 'partners', 'action' => 'resources.manage', 'description' => 'Administrar recursos para partners'],
+            ['key' => 'projects.read', 'module' => 'projects', 'action' => 'read', 'description' => 'Ver proyectos de implementacion'],
+            ['key' => 'projects.manage', 'module' => 'projects', 'action' => 'manage', 'description' => 'Administrar proyectos, hitos y asignaciones'],
         ];
 
         foreach ($permissions as $permission) {

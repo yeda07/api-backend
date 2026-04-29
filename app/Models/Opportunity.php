@@ -65,6 +65,11 @@ class Opportunity extends Model
         return $this->morphTo();
     }
 
+    public function project()
+    {
+        return $this->hasOne(Project::class);
+    }
+
     public function getOwnerUserUidAttribute()
     {
         return $this->owner?->uid
