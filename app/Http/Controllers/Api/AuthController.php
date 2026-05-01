@@ -259,6 +259,7 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'tenant_uid' => $user->tenant?->uid,
+            'is_platform_admin' => (bool) $user->is_platform_admin,
             'two_factor_enabled' => $user->hasTwoFactorEnabled(),
             'locked_until' => $user->locked_until?->toISOString(),
         ];
@@ -284,6 +285,12 @@ class AuthController extends Controller
 
     private function tenantAbilities(User $user, array $abilities): array
     {
+        if ($user->is_platform_admin && $user->tenant_id === null) {
+            return array_merge($abilities, [
+                'platform:admin',
+            ]);
+        }
+
         return array_merge($abilities, [
             'tenant:' . $user->tenant?->uid,
         ]);

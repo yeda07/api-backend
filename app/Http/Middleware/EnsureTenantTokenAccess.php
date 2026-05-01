@@ -21,6 +21,21 @@ class EnsureTenantTokenAccess
             return $next($request);
         }
 
+        if ($user->is_platform_admin && $user->tenant_id === null) {
+            if ($user->tokenCan('*') || $user->tokenCan('platform:admin')) {
+                return $next($request);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Token invalido para plataforma',
+                'data' => null,
+                'errors' => [
+                    'token' => ['El token no pertenece a un superadmin global valido'],
+                ],
+            ], 403);
+        }
+
         $tenantAbility = 'tenant:' . $user->tenant?->uid;
 
         if ($user->tokenCan('*') || $user->tokenCan($tenantAbility)) {

@@ -9,7 +9,13 @@ class CheckTenantActive
 {
     public function handle(Request $request, Closure $next)
     {
-        $tenant = $request->user()?->tenant;
+        $user = $request->user();
+
+        if ($user?->is_platform_admin && $user->tenant_id === null) {
+            return $next($request);
+        }
+
+        $tenant = $user?->tenant;
 
         if (!$tenant || !$tenant->isActive()) {
             return response()->json([
