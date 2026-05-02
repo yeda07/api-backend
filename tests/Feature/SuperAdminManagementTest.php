@@ -1,0 +1,237 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Invoice;
+use App\Models\Permission;
+use App\Models\Plan;
+use App\Models\SystemLog;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class SuperAdminManagementTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_superadmin_can_create_plan_with_frontend_feature_payload(): void
+    {
+        $this->authenticateSuperadmin(['plans.manage']);
+
+        $response = $this->postJson('/api/plans', [
+            'name' => 'Plan Pro',
+            'tier' => 'PRO',
+            'price' => 49,
+            'is_active' => true,
+            'max_users' => 5,
+            'storage_gb' => 10,
+            'api_calls_month' => 10000,
+            'modules' => ['Ventas', 'Inventario', 'RH / Comisiones'],
+            'custom_domain' => true,
+            'sso_saml' => false,
+            'advanced_reports' => true,
+            'support' => 'Email + Chat',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'ACTIVO')
+            ->assertJsonPath('data.features.storage_gb', 10)
+            ->assertJsonPath('data.features.api_calls_month', 10000)
+            ->assertJsonPath('data.features.support', 'Email + Chat');
+    }
+
+    public function test_plan_delete_deactivates_when_tenants_are_attached(): void
+    {
+        $this->authenticateSuperadmin(['plans.manage']);
+
+        $plan = Plan::query()->create([
+            'name' => 'Plan Starter',
+            'price' => 49,
+            'status' => 'ACTIVO',
+        ]);
+
+        Tenant::query()->create([
+            'name' => 'Acme Corporation',
+            'domain' => 'acme.test',
+            'status' => 'ACTIVO',
+            'plan_id' => $plan->getKey(),
+            'is_active' => true,
+        ]);
+
+        $this->deleteJson('/api/plans/' . $plan->uid)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'INACTIVO');
+
+        $this->assertDatabaseHas('plans', [
+            'id' => $plan->getKey(),
+            'status' => 'INACTIVO',
+        ]);
+    }
+
+    public function test_superadmin_can_export_billing_report(): void
+    {
+        $this->authenticateSuperadmin(['admin.billing.manage']);
+
+        $tenant = $this->tenantWithPlan();
+
+        Invoice::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'invoiceable_type' => Tenant::class,
+            'invoiceable_id' => $tenant->getKey(),
+            'invoice_number' => 'INV-001',
+            'status' => 'overdue',
+            'currency' => 'USD',
+            'subtotal' => 100,
+            'total' => 100,
+            'outstanding_total' => 100,
+            'issued_at' => '2026-03-01',
+            'due_date' => '2026-03-15',
+        ]);
+
+        $this->getJson('/api/admin/billing/export?format=json')
+            ->assertOk()
+            ->assertJsonPath('data.summary.total_facturas', 1)
+            ->assertJsonPath('data.summary.total_vencido', 100)
+            ->assertJsonPath('data.rows.0.status', 'VENCIDA');
+    }
+
+    public function test_superadmin_can_read_billing_summary_cards(): void
+    {
+        $this->authenticateSuperadmin(['admin.billing.manage']);
+
+        $tenant = $this->tenantWithPlan();
+
+        Invoice::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'invoiceable_type' => Tenant::class,
+            'invoiceable_id' => $tenant->getKey(),
+            'invoice_number' => 'INV-PAID',
+            'status' => 'paid',
+            'currency' => 'USD',
+            'subtotal' => 100,
+            'total' => 100,
+            'paid_total' => 100,
+            'outstanding_total' => 0,
+            'issued_at' => now()->toDateString(),
+            'due_date' => now()->addDays(10)->toDateString(),
+        ]);
+
+        Invoice::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'invoiceable_type' => Tenant::class,
+            'invoiceable_id' => $tenant->getKey(),
+            'invoice_number' => 'INV-OVERDUE',
+            'status' => 'overdue',
+            'currency' => 'USD',
+            'subtotal' => 80,
+            'total' => 80,
+            'outstanding_total' => 80,
+            'issued_at' => now()->toDateString(),
+            'due_date' => now()->subDays(5)->toDateString(),
+        ]);
+
+        $this->getJson('/api/admin/billing/summary')
+            ->assertOk()
+            ->assertJsonPath('data.cobrado_este_mes', 100)
+            ->assertJsonPath('data.facturas_vencidas', 80)
+            ->assertJsonPath('data.total_facturas', 2);
+    }
+
+    public function test_superadmin_tenant_index_uses_frontend_contract(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $this->tenantWithPlan();
+
+        $this->getJson('/api/admin/tenants')
+            ->assertOk()
+            ->assertJsonPath('data.0.nombre', 'Acme Corporation')
+            ->assertJsonPath('data.0.dominio', 'acme.test')
+            ->assertJsonPath('data.0.plan_nombre', 'Plan Pro');
+    }
+
+    public function test_superadmin_can_read_telemetry_summary(): void
+    {
+        $this->authenticateSuperadmin(['admin.telemetry.read']);
+
+        $tenant = $this->tenantWithPlan();
+
+        SystemLog::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'level' => 'critical',
+            'message' => '503 Service Unavailable',
+            'context' => ['latency_ms' => 240],
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now()->subMinutes(5),
+        ]);
+
+        SystemLog::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'level' => 'info',
+            'message' => 'Request',
+            'context' => ['latency_ms' => 120],
+            'created_at' => now()->subMinutes(10),
+            'updated_at' => now()->subMinutes(10),
+        ]);
+
+        $this->getJson('/api/admin/telemetry/summary')
+            ->assertOk()
+            ->assertJsonPath('data.errors_24h', 1)
+            ->assertJsonPath('data.tenants_with_errors', 1)
+            ->assertJsonPath('data.latency_p95_ms', 240)
+            ->assertJsonPath('data.errors_by_tenant.0.tenant_nombre', 'Acme Corporation');
+    }
+
+    private function authenticateSuperadmin(array $permissionKeys): User
+    {
+        foreach ($permissionKeys as $key) {
+            Permission::query()->firstOrCreate(
+                ['key' => $key],
+                [
+                    'module' => str_contains($key, '.') ? explode('.', $key)[0] : 'admin',
+                    'action' => $key,
+                    'description' => $key,
+                ]
+            );
+        }
+
+        $admin = User::withoutGlobalScopes()->create([
+            'name' => 'Super Admin',
+            'email' => 'superadmin@example.test',
+            'password' => bcrypt('secret123'),
+            'tenant_id' => null,
+            'is_platform_admin' => true,
+            'two_factor_secret' => 'secret',
+            'two_factor_confirmed_at' => now(),
+        ]);
+
+        $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
+        $admin->permissions()->sync($permissionIds);
+
+        Sanctum::actingAs($admin, ['access:full', 'platform:admin']);
+
+        return $admin;
+    }
+
+    private function tenantWithPlan(): Tenant
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Plan Pro',
+            'price' => 149,
+            'status' => 'ACTIVO',
+        ]);
+
+        return Tenant::query()->create([
+            'name' => 'Acme Corporation',
+            'domain' => 'acme.test',
+            'status' => 'ACTIVO',
+            'plan_id' => $plan->getKey(),
+            'mrr' => 149,
+            'is_active' => true,
+        ]);
+    }
+}

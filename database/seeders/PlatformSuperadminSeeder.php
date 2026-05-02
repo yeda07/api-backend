@@ -30,10 +30,16 @@ class PlatformSuperadminSeeder extends Seeder
             ]
         );
 
-        $permission = Permission::query()->where('key', 'plans.manage')->first();
-
-        if ($permission) {
-            $user->givePermissionTo($permission);
-        }
+        Permission::query()
+            ->whereIn('key', [
+                'plans.manage',
+                'admin.dashboard.read',
+                'admin.tenants.manage',
+                'admin.billing.manage',
+                'admin.telemetry.read',
+                'admin.alerts.manage',
+            ])
+            ->get()
+            ->each(fn (Permission $permission) => $user->givePermissionTo($permission));
     }
 }

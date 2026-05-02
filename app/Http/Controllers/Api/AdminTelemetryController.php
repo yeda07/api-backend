@@ -13,6 +13,61 @@ use Illuminate\Validation\ValidationException;
 
 class AdminTelemetryController extends Controller
 {
+    public function summary()
+    {
+        $logs24h = SystemLog::withoutGlobalScopes()
+            ->with('tenant')
+            ->where('created_at', '>=', now()->subDay())
+            ->get();
+
+        $errorLogs = $logs24h->whereIn('level', ['critical', 'error']);
+        $warningLogs = $logs24h->where('level', 'warning');
+        $latencies = $logs24h
+            ->map(fn (SystemLog $log) => $this->extractLatencyMs($log))
+            ->filter(fn ($value) => $value !== null)
+            ->sort()
+            ->values();
+
+        $totalLogs = $logs24h->count();
+        $uptime = $totalLogs > 0
+            ? round(max(0, 1 - ($errorLogs->count() / $totalLogs)) * 100, 2)
+            : 100.0;
+
+        $errorsByTenant = $errorLogs
+            ->groupBy('tenant_id')
+            ->map(function ($items) {
+                $last = $items->sortByDesc('created_at')->first();
+                $mostFrequentMessage = $items
+                    ->groupBy('message')
+                    ->sortByDesc(fn ($group) => $group->count())
+                    ->keys()
+                    ->first();
+
+                return [
+                    'tenant_uid' => $last?->tenant?->uid,
+                    'tenant_nombre' => $last?->tenant?->name ?? 'Plataforma',
+                    'errors_24h' => $items->count(),
+                    'tipo_mas_frecuente' => $mostFrequentMessage,
+                    'ultimo_error_at' => optional($last?->created_at)?->toISOString(),
+                    'severity' => $items->contains('level', 'critical') ? 'CRITICO' : 'ALTO',
+                    'estado' => $last?->tenant?->status,
+                ];
+            })
+            ->sortByDesc('errors_24h')
+            ->values();
+
+        return $this->successResponse([
+            'uptime_global' => $uptime,
+            'sla' => $uptime,
+            'errors_24h' => $errorLogs->count(),
+            'warnings_24h' => $warningLogs->count(),
+            'tenants_with_errors' => $errorLogs->pluck('tenant_id')->filter()->unique()->count(),
+            'latency_p95_ms' => $this->percentile($latencies, 95),
+            'active_alerts' => AdminAlertRule::query()->where('is_active', true)->count(),
+            'errors_by_tenant' => $errorsByTenant,
+        ]);
+    }
+
     public function logs(Request $request)
     {
         $validated = Validator::make($request->query(), [
@@ -158,6 +213,33 @@ class AdminTelemetryController extends Controller
                 default => 'BAJO',
             },
         ];
+    }
+
+    private function extractLatencyMs(SystemLog $log): ?float
+    {
+        $context = $log->context ?? [];
+
+        foreach (['latency_ms', 'duration_ms', 'response_time_ms', 'elapsed_ms'] as $key) {
+            if (isset($context[$key]) && is_numeric($context[$key])) {
+                return (float) $context[$key];
+            }
+        }
+
+        return null;
+    }
+
+    private function percentile($values, int $percentile): ?float
+    {
+        $values = collect($values)->values();
+        $count = $values->count();
+
+        if ($count === 0) {
+            return null;
+        }
+
+        $index = (int) ceil(($percentile / 100) * $count) - 1;
+
+        return round((float) $values->get(max(0, min($index, $count - 1))), 2);
     }
 
     private function serializeAlert(AdminAlertRule $rule): array

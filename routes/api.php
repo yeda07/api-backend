@@ -97,6 +97,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/', [PlanController::class, 'index'])->middleware('permission:plans.manage');
         Route::post('/', [PlanController::class, 'store'])->middleware('permission:plans.manage');
         Route::put('/{uid}', [PlanController::class, 'update'])->middleware('permission:plans.manage');
+        Route::delete('/{uid}', [PlanController::class, 'destroy'])->middleware('permission:plans.manage');
     });
 
     Route::prefix('accounts')->group(function () {
@@ -435,30 +436,33 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::get('/logs', [LogController::class, 'index'])->middleware('permission:logs.read');
 });
 
-Route::middleware(['auth:sanctum', 'full.access', 'platform.admin', 'permission:plans.manage'])->prefix('admin')->group(function () {
-    Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('admin')->group(function () {
+    Route::get('/dashboard', [AdminDashboardController::class, 'index'])->middleware('permission:admin.dashboard.read');
 
     Route::prefix('tenants')->group(function () {
-        Route::get('/', [AdminTenantController::class, 'index']);
-        Route::post('/', [AdminTenantController::class, 'store']);
-        Route::get('/{uid}', [AdminTenantController::class, 'show']);
-        Route::put('/{uid}', [AdminTenantController::class, 'update']);
-        Route::post('/{uid}/suspend', [AdminTenantController::class, 'suspend']);
-        Route::post('/{uid}/activate', [AdminTenantController::class, 'activate']);
-        Route::post('/{uid}/users', [AdminTenantController::class, 'createUser']);
+        Route::get('/', [AdminTenantController::class, 'index'])->middleware('permission:admin.tenants.manage');
+        Route::post('/', [AdminTenantController::class, 'store'])->middleware('permission:admin.tenants.manage');
+        Route::get('/{uid}', [AdminTenantController::class, 'show'])->middleware('permission:admin.tenants.manage');
+        Route::put('/{uid}', [AdminTenantController::class, 'update'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/suspend', [AdminTenantController::class, 'suspend'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/activate', [AdminTenantController::class, 'activate'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/users', [AdminTenantController::class, 'createUser'])->middleware('permission:admin.tenants.manage');
     });
 
     Route::prefix('billing')->group(function () {
-        Route::get('/', [AdminBillingController::class, 'index']);
-        Route::post('/mark-paid-bulk', [AdminBillingController::class, 'markPaidBulk']);
-        Route::post('/{uid}/mark-paid', [AdminBillingController::class, 'markPaid']);
+        Route::get('/', [AdminBillingController::class, 'index'])->middleware('permission:admin.billing.manage');
+        Route::get('/summary', [AdminBillingController::class, 'summary'])->middleware('permission:admin.billing.manage');
+        Route::get('/export', [AdminBillingController::class, 'export'])->middleware('permission:admin.billing.manage');
+        Route::post('/mark-paid-bulk', [AdminBillingController::class, 'markPaidBulk'])->middleware('permission:admin.billing.manage');
+        Route::post('/{uid}/mark-paid', [AdminBillingController::class, 'markPaid'])->middleware('permission:admin.billing.manage');
     });
 
     Route::prefix('telemetry')->group(function () {
-        Route::get('/logs', [AdminTelemetryController::class, 'logs']);
-        Route::get('/alerts', [AdminTelemetryController::class, 'alerts']);
-        Route::post('/alerts', [AdminTelemetryController::class, 'storeAlert']);
-        Route::put('/alerts/{uid}', [AdminTelemetryController::class, 'updateAlert']);
-        Route::post('/alerts/{uid}/toggle', [AdminTelemetryController::class, 'toggleAlert']);
+        Route::get('/summary', [AdminTelemetryController::class, 'summary'])->middleware('permission:admin.telemetry.read');
+        Route::get('/logs', [AdminTelemetryController::class, 'logs'])->middleware('permission:admin.telemetry.read');
+        Route::get('/alerts', [AdminTelemetryController::class, 'alerts'])->middleware('permission:admin.alerts.manage');
+        Route::post('/alerts', [AdminTelemetryController::class, 'storeAlert'])->middleware('permission:admin.alerts.manage');
+        Route::put('/alerts/{uid}', [AdminTelemetryController::class, 'updateAlert'])->middleware('permission:admin.alerts.manage');
+        Route::post('/alerts/{uid}/toggle', [AdminTelemetryController::class, 'toggleAlert'])->middleware('permission:admin.alerts.manage');
     });
 });

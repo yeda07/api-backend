@@ -70,7 +70,17 @@ class AdminTenantController extends Controller
 
         $query->orderBy($sortBy, $sortDir);
 
-        return $this->successResponse(ApiIndex::paginateOrGet($query, $validated, 'tenants_page'));
+        $result = ApiIndex::paginateOrGet($query, $validated, 'tenants_page');
+
+        if ($result instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+            $result->setCollection($result->getCollection()->map(fn (Tenant $tenant) => $this->serializeTenant($tenant)));
+
+            return $this->successResponse($result);
+        }
+
+        return $this->successResponse(
+            collect($result)->map(fn (Tenant $tenant) => $this->serializeTenant($tenant))->values()
+        );
     }
 
     public function store(Request $request)

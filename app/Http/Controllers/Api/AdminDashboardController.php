@@ -47,6 +47,35 @@ class AdminDashboardController extends Controller
                 ->where('created_at', '>=', now()->subDay())
                 ->count(),
             'usuarios_totales' => User::withoutGlobalScopes()->whereNotNull('tenant_id')->count(),
+            'requieren_atencion' => $tenants
+                ->whereIn('status', ['VENCIDO', 'SUSPENDIDO'])
+                ->values()
+                ->map(fn (Tenant $tenant) => $this->serializeTenantSummary($tenant)),
+            'tenants_recientes' => $tenants
+                ->sortByDesc('created_at')
+                ->take(5)
+                ->values()
+                ->map(fn (Tenant $tenant) => $this->serializeTenantSummary($tenant)),
         ]);
+    }
+
+    private function serializeTenantSummary(Tenant $tenant): array
+    {
+        $lastAccessAt = User::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->max('last_login_at');
+
+        return [
+            'uid' => $tenant->uid,
+            'nombre' => $tenant->name,
+            'dominio' => $tenant->domain,
+            'plan_uid' => $tenant->plan?->uid,
+            'plan_nombre' => $tenant->plan?->name,
+            'mrr' => (float) ($tenant->mrr ?? $tenant->plan?->price ?? 0),
+            'estado' => $tenant->status,
+            'total_usuarios' => User::withoutGlobalScopes()->where('tenant_id', $tenant->getKey())->count(),
+            'limite_usuarios' => $tenant->plan?->max_users,
+            'last_access_at' => $lastAccessAt ? Carbon::parse($lastAccessAt)->toISOString() : null,
+        ];
     }
 }

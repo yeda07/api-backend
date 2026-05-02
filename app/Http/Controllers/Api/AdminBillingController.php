@@ -15,6 +15,25 @@ use Illuminate\Validation\ValidationException;
 
 class AdminBillingController extends Controller
 {
+    public function summary()
+    {
+        $currentMonth = now()->startOfMonth();
+
+        $invoices = Invoice::withoutGlobalScopes()
+            ->whereDate('issued_at', '>=', $currentMonth)
+            ->get();
+
+        return $this->successResponse([
+            'cobrado_este_mes' => round((float) $invoices->where('status', 'paid')->sum('paid_total'), 2),
+            'pendiente_cobro' => round((float) $invoices->where('status', 'issued')->sum('outstanding_total'), 2),
+            'facturas_vencidas' => round((float) $invoices->where('status', 'overdue')->sum('outstanding_total'), 2),
+            'total_facturas' => $invoices->count(),
+            'pagadas' => $invoices->where('status', 'paid')->count(),
+            'pendientes' => $invoices->where('status', 'issued')->count(),
+            'vencidas' => $invoices->where('status', 'overdue')->count(),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $validated = Validator::make($request->query(), [
@@ -55,6 +74,45 @@ class AdminBillingController extends Controller
         }
 
         return $this->successResponse(collect($result)->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice))->values());
+    }
+
+    public function export(Request $request)
+    {
+        $validated = Validator::make($request->query(), [
+            'tenant_uid' => 'nullable|uuid',
+            'estado' => 'nullable|string|in:PAGADA,PENDIENTE,VENCIDA,CANCELADA',
+            'from' => 'nullable|date',
+            'to' => 'nullable|date',
+            'format' => 'nullable|string|in:json,csv',
+        ])->validate();
+
+        $invoices = $this->billingQuery($validated)
+            ->orderByDesc('issued_at')
+            ->get();
+
+        $rows = $invoices
+            ->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice))
+            ->values();
+
+        $summary = [
+            'total_facturas' => $rows->count(),
+            'total_monto' => round((float) $rows->sum('total'), 2),
+            'total_pagado' => round((float) $rows->where('status', 'PAGADA')->sum('total'), 2),
+            'total_pendiente' => round((float) $rows->where('status', 'PENDIENTE')->sum('total'), 2),
+            'total_vencido' => round((float) $rows->where('status', 'VENCIDA')->sum('total'), 2),
+        ];
+
+        if (($validated['format'] ?? 'json') === 'csv') {
+            return response($this->toCsv($rows->all()), 200, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="billing-report.csv"',
+            ]);
+        }
+
+        return $this->successResponse([
+            'summary' => $summary,
+            'rows' => $rows,
+        ]);
     }
 
     public function markPaid(string $uid)
@@ -125,6 +183,58 @@ class AdminBillingController extends Controller
                 'invoices' => $updated,
             ];
         });
+    }
+
+    private function billingQuery(array $validated)
+    {
+        $query = Invoice::withoutGlobalScopes()->with(['tenant.plan']);
+
+        if (!empty($validated['tenant_uid'])) {
+            $tenantId = Tenant::query()->where('uid', $validated['tenant_uid'])->value('id');
+            $query->where('tenant_id', $tenantId);
+        }
+
+        if (!empty($validated['estado'])) {
+            $query->where('status', $this->toInvoiceStatus($validated['estado']));
+        }
+
+        if (!empty($validated['from'])) {
+            $query->whereDate('issued_at', '>=', $validated['from']);
+        }
+
+        if (!empty($validated['to'])) {
+            $query->whereDate('issued_at', '<=', $validated['to']);
+        }
+
+        return $query;
+    }
+
+    private function toCsv(array $rows): string
+    {
+        $headers = ['uid', 'tenant', 'periodo', 'plan', 'total', 'status', 'issued_at', 'due_at'];
+        $lines = [implode(',', $headers)];
+
+        foreach ($rows as $row) {
+            $lines[] = implode(',', array_map(fn ($value) => $this->csvValue($value), [
+                $row['uid'],
+                $row['tenant_nombre'],
+                $row['periodo'],
+                $row['plan_nombre'],
+                $row['total'],
+                $row['status'],
+                $row['issued_at'],
+                $row['due_at'],
+            ]));
+        }
+
+        return implode("\n", $lines) . "\n";
+    }
+
+    private function csvValue(mixed $value): string
+    {
+        $value = (string) $value;
+
+        return '"' . str_replace('"', '""', $value) . '"';
     }
 
     private function serializeInvoice(Invoice $invoice): array
