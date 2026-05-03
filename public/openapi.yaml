@@ -92,7 +92,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+                $ref: '#/components/schemas/PlanArrayEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -102,17 +102,73 @@ paths:
       tags: [Admin]
       summary: Dashboard administrativo
       description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - in: query
+          name: recent_page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: recent_per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardEnvelope'
   /admin/tenants:
     get:
       tags: [Admin]
       summary: Listar tenants
       description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: plan_uid
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: estado
+          schema:
+            type: string
+            enum: [ACTIVO, TRIAL, VENCIDO, SUSPENDIDO, INACTIVO]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            enum: [nombre, mrr, totalUsuarios, creadoEn, ultimoAcceso]
+        - in: query
+          name: sort_dir
+          schema:
+            type: string
+            enum: [asc, desc]
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantListEnvelope'
     post:
       tags: [Admin]
       summary: Crear tenant
@@ -125,7 +181,11 @@ paths:
               $ref: '#/components/schemas/AdminTenantRequest'
       responses:
         '201':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantEnvelope'
   /admin/tenants/{uid}:
     get:
       tags: [Admin]
@@ -135,7 +195,11 @@ paths:
         - $ref: '#/components/parameters/UidPath'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantEnvelope'
     put:
       tags: [Admin]
       summary: Actualizar tenant
@@ -150,7 +214,11 @@ paths:
               $ref: '#/components/schemas/AdminTenantRequest'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantEnvelope'
   /admin/tenants/{uid}/activate:
     post:
       tags: [Admin]
@@ -160,7 +228,11 @@ paths:
         - $ref: '#/components/parameters/UidPath'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantEnvelope'
   /admin/tenants/{uid}/suspend:
     post:
       tags: [Admin]
@@ -170,7 +242,11 @@ paths:
         - $ref: '#/components/parameters/UidPath'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantEnvelope'
   /admin/tenants/{uid}/users:
     post:
       tags: [Admin]
@@ -186,15 +262,67 @@ paths:
               $ref: '#/components/schemas/AdminTenantUserRequest'
       responses:
         '201':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantUserEnvelope'
   /admin/billing:
     get:
       tags: [Admin]
       summary: Listar facturacion administrativa
       description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - in: query
+          name: tenant_uid
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: estado
+          schema:
+            type: string
+            enum: [PAGADA, PENDIENTE, VENCIDA, CANCELADA]
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBillingListEnvelope'
+  /admin/billing/summary:
+    get:
+      tags: [Admin]
+      summary: Resumen de facturacion administrativa
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBillingSummaryEnvelope'
   /admin/billing/{uid}/mark-paid:
     post:
       tags: [Admin]
@@ -204,7 +332,11 @@ paths:
         - $ref: '#/components/parameters/UidPath'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBillingInvoiceEnvelope'
   /admin/billing/mark-paid-bulk:
     post:
       tags: [Admin]
@@ -218,15 +350,79 @@ paths:
               $ref: '#/components/schemas/AdminBillingBulkRequest'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBillingInvoiceArrayEnvelope'
+  /admin/telemetry/summary:
+    get:
+      tags: [Admin]
+      summary: Resumen global de telemetria
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTelemetrySummaryEnvelope'
+  /admin/telemetry/stats:
+    get:
+      tags: [Admin]
+      summary: Stats cortas de telemetria
+      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTelemetryStatsEnvelope'
   /admin/telemetry/logs:
     get:
       tags: [Admin]
       summary: Listar logs de plataforma
       description: Requiere acceso de plataforma y permiso `plans.manage`.
+      parameters:
+        - in: query
+          name: tenant_uid
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: nivel
+          schema:
+            type: string
+            enum: [ERROR, WARN, INFO]
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTelemetryLogListEnvelope'
   /admin/telemetry/alerts:
     get:
       tags: [Admin]
@@ -234,7 +430,11 @@ paths:
       description: Requiere acceso de plataforma y permiso `plans.manage`.
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAlertArrayEnvelope'
     post:
       tags: [Admin]
       summary: Crear alerta administrativa
@@ -247,7 +447,11 @@ paths:
               $ref: '#/components/schemas/AdminAlertRuleRequest'
       responses:
         '201':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAlertEnvelope'
   /admin/telemetry/alerts/{uid}:
     put:
       tags: [Admin]
@@ -263,7 +467,11 @@ paths:
               $ref: '#/components/schemas/AdminAlertRuleRequest'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAlertEnvelope'
   /admin/telemetry/alerts/{uid}/toggle:
     post:
       tags: [Admin]
@@ -273,7 +481,11 @@ paths:
         - $ref: '#/components/parameters/UidPath'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAlertEnvelope'
   /accounts:
     get:
       description: >-
@@ -4027,7 +4239,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+                $ref: '#/components/schemas/PlanArrayEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -4049,7 +4261,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+                $ref: '#/components/schemas/PlanEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -4069,7 +4281,11 @@ paths:
               $ref: '#/components/schemas/PlanRequest'
       responses:
         '200':
-          $ref: '#/components/responses/GenericSuccess'
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanEnvelope'
   /price-books:
     get:
       description: >-
@@ -5997,6 +6213,12 @@ components:
       scheme: bearer
       bearerFormat: Sanctum
   responses:
+    GenericSuccess:
+      description: Operacion exitosa
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SuccessEnvelope'
     Unauthorized:
       description: Token invalido o ausente.
       content:
@@ -6116,8 +6338,7 @@ components:
           enum: [ACTIVO, INACTIVO, LEGADO]
           example: ACTIVO
         features:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/PlanFeatures'
         max_accounts:
           type: integer
         max_contacts:
@@ -6256,6 +6477,360 @@ components:
           type: string
           enum: [ACTIVO, INACTIVO]
           example: ACTIVO
+    PlanFeatures:
+      type: object
+      properties:
+        storage_gb:
+          type: number
+          format: float
+          example: 50
+        api_calls_month:
+          type: integer
+          example: 100000
+        modules:
+          type: array
+          items:
+            type: string
+          example: [ventas, inventario, rh]
+        support_type:
+          type: string
+          enum: [EMAIL, EMAIL_CHAT, DEDICADO]
+          example: EMAIL_CHAT
+        support:
+          type: string
+          example: Email + Chat
+        sla_uptime:
+          type: number
+          format: float
+          example: 99.9
+        custom_domain:
+          type: boolean
+          example: true
+        sso:
+          type: boolean
+          example: false
+        sso_saml:
+          type: boolean
+          example: false
+        advanced_reports:
+          type: boolean
+          example: true
+    PlanResource:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        price:
+          type: number
+          format: float
+        max_users:
+          type: integer
+        tier:
+          type: string
+          enum: [STARTER, PRO, BUSINESS, ENTERPRISE]
+        billing_interval:
+          type: string
+          enum: [MENSUAL, ANUAL]
+        status:
+          type: string
+          enum: [ACTIVO, INACTIVO, LEGADO]
+        features:
+          $ref: '#/components/schemas/PlanFeatures'
+        total_tenants:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    AdminTenantResource:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        dominio:
+          type: string
+        pais:
+          type: string
+          nullable: true
+        email_contacto:
+          type: string
+          format: email
+          nullable: true
+        plan_uid:
+          type: string
+          format: uuid
+          nullable: true
+        plan_nombre:
+          type: string
+          nullable: true
+        mrr:
+          type: number
+          format: float
+        estado:
+          type: string
+          enum: [ACTIVO, TRIAL, VENCIDO, SUSPENDIDO, INACTIVO]
+        total_usuarios:
+          type: integer
+        limite_usuarios:
+          type: integer
+          nullable: true
+        almacenamiento_usado_gb:
+          type: number
+          format: float
+        limite_almacenamiento_gb:
+          type: number
+          format: float
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_access_at:
+          type: string
+          format: date-time
+          nullable: true
+    AdminDashboardData:
+      type: object
+      properties:
+        mrr_total:
+          type: number
+          format: float
+        mrr_growth_percent:
+          type: number
+          format: float
+        mrr_history:
+          type: array
+          items:
+            type: object
+            properties:
+              mes:
+                type: string
+              valor:
+                type: number
+                format: float
+        tenants_activos:
+          type: integer
+        tenants_trial:
+          type: integer
+        tenants_en_riesgo_count:
+          type: integer
+        facturas_vencidas:
+          type: integer
+        errores_criticos_24h:
+          type: integer
+        usuarios_totales:
+          type: integer
+        tenants_en_riesgo:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminTenantResource'
+        requieren_atencion:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminTenantResource'
+        tenants_recientes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminTenantResource'
+        tenants_recientes_pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            per_page:
+              type: integer
+            total:
+              type: integer
+            last_page:
+              type: integer
+    AdminBillingInvoice:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        tenant_uid:
+          type: string
+          format: uuid
+          nullable: true
+        tenant_nombre:
+          type: string
+          nullable: true
+        periodo:
+          type: string
+          nullable: true
+        plan_nombre:
+          type: string
+          nullable: true
+        subtotal:
+          type: number
+          format: float
+        tax:
+          type: number
+          format: float
+        total:
+          type: number
+          format: float
+        status:
+          type: string
+          enum: [PAGADA, PENDIENTE, VENCIDA, CANCELADA]
+        issued_at:
+          type: string
+          format: date-time
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+    AdminBillingSummaryData:
+      type: object
+      properties:
+        cobrado_este_mes:
+          type: number
+          format: float
+        pendiente_cobro:
+          type: number
+          format: float
+        facturas_vencidas:
+          type: number
+          format: float
+        total_facturas:
+          type: integer
+        pagadas:
+          type: integer
+        pendientes:
+          type: integer
+        vencidas:
+          type: integer
+    AdminTelemetryLog:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        tenant_uid:
+          type: string
+          format: uuid
+          nullable: true
+        tenant_nombre:
+          type: string
+          nullable: true
+        level:
+          type: string
+          enum: [ERROR, WARN, INFO]
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+          nullable: true
+        errors_last_24h:
+          type: integer
+        severity:
+          type: string
+          enum: [CRITICO, ALTO, MEDIO, BAJO]
+    AdminAlertResource:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        nombre:
+          type: string
+        condicion:
+          type: string
+        canales:
+          type: array
+          items:
+            type: string
+            enum: [EMAIL, SLACK, PUSH]
+        estado:
+          type: string
+          enum: [ACTIVO, INACTIVO]
+        last_triggered_at:
+          type: string
+          format: date-time
+          nullable: true
+    AdminTelemetryStatsData:
+      type: object
+      properties:
+        uptime_global_percent:
+          type: number
+          format: float
+        latencia_p95_ms:
+          type: number
+          format: float
+          nullable: true
+    AdminTelemetrySummaryData:
+      type: object
+      properties:
+        uptime_global:
+          type: number
+          format: float
+        sla:
+          type: number
+          format: float
+        errors_24h:
+          type: integer
+        warnings_24h:
+          type: integer
+        tenants_with_errors:
+          type: integer
+        latency_p95_ms:
+          type: number
+          format: float
+          nullable: true
+        active_alerts:
+          type: integer
+        errors_by_tenant:
+          type: array
+          items:
+            type: object
+            properties:
+              tenant_uid:
+                type: string
+                format: uuid
+                nullable: true
+              tenant_nombre:
+                type: string
+              errors_24h:
+                type: integer
+              tipo_mas_frecuente:
+                type: string
+                nullable: true
+              ultimo_error_at:
+                type: string
+                format: date-time
+                nullable: true
+              severity:
+                type: string
+                enum: [CRITICO, ALTO]
+              estado:
+                type: string
+                nullable: true
+    AdminTenantUserResource:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        tenant_uid:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
     ProductRequest:
       type: object
       required: [name, type, status]
@@ -6597,6 +7172,129 @@ components:
           items:
             type: string
             format: uuid
+    PlanEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PlanResource'
+    PlanArrayEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlanResource'
+    AdminTenantEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminTenantResource'
+    AdminTenantListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              oneOf:
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/AdminTenantResource'
+                - type: object
+    AdminDashboardEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminDashboardData'
+    AdminBillingInvoiceEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminBillingInvoice'
+    AdminBillingInvoiceArrayEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminBillingInvoice'
+    AdminBillingListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              oneOf:
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/AdminBillingInvoice'
+                - type: object
+    AdminBillingSummaryEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminBillingSummaryData'
+    AdminTelemetryLogListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              oneOf:
+                - type: array
+                  items:
+                    $ref: '#/components/schemas/AdminTelemetryLog'
+                - type: object
+    AdminAlertEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminAlertResource'
+    AdminAlertArrayEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminAlertResource'
+    AdminTelemetryStatsEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminTelemetryStatsData'
+    AdminTelemetrySummaryEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminTelemetrySummaryData'
+    AdminTenantUserEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminTenantUserResource'
     SuccessEnvelope:
       type: object
       example:

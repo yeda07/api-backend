@@ -688,13 +688,26 @@ Success:
   "data": [
     {
       "uid": "df6b9f59-f371-4851-a9fa-18570f6d8310",
-      "name": "Pro",
-      "price": "49.99",
-      "max_users": 10,
-      "max_records": null,
-      "max_accounts": 1000,
-      "max_contacts": 5000,
-      "max_entities": 1000
+      "name": "Plan Pro",
+      "price": 149,
+      "max_users": 25,
+      "tier": "PRO",
+      "billing_interval": "MENSUAL",
+      "status": "ACTIVO",
+      "features": {
+        "storage_gb": 50,
+        "api_calls_month": 100000,
+        "modules": ["ventas", "inventario", "rh"],
+        "support_type": "EMAIL_CHAT",
+        "support": "Email + Chat",
+        "sla_uptime": 99.9,
+        "custom_domain": true,
+        "sso": false,
+        "sso_saml": false,
+        "advanced_reports": true
+      },
+      "total_tenants": 86,
+      "created_at": "2026-05-03T00:00:00.000000Z"
     }
   ],
   "errors": null
@@ -709,12 +722,22 @@ Payload:
 
 ```json
 {
-  "name": "Pro",
-  "price": 49.99,
-  "max_users": 10,
-  "max_accounts": 1000,
-  "max_contacts": 5000,
-  "max_entities": 1000
+  "name": "Plan Pro",
+  "price": 149,
+  "max_users": 25,
+  "tier": "PRO",
+  "billing_interval": "MENSUAL",
+  "status": "ACTIVO",
+  "features": {
+    "storage_gb": 50,
+    "api_calls_month": 100000,
+    "modules": ["ventas", "inventario", "rh"],
+    "support_type": "EMAIL_CHAT",
+    "sla_uptime": 99.9,
+    "custom_domain": true,
+    "sso": false,
+    "advanced_reports": true
+  }
 }
 ```
 
@@ -787,9 +810,40 @@ Estos endpoints requieren:
 
 Dashboard operativo del superadmin.
 
+Query params opcionales:
+
+- `recent_page`
+- `recent_per_page`
+
+Devuelve:
+
+- `mrr_total`
+- `mrr_growth_percent`
+- `mrr_history`
+- `tenants_activos`
+- `tenants_trial`
+- `tenants_en_riesgo_count`
+- `facturas_vencidas`
+- `errores_criticos_24h`
+- `usuarios_totales`
+- `tenants_en_riesgo`
+- `requieren_atencion`
+- `tenants_recientes`
+- `tenants_recientes_pagination`
+
 ### `GET /api/admin/tenants`
 
 Lista tenants con filtros administrativos.
+
+Filtros:
+
+- `search`
+- `plan_uid`
+- `estado`
+- `page`
+- `per_page`
+- `sort_by = nombre | mrr | totalUsuarios | creadoEn | ultimoAcceso`
+- `sort_dir = asc | desc`
 
 ### `POST /api/admin/tenants`
 
@@ -808,7 +862,23 @@ Payload:
 
 ### `GET /api/admin/tenants/{uid}`
 
-Ver detalle del tenant.
+Ver detalle del tenant. Devuelve:
+
+- `uid`
+- `nombre`
+- `dominio`
+- `pais`
+- `email_contacto`
+- `plan_uid`
+- `plan_nombre`
+- `mrr`
+- `estado`
+- `total_usuarios`
+- `limite_usuarios`
+- `almacenamiento_usado_gb`
+- `limite_almacenamiento_gb`
+- `created_at`
+- `last_access_at`
 
 ### `PUT /api/admin/tenants/{uid}`
 
@@ -834,13 +904,54 @@ Payload:
 }
 ```
 
+Notas:
+
+- crea un usuario del tenant ignorando `TenantScope`
+- intenta asignar el rol pedido si existe en ese tenant
+- dispara el flujo de recuperacion para que el usuario establezca su contrasena por correo
+
 ### `GET /api/admin/billing`
 
 Lista facturas administrativas.
 
+Filtros:
+
+- `tenant_uid`
+- `estado = PAGADA | PENDIENTE | VENCIDA | CANCELADA`
+- `from`
+- `to`
+- `page`
+- `per_page`
+
+Cada item devuelve:
+
+- `uid`
+- `tenant_uid`
+- `tenant_nombre`
+- `periodo`
+- `plan_nombre`
+- `subtotal`
+- `tax`
+- `total`
+- `status`
+- `issued_at`
+- `due_at`
+
+### `GET /api/admin/billing/summary`
+
+Devuelve:
+
+- `cobrado_este_mes`
+- `pendiente_cobro`
+- `facturas_vencidas`
+- `total_facturas`
+- `pagadas`
+- `pendientes`
+- `vencidas`
+
 ### `POST /api/admin/billing/{uid}/mark-paid`
 
-Marca una factura como pagada.
+Marca una factura como pagada y devuelve la factura actualizada.
 
 ### `POST /api/admin/billing/mark-paid-bulk`
 
@@ -857,6 +968,46 @@ Payload:
 ### `GET /api/admin/telemetry/logs`
 
 Consulta logs globales de plataforma.
+
+Filtros:
+
+- `tenant_uid`
+- `nivel = ERROR | WARN | INFO`
+- `from`
+- `to`
+- `page`
+- `per_page`
+
+Cada item devuelve:
+
+- `uid`
+- `tenant_uid`
+- `tenant_nombre`
+- `level`
+- `message`
+- `timestamp`
+- `errors_last_24h`
+- `severity`
+
+### `GET /api/admin/telemetry/summary`
+
+Devuelve:
+
+- `uptime_global`
+- `sla`
+- `errors_24h`
+- `warnings_24h`
+- `tenants_with_errors`
+- `latency_p95_ms`
+- `active_alerts`
+- `errors_by_tenant`
+
+### `GET /api/admin/telemetry/stats`
+
+Alias corto para cards del frontend. Devuelve:
+
+- `uptime_global_percent`
+- `latencia_p95_ms`
 
 ### `GET /api/admin/telemetry/alerts`
 
@@ -882,26 +1033,6 @@ Actualiza una regla administrativa de alerta.
 ### `POST /api/admin/telemetry/alerts/{uid}/toggle`
 
 Activa o inactiva una regla administrativa.
-
-Success:
-
-```json
-{
-  "success": true,
-  "message": null,
-  "data": {
-    "uid": "df6b9f59-f371-4851-a9fa-18570f6d8310",
-    "name": "Pro",
-    "price": "49.99",
-    "max_users": 10,
-    "max_records": null,
-    "max_accounts": 1000,
-    "max_contacts": 5000,
-    "max_entities": 1000
-  },
-  "errors": null
-}
-```
 
 ### `GET /api/accounts`
 
