@@ -459,6 +459,7 @@ Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('ad
 
     Route::prefix('telemetry')->group(function () {
         Route::get('/summary', [AdminTelemetryController::class, 'summary'])->middleware('permission:admin.telemetry.read');
+        Route::get('/stats', [AdminTelemetryController::class, 'stats'])->middleware('permission:admin.telemetry.read');
         Route::get('/logs', [AdminTelemetryController::class, 'logs'])->middleware('permission:admin.telemetry.read');
         Route::get('/alerts', [AdminTelemetryController::class, 'alerts'])->middleware('permission:admin.alerts.manage');
         Route::post('/alerts', [AdminTelemetryController::class, 'storeAlert'])->middleware('permission:admin.alerts.manage');

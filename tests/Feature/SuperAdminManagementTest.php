@@ -154,6 +154,24 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonPath('data.0.plan_nombre', 'Plan Pro');
     }
 
+    public function test_superadmin_can_read_any_tenant_user_access(): void
+    {
+        $this->authenticateSuperadmin(['users.manage']);
+
+        $tenant = $this->tenantWithPlan();
+        $user = User::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Tenant Admin',
+            'email' => 'tenant-admin@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        $this->getJson('/api/users/' . $user->uid . '/access')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.uid', $user->uid);
+    }
+
     public function test_superadmin_can_read_telemetry_summary(): void
     {
         $this->authenticateSuperadmin(['admin.telemetry.read']);

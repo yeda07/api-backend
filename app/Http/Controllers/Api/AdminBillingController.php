@@ -117,7 +117,9 @@ class AdminBillingController extends Controller
 
     public function markPaid(string $uid)
     {
-        return $this->successResponse($this->markInvoicesAsPaid([$uid]), 200, 'Factura marcada como pagada');
+        $invoices = $this->markInvoicesAsPaid([$uid]);
+
+        return $this->successResponse($invoices[0] ?? null, 200, 'Factura marcada como pagada');
     }
 
     public function markPaidBulk(Request $request)
@@ -178,10 +180,7 @@ class AdminBillingController extends Controller
                 $updated[] = $this->serializeInvoice($invoice->fresh(['tenant.plan']));
             }
 
-            return [
-                'updated' => count($updated),
-                'invoices' => $updated,
-            ];
+            return $updated;
         });
     }
 

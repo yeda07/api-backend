@@ -138,7 +138,11 @@ class AccessControlService
 
     private function findUser(string $userUid): User
     {
-        $user = User::query()->where('uid', $userUid)->first();
+        $query = $this->platformAdminIsActing()
+            ? User::withoutGlobalScopes()
+            : User::query();
+
+        $user = $query->where('uid', $userUid)->first();
 
         if (!$user) {
             throw new ModelNotFoundException('Usuario no encontrado');
@@ -149,7 +153,11 @@ class AccessControlService
 
     private function findRole(string $roleUid): Role
     {
-        $role = Role::query()->where('uid', $roleUid)->first();
+        $query = $this->platformAdminIsActing()
+            ? Role::withoutGlobalScopes()
+            : Role::query();
+
+        $role = $query->where('uid', $roleUid)->first();
 
         if (!$role) {
             throw ValidationException::withMessages([
@@ -194,7 +202,11 @@ class AccessControlService
 
     private function ensureRoleKeyIsAvailable(string $key, ?int $ignoreRoleId = null): void
     {
-        $exists = Role::query()
+        $query = $this->platformAdminIsActing()
+            ? Role::withoutGlobalScopes()
+            : Role::query();
+
+        $exists = $query
             ->where('key', $key)
             ->when($ignoreRoleId, fn ($query) => $query->where('id', '!=', $ignoreRoleId))
             ->exists();
@@ -204,5 +216,12 @@ class AccessControlService
                 'key' => ['Ya existe un rol con esta clave en el tenant'],
             ]);
         }
+    }
+
+    private function platformAdminIsActing(): bool
+    {
+        $user = auth()->user();
+
+        return (bool) ($user?->is_platform_admin && $user->tenant_id === null);
     }
 }

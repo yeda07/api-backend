@@ -38,6 +38,7 @@ class PlatformSuperadminSeeder extends Seeder
                 'admin.billing.manage',
                 'admin.telemetry.read',
                 'admin.alerts.manage',
+                'users.manage',
             ])
             ->get()
             ->each(fn (Permission $permission) => $user->givePermissionTo($permission));

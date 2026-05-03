@@ -13,7 +13,22 @@ use Illuminate\Validation\ValidationException;
 
 class AdminTelemetryController extends Controller
 {
+    public function stats()
+    {
+        $summary = $this->buildSummaryPayload();
+
+        return $this->successResponse([
+            'uptime_global_percent' => $summary['uptime_global'],
+            'latencia_p95_ms' => $summary['latency_p95_ms'],
+        ]);
+    }
+
     public function summary()
+    {
+        return $this->successResponse($this->buildSummaryPayload());
+    }
+
+    private function buildSummaryPayload(): array
     {
         $logs24h = SystemLog::withoutGlobalScopes()
             ->with('tenant')
@@ -56,7 +71,7 @@ class AdminTelemetryController extends Controller
             ->sortByDesc('errors_24h')
             ->values();
 
-        return $this->successResponse([
+        return [
             'uptime_global' => $uptime,
             'sla' => $uptime,
             'errors_24h' => $errorLogs->count(),
@@ -65,7 +80,7 @@ class AdminTelemetryController extends Controller
             'latency_p95_ms' => $this->percentile($latencies, 95),
             'active_alerts' => AdminAlertRule::query()->where('is_active', true)->count(),
             'errors_by_tenant' => $errorsByTenant,
-        ]);
+        ];
     }
 
     public function logs(Request $request)
