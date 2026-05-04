@@ -743,7 +743,7 @@ Payload:
 
 ### `PUT /api/plans/{uid}`
 
-Auth requerida.  
+Auth requerida.
 Permiso: `plans.manage`.
 
 Permite actualizar:
@@ -877,6 +877,8 @@ Ver detalle del tenant. Devuelve:
 - `limite_usuarios`
 - `almacenamiento_usado_gb`
 - `limite_almacenamiento_gb`
+- `api_calls_mes`
+- `limite_api_calls`
 - `created_at`
 - `last_access_at`
 
@@ -891,6 +893,34 @@ Activa el tenant.
 ### `POST /api/admin/tenants/{uid}/suspend`
 
 Suspende el tenant.
+
+### `GET /api/admin/tenants/{uid}/users`
+
+Lista los usuarios existentes de un tenant.
+
+Auth requerida.
+Permiso: `admin.tenants.manage`.
+
+Success:
+
+```json
+{
+  "success": true,
+  "message": null,
+  "data": [
+    {
+      "uid": "user-uuid",
+      "name": "Juan Perez",
+      "email": "juan@acme.com",
+      "rol": "owner",
+      "ultimo_acceso": "2025-03-20T08:00:00.000000Z",
+      "estado": "Activo"
+    }
+  ],
+  "errors": null,
+  "meta": null
+}
+```
 
 ### `POST /api/admin/tenants/{uid}/users`
 

@@ -248,10 +248,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminTenantEnvelope'
   /admin/tenants/{uid}/users:
+    get:
+      tags: [Admin]
+      summary: Listar usuarios de tenant
+      description: Requiere acceso de plataforma y permiso `admin.tenants.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTenantUserListEnvelope'
     post:
       tags: [Admin]
       summary: Crear usuario de tenant
-      description: Requiere acceso de plataforma y permiso `plans.manage`.
+      description: Requiere acceso de plataforma y permiso `admin.tenants.manage`.
       parameters:
         - $ref: '#/components/parameters/UidPath'
       requestBody:
@@ -266,7 +279,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminTenantUserEnvelope'
+                $ref: '#/components/schemas/AdminTenantUserCreateEnvelope'
   /admin/billing:
     get:
       tags: [Admin]
@@ -6586,6 +6599,12 @@ components:
           type: number
           format: float
           nullable: true
+        api_calls_mes:
+          type: integer
+          example: 2500
+        limite_api_calls:
+          type: integer
+          example: 100000
         created_at:
           type: string
           format: date-time
@@ -6814,6 +6833,29 @@ components:
                 type: string
                 nullable: true
     AdminTenantUserResource:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        rol:
+          type: string
+          nullable: true
+          example: owner
+        ultimo_acceso:
+          type: string
+          format: date-time
+          nullable: true
+        estado:
+          type: string
+          enum: [Activo, Inactivo]
+          example: Activo
+    AdminTenantUserCreateResource:
       type: object
       properties:
         uid:
@@ -7288,13 +7330,22 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/AdminTelemetrySummaryData'
-    AdminTenantUserEnvelope:
+    AdminTenantUserListEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'
         - type: object
           properties:
             data:
-              $ref: '#/components/schemas/AdminTenantUserResource'
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminTenantUserResource'
+    AdminTenantUserCreateEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminTenantUserCreateResource'
     SuccessEnvelope:
       type: object
       example:
