@@ -97,6 +97,8 @@ class AdminDashboardController extends Controller
             'limite_usuarios' => $tenant->plan?->max_users,
             'almacenamiento_usado_gb' => $tenant->storage_used_gb !== null ? (float) $tenant->storage_used_gb : 0.0,
             'limite_almacenamiento_gb' => $tenant->storage_limit_gb !== null ? (float) $tenant->storage_limit_gb : null,
+            'api_calls_mes' => (int) ($tenant->api_calls_mes ?? 0),
+            'limite_api_calls' => (int) (($tenant->limite_api_calls ?? 0) ?: data_get($tenant->plan?->features, 'api_calls_month', 0)),
             'created_at' => optional($tenant->created_at)?->toISOString(),
             'last_access_at' => $lastAccessAt ? Carbon::parse($lastAccessAt)->toISOString() : null,
         ];

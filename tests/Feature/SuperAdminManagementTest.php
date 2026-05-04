@@ -145,13 +145,48 @@ class SuperAdminManagementTest extends TestCase
     {
         $this->authenticateSuperadmin(['admin.tenants.manage']);
 
-        $this->tenantWithPlan();
+        $tenant = $this->tenantWithPlan();
+        $tenant->update([
+            'api_calls_mes' => 123,
+        ]);
 
         $this->getJson('/api/admin/tenants')
             ->assertOk()
             ->assertJsonPath('data.0.nombre', 'Acme Corporation')
             ->assertJsonPath('data.0.dominio', 'acme.test')
-            ->assertJsonPath('data.0.plan_nombre', 'Plan Pro');
+            ->assertJsonPath('data.0.plan_nombre', 'Plan Pro')
+            ->assertJsonPath('data.0.api_calls_mes', 123)
+            ->assertJsonPath('data.0.limite_api_calls', 10000);
+    }
+
+    public function test_superadmin_can_list_tenant_users_for_drawer(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $tenant = $this->tenantWithPlan();
+        $role = \App\Models\Role::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Owner',
+            'key' => 'owner',
+            'is_system' => true,
+        ]);
+        $user = User::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Juan Perez',
+            'email' => 'juan@acme.com',
+            'password' => bcrypt('secret123'),
+            'last_login_at' => '2025-03-20 08:00:00',
+        ]);
+        $user->roles()->attach($role->getKey());
+
+        $this->getJson('/api/admin/tenants/' . $tenant->uid . '/users')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $user->uid)
+            ->assertJsonPath('data.0.name', 'Juan Perez')
+            ->assertJsonPath('data.0.email', 'juan@acme.com')
+            ->assertJsonPath('data.0.rol', 'owner')
+            ->assertJsonPath('data.0.ultimo_acceso', '2025-03-20T08:00:00.000000Z')
+            ->assertJsonPath('data.0.estado', 'Activo');
     }
 
     public function test_superadmin_can_read_any_tenant_user_access(): void
@@ -241,6 +276,9 @@ class SuperAdminManagementTest extends TestCase
             'name' => 'Plan Pro',
             'price' => 149,
             'status' => 'ACTIVO',
+            'features' => [
+                'api_calls_month' => 10000,
+            ],
         ]);
 
         return Tenant::query()->create([

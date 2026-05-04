@@ -20,6 +20,8 @@ class Tenant extends Model
         'mrr',
         'storage_used_gb',
         'storage_limit_gb',
+        'api_calls_mes',
+        'limite_api_calls',
         'plan_id',
         'currency_id',
         'is_active',
@@ -38,6 +40,8 @@ class Tenant extends Model
         'mrr' => 'decimal:2',
         'storage_used_gb' => 'decimal:2',
         'storage_limit_gb' => 'decimal:2',
+        'api_calls_mes' => 'integer',
+        'limite_api_calls' => 'integer',
     ];
 
     public function users()

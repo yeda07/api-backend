@@ -300,6 +300,25 @@ class AdminTenantController extends Controller
         }
     }
 
+    public function users(string $uid)
+    {
+        $tenant = Tenant::query()->where('uid', $uid)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant no encontrado', 404);
+        }
+
+        $users = User::withoutGlobalScopes()
+            ->with(['roles' => fn ($query) => $query->withoutGlobalScopes()])
+            ->where('tenant_id', $tenant->getKey())
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => $this->serializeTenantUser($user))
+            ->values();
+
+        return $this->successResponse($users);
+    }
+
     private function serializeTenant(Tenant $tenant): array
     {
         $totalUsers = $tenant->total_usuarios
@@ -322,8 +341,22 @@ class AdminTenantController extends Controller
             'limite_usuarios' => $tenant->plan?->max_users,
             'almacenamiento_usado_gb' => (float) $tenant->storage_used_gb,
             'limite_almacenamiento_gb' => $tenant->storage_limit_gb !== null ? (float) $tenant->storage_limit_gb : null,
+            'api_calls_mes' => (int) ($tenant->api_calls_mes ?? 0),
+            'limite_api_calls' => (int) (($tenant->limite_api_calls ?? 0) ?: data_get($tenant->plan?->features, 'api_calls_month', 0)),
             'created_at' => optional($tenant->created_at)?->toISOString(),
             'last_access_at' => $lastAccessAt ? Carbon::parse($lastAccessAt)->toISOString() : null,
+        ];
+    }
+
+    private function serializeTenantUser(User $user): array
+    {
+        return [
+            'uid' => $user->uid,
+            'name' => $user->name,
+            'email' => $user->email,
+            'rol' => $user->roles->first()?->key,
+            'ultimo_acceso' => $user->last_login_at?->toISOString(),
+            'estado' => $user->isLocked() ? 'Inactivo' : 'Activo',
         ];
     }
 }

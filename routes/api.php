@@ -446,6 +446,7 @@ Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('ad
         Route::put('/{uid}', [AdminTenantController::class, 'update'])->middleware('permission:admin.tenants.manage');
         Route::post('/{uid}/suspend', [AdminTenantController::class, 'suspend'])->middleware('permission:admin.tenants.manage');
         Route::post('/{uid}/activate', [AdminTenantController::class, 'activate'])->middleware('permission:admin.tenants.manage');
+        Route::get('/{uid}/users', [AdminTenantController::class, 'users'])->middleware('permission:admin.tenants.manage');
         Route::post('/{uid}/users', [AdminTenantController::class, 'createUser'])->middleware('permission:admin.tenants.manage');
     });
 
