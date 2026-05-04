@@ -32,11 +32,7 @@ Errores de validacion:
 
 ## Identificadores publicos
 
-La API no expone `id` como identificador publico.
-
-- Todas las rutas y respuestas publicas usan `uid`.
-- Los campos internos como `id`, `tenant_id`, `account_id`, `from_id`, `to_id`, `custom_field_id` y similares quedan solo para base de datos.
-- Los payloads legacy con `*_id` no hacen parte del contrato publico.
+La API expone `uid` como identificador publico.
 
 ## Base URL
 
