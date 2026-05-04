@@ -186,7 +186,35 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonPath('data.0.email', 'juan@acme.com')
             ->assertJsonPath('data.0.rol', 'owner')
             ->assertJsonPath('data.0.ultimo_acceso', '2025-03-20T08:00:00.000000Z')
-            ->assertJsonPath('data.0.estado', 'Activo');
+            ->assertJsonPath('data.0.estado', 'Activo')
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 25)
+            ->assertJsonPath('meta.pagination.total', 1);
+    }
+
+    public function test_superadmin_can_paginate_tenant_users_for_drawer(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $tenant = $this->tenantWithPlan();
+
+        foreach (['Ana Gomez', 'Juan Perez', 'Maria Ruiz'] as $index => $name) {
+            User::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->getKey(),
+                'name' => $name,
+                'email' => 'tenant-user-' . $index . '@acme.com',
+                'password' => bcrypt('secret123'),
+            ]);
+        }
+
+        $this->getJson('/api/admin/tenants/' . $tenant->uid . '/users?page=2&per_page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Maria Ruiz')
+            ->assertJsonPath('meta.pagination.current_page', 2)
+            ->assertJsonPath('meta.pagination.per_page', 2)
+            ->assertJsonPath('meta.pagination.total', 3)
+            ->assertJsonPath('meta.pagination.last_page', 2);
     }
 
     public function test_superadmin_can_read_any_tenant_user_access(): void

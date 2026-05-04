@@ -897,6 +897,11 @@ Lista los usuarios existentes de un tenant.
 Auth requerida.
 Permiso: `admin.tenants.manage`.
 
+Query params:
+
+- `page`
+- `per_page` (default backend: 25, max: 100)
+
 Success:
 
 ```json
@@ -914,7 +919,17 @@ Success:
     }
   ],
   "errors": null,
-  "meta": null
+  "meta": {
+    "pagination": {
+      "current_page": 1,
+      "per_page": 25,
+      "total": 1,
+      "last_page": 1,
+      "from": 1,
+      "to": 1,
+      "has_more_pages": false
+    }
+  }
 }
 ```
 

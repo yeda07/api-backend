@@ -300,8 +300,13 @@ class AdminTenantController extends Controller
         }
     }
 
-    public function users(string $uid)
+    public function users(Request $request, string $uid)
     {
+        $validated = Validator::make($request->query(), [
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100',
+        ])->validate();
+
         $tenant = Tenant::query()->where('uid', $uid)->first();
 
         if (!$tenant) {
@@ -312,9 +317,18 @@ class AdminTenantController extends Controller
             ->with(['roles' => fn ($query) => $query->withoutGlobalScopes()])
             ->where('tenant_id', $tenant->getKey())
             ->orderBy('name')
-            ->get()
-            ->map(fn (User $user) => $this->serializeTenantUser($user))
-            ->values();
+            ->paginate(
+                ApiIndex::perPage($validated),
+                ['*'],
+                'users_page',
+                ApiIndex::page($validated)
+            );
+
+        $users->setCollection(
+            $users->getCollection()
+                ->map(fn (User $user) => $this->serializeTenantUser($user))
+                ->values()
+        );
 
         return $this->successResponse($users);
     }
