@@ -217,6 +217,36 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonPath('meta.pagination.last_page', 2);
     }
 
+    public function test_tenant_user_creation_succeeds_when_reset_email_fails(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $tenant = $this->tenantWithPlan();
+
+        app()->instance('auth.password', new class {
+            public function sendResetLink(array $credentials, ?\Closure $callback = null): void
+            {
+                throw new \RuntimeException('mail transport unavailable');
+            }
+        });
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/users', [
+            'name' => 'Nuevo Admin',
+            'email' => 'nuevo-admin@acme.com',
+            'role' => 'owner',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Nuevo Admin')
+            ->assertJsonPath('data.email', 'nuevo-admin@acme.com')
+            ->assertJsonPath('data.tenant_uid', $tenant->uid)
+            ->assertJsonPath('data.reset_email_sent', false);
+
+        $this->assertDatabaseHas('users', [
+            'tenant_id' => $tenant->getKey(),
+            'email' => 'nuevo-admin@acme.com',
+        ]);
+    }
+
     public function test_superadmin_can_read_any_tenant_user_access(): void
     {
         $this->authenticateSuperadmin(['users.manage']);

@@ -15,7 +15,16 @@ class InventoryWarehouseController extends Controller
 
     public function index(Request $request)
     {
-        return $this->successResponse($this->inventoryService->listWarehouses($request->query()));
+        $payload = $this->inventoryService->listWarehouses($request->query());
+
+        return response()->json([
+            'success' => true,
+            'message' => null,
+            'data' => $payload['data'],
+            'summary' => $payload['summary'],
+            'meta' => null,
+            'errors' => null,
+        ]);
     }
 
     public function store(Request $request)

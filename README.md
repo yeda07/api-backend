@@ -1768,7 +1768,50 @@ Success:
       "tags": 8,
       "tasks": 0
     },
-    "top_tags": []
+    "kpis": {
+      "conversion_rate": 62.5,
+      "mrr": 42500,
+      "at_risk_count": 4
+    },
+    "top_tags": [],
+    "overdue_tasks": [
+      {
+        "uid": "uuid-aqui",
+        "title": "Enviar propuesta comercial",
+        "account_name": "TechMex Solutions",
+        "assigned_to_name": "Carlos V.",
+        "due_date": "2026-05-04T00:00:00.000000Z",
+        "priority": "high"
+      }
+    ],
+    "recent_quotations": [
+      {
+        "uid": "uuid-aqui",
+        "number": "COT-2026-0001",
+        "account_name": "TechMex Solutions",
+        "total": 45200,
+        "status": "pending",
+        "created_at": "2026-05-04T10:00:00.000000Z"
+      }
+    ],
+    "low_stock_products": [
+      {
+        "uid": "uuid-aqui",
+        "name": "Camiseta Basica XL",
+        "sku": "SKU-001-XL",
+        "current_stock": 3,
+        "minimum_stock": 25,
+        "stock_status": "critical"
+      }
+    ],
+    "monthly_sales": [
+      {
+        "month": "2026-05",
+        "label": "May",
+        "actual": 23000,
+        "goal": null
+      }
+    ]
   },
   "errors": null
 }
@@ -1779,6 +1822,10 @@ Notas:
 - usa cache backend
 - por defecto el dashboard puede usar un store dedicado definido en `DASHBOARD_CACHE_STORE`
 - la recomendacion para produccion es `DASHBOARD_CACHE_STORE=redis`
+- `recent_quotations.status` normaliza estados internos: `draft` -> `review`, `sent` -> `pending`, `cancelled` -> `rejected`
+- `kpis.mrr` usa facturas del mes actual con estado `issued`, `partial` o `paid`
+- `monthly_sales` devuelve los ultimos 12 meses de facturas con `issued_at`, de mas antiguo a mas reciente
+- `monthly_sales.goal` retorna `null` mientras no exista una tabla de metas configuradas
 
 ## Historial, Productividad y Anexos
 
@@ -1852,6 +1899,13 @@ Auth requerida.
 Permiso: `activities.read`.
 
 Devuelve actividades visibles del usuario autenticado.
+
+Query params:
+
+- `per_page`
+- `page`
+- `paginate=false` para retornar array sin metadata de paginacion; si se envia `per_page`, se usa como limite
+- `scope=tenant` para retornar actividades del tenant ignorando Row-Level Security; sigue respetando `TenantScope`
 
 Success:
 
@@ -3833,6 +3887,27 @@ DATABASE_URL=...
 SESSION_DRIVER=file
 MAIL_MAILER=log
 ```
+
+### SMTP Brevo para pruebas de correo
+
+Para enviar correos reales de reset password, activa el mailer Brevo:
+
+```env
+MAIL_MAILER=brevo
+MAIL_FROM_ADDRESS=remitente-verificado@tu-dominio.com
+MAIL_FROM_NAME="${APP_NAME}"
+BREVO_MAIL_SCHEME=smtp
+BREVO_MAIL_HOST=smtp-relay.brevo.com
+BREVO_MAIL_PORT=587
+BREVO_MAIL_USERNAME=tu-login-smtp-brevo
+BREVO_MAIL_PASSWORD=tu-smtp-key-brevo
+```
+
+Notas:
+
+- `MAIL_FROM_ADDRESS` debe estar verificado en Brevo.
+- `BREVO_MAIL_PASSWORD` no es la clave de login normal; es la SMTP key.
+- Si falla el email al crear usuarios de tenant, el usuario queda creado y la respuesta incluye `reset_email_sent: false`.
 
 Checklist:
 

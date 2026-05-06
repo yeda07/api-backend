@@ -9,6 +9,7 @@ use App\Models\InventoryReservation;
 use App\Models\InventoryStock;
 use App\Models\Warehouse;
 use App\Support\ApiIndex;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -74,6 +75,7 @@ class InventoryService
                 'sku' => $validated['sku'],
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
+                'cost_price' => $validated['unit_cost'] ?? $validated['cost_price'] ?? 0,
                 'reorder_point' => $validated['reorder_point'] ?? 0,
                 'is_active' => $validated['is_active'] ?? true,
             ]);
@@ -102,6 +104,10 @@ class InventoryService
                 }
             }
 
+            if (array_key_exists('unit_cost', $validated) || array_key_exists('cost_price', $validated)) {
+                $payload['cost_price'] = $validated['unit_cost'] ?? $validated['cost_price'];
+            }
+
             if ($payload !== []) {
                 $product->update($payload);
             }
@@ -121,11 +127,18 @@ class InventoryService
 
     public function listWarehouses(array $filters = [])
     {
-        return ApiIndex::paginateOrGet(
-            Warehouse::query()->withCount('stocks')->orderBy('name'),
-            $filters,
-            'inventory_warehouses_page'
-        );
+        $warehouses = Warehouse::query()
+            ->with(['stocks.product'])
+            ->orderBy('name')
+            ->get();
+
+        return [
+            'data' => $warehouses->map(fn (Warehouse $warehouse) => $this->warehouseRow($warehouse))->values(),
+            'summary' => [
+                'total_warehouses' => $warehouses->count(),
+                'active_warehouses' => $warehouses->where('is_active', true)->count(),
+            ],
+        ];
     }
 
     public function createWarehouse(array $data): Warehouse
@@ -202,6 +215,8 @@ class InventoryService
             'data' => $rows,
             'summary' => [
                 'products' => $rows->count(),
+                'active_products' => $rows->where('is_active', true)->count(),
+                'out_of_stock_count' => $rows->where('stock_state', 'out')->count(),
                 'total_physical_stock' => (int) $rows->sum('stock_physical_total'),
                 'total_reserved_stock' => (int) $rows->sum('stock_reserved_total'),
                 'total_available_stock' => (int) $rows->sum('stock_available_total'),
@@ -317,6 +332,45 @@ class InventoryService
                     'available_stock' => max(0, $previousPhysical - (int) $stock->reserved_stock),
                     'projected_physical_stock' => $projectedPhysical,
                     'projected_available_stock' => max(0, $projectedPhysical - (int) $stock->reserved_stock),
+                ],
+            ];
+        });
+    }
+
+    public function adjustStockBulk(array $data): array
+    {
+        $validated = Validator::make($data, [
+            'warehouse_uid' => 'required|uuid',
+            'comment' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.product_uid' => 'required|uuid',
+            'items.*.quantity' => 'required|integer|min:1',
+        ])->validate();
+
+        return DB::transaction(function () use ($validated) {
+            $movements = [];
+            $stocks = [];
+
+            foreach ($validated['items'] as $item) {
+                $result = $this->adjustStock([
+                    'product_uid' => $item['product_uid'],
+                    'warehouse_uid' => $validated['warehouse_uid'],
+                    'operation' => 'in',
+                    'quantity' => $item['quantity'],
+                    'comment' => $validated['comment'] ?? null,
+                ]);
+
+                $movements[] = $result['movement'];
+                $stocks[] = $result['stock'];
+            }
+
+            return [
+                'movements' => $movements,
+                'stocks' => $stocks,
+                'summary' => [
+                    'warehouse_uid' => $validated['warehouse_uid'],
+                    'items' => count($validated['items']),
+                    'total_quantity' => (int) collect($validated['items'])->sum('quantity'),
                 ],
             ];
         });
@@ -577,6 +631,30 @@ class InventoryService
         ];
     }
 
+    public function movementsSummary(array $filters = []): array
+    {
+        $validated = Validator::make($filters, [
+            'period' => 'nullable|date_format:Y-m',
+        ])->validate();
+
+        $period = $validated['period'] ?? now()->format('Y-m');
+        $start = CarbonImmutable::createFromFormat('Y-m-d H:i:s', $period . '-01 00:00:00')->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+
+        $movements = InventoryMovement::query()
+            ->whereBetween('created_at', [$start, $end])
+            ->get();
+
+        return [
+            'total' => $movements->count(),
+            'entries' => $movements->where('type', 'adjustment_in')->count(),
+            'transfers' => $movements->where('type', 'transfer')->count(),
+            'adjustments' => $movements
+                ->whereIn('type', ['adjustment_out', 'set_balance'])
+                ->count(),
+        ];
+    }
+
     public function transferStock(array $data): array
     {
         $validated = Validator::make($data, [
@@ -732,11 +810,14 @@ class InventoryService
             'sku' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'description' => 'nullable|string',
+            'unit_cost' => 'sometimes|numeric|min:0',
+            'cost_price' => 'sometimes|numeric|min:0',
             'reorder_point' => 'sometimes|integer|min:0',
             'is_active' => 'sometimes|boolean',
             'warehouse_stocks' => 'sometimes|array',
             'warehouse_stocks.*.warehouse_uid' => 'required_with:warehouse_stocks|uuid',
-            'warehouse_stocks.*.physical_stock' => 'required_with:warehouse_stocks|integer|min:0',
+            'warehouse_stocks.*.physical_stock' => 'required_without:warehouse_stocks.*.quantity|integer|min:0',
+            'warehouse_stocks.*.quantity' => 'required_without:warehouse_stocks.*.physical_stock|integer|min:0',
         ])->validate();
     }
 
@@ -746,14 +827,16 @@ class InventoryService
             $warehouse = $this->getWarehouseByUid($stockPayload['warehouse_uid']);
             $stock = $this->getOrCreateStock($product, $warehouse);
 
-            if ($updating && (int) $stock->reserved_stock > (int) $stockPayload['physical_stock']) {
+            $physicalStock = (int) ($stockPayload['physical_stock'] ?? $stockPayload['quantity']);
+
+            if ($updating && (int) $stock->reserved_stock > $physicalStock) {
                 throw ValidationException::withMessages([
                     'warehouse_stocks' => ['El stock fisico no puede quedar por debajo del stock reservado'],
                 ]);
             }
 
             $stock->update([
-                'physical_stock' => (int) $stockPayload['physical_stock'],
+                'physical_stock' => $physicalStock,
             ]);
         }
     }
@@ -856,9 +939,13 @@ class InventoryService
         return [
             'uid' => $product->uid,
             'sku' => $product->sku,
+            'name' => $product->name,
             'product' => $product->name,
+            'description' => $product->description,
             'category_uid' => $product->category?->uid,
             'category_name' => $product->category?->name,
+            'unit_cost' => (float) $product->cost_price,
+            'is_active' => (bool) $product->is_active,
             'warehouse_uid' => $warehouse?->uid,
             'stock_physical_total' => $physical,
             'stock_reserved_total' => $reserved,
@@ -870,6 +957,43 @@ class InventoryService
                 default => 'green',
             },
             'reorder_point' => (int) $product->reorder_point,
+            'stocks' => $stocks->map(function (InventoryStock $stock) {
+                return [
+                    'uid' => $stock->uid,
+                    'product_uid' => $stock->product?->uid ?? $stock->product_uid,
+                    'warehouse_uid' => $stock->warehouse?->uid ?? $stock->warehouse_uid,
+                    'physical_stock' => (int) $stock->physical_stock,
+                    'reserved_stock' => (int) $stock->reserved_stock,
+                    'available_stock' => (int) $stock->available_stock,
+                    'stock_state' => $stock->stock_state,
+                    'stock_indicator' => $stock->stock_indicator,
+                    'warehouse' => $stock->warehouse ? [
+                        'uid' => $stock->warehouse->uid,
+                        'name' => $stock->warehouse->name,
+                        'code' => $stock->warehouse->code,
+                    ] : null,
+                ];
+            })->values(),
+        ];
+    }
+
+    private function warehouseRow(Warehouse $warehouse): array
+    {
+        $stocks = $warehouse->stocks;
+
+        return [
+            'uid' => $warehouse->uid,
+            'name' => $warehouse->name,
+            'code' => $warehouse->code,
+            'location' => $warehouse->location,
+            'is_active' => (bool) $warehouse->is_active,
+            'summary' => [
+                'sku_count' => $stocks->where('physical_stock', '>', 0)->pluck('product_id')->unique()->count(),
+                'total_physical' => (int) $stocks->sum('physical_stock'),
+                'total_reserved' => (int) $stocks->sum('reserved_stock'),
+                'total_available' => (int) $stocks->sum(fn (InventoryStock $stock) => $stock->available_stock),
+                'total_value' => round((float) $stocks->sum(fn (InventoryStock $stock) => (int) $stock->physical_stock * (float) ($stock->product?->cost_price ?? 0)), 2),
+            ],
         ];
     }
 }

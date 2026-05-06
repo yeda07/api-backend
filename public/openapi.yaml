@@ -712,6 +712,29 @@ paths:
         Requiere permiso activities.read.
       tags: [Activities]
       summary: 'Listar - activities'
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: paginate
+          schema:
+            type: boolean
+          description: Enviar false para retornar un array sin metadata de paginacion.
+        - in: query
+          name: scope
+          schema:
+            type: string
+            enum: [tenant]
+          description: Enviar tenant para ignorar Row-Level Security y retornar actividades del tenant actual.
       responses:
         '200':
           description: Operacion exitosa
@@ -755,7 +778,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+                $ref: '#/components/schemas/DashboardCoreEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -6624,6 +6647,158 @@ components:
           type: string
           format: date-time
           nullable: true
+    DashboardCoreData:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            new_customers_today:
+              type: integer
+            overdue_tasks_today:
+              type: integer
+            tasks_supported:
+              type: boolean
+        breakdown:
+          type: object
+          properties:
+            accounts_created_today:
+              type: integer
+            contacts_created_today:
+              type: integer
+            crm_entities_created_today:
+              type: integer
+            tasks_due_today:
+              type: integer
+        totals:
+          type: object
+          properties:
+            accounts:
+              type: integer
+            contacts:
+              type: integer
+            crm_entities:
+              type: integer
+            tags:
+              type: integer
+            tasks:
+              type: integer
+        kpis:
+          type: object
+          properties:
+            conversion_rate:
+              type: number
+              format: float
+            mrr:
+              type: number
+              format: float
+            at_risk_count:
+              type: integer
+        top_tags:
+          type: array
+          items:
+            type: object
+            properties:
+              uid:
+                type: string
+                format: uuid
+              name:
+                type: string
+              color:
+                type: string
+              category:
+                type: string
+              usage_count:
+                type: integer
+        overdue_tasks:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            properties:
+              uid:
+                type: string
+                format: uuid
+              title:
+                type: string
+              account_name:
+                type: string
+                nullable: true
+              assigned_to_name:
+                type: string
+                nullable: true
+              due_date:
+                type: string
+                format: date-time
+                nullable: true
+              priority:
+                type: string
+                enum: [high, medium, low]
+        recent_quotations:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            properties:
+              uid:
+                type: string
+                format: uuid
+              number:
+                type: string
+              account_name:
+                type: string
+                nullable: true
+              total:
+                type: number
+                format: float
+              status:
+                type: string
+                enum: [pending, approved, rejected, review]
+              created_at:
+                type: string
+                format: date-time
+                nullable: true
+        low_stock_products:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            properties:
+              uid:
+                type: string
+                format: uuid
+              name:
+                type: string
+              sku:
+                type: string
+              current_stock:
+                type: integer
+              minimum_stock:
+                type: integer
+              stock_status:
+                type: string
+                enum: [critical, low]
+        monthly_sales:
+          type: array
+          minItems: 12
+          maxItems: 12
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                pattern: '^\d{4}-\d{2}$'
+                example: "2026-05"
+              label:
+                type: string
+                example: May
+              actual:
+                type: number
+                format: float
+              goal:
+                type: number
+                format: float
+                nullable: true
     AdminDashboardData:
       type: object
       properties:
@@ -7259,6 +7434,13 @@ components:
                   items:
                     $ref: '#/components/schemas/AdminTenantResource'
                 - type: object
+    DashboardCoreEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DashboardCoreData'
     AdminDashboardEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'
@@ -7435,5 +7617,3 @@ components:
           type: integer
         last_page:
           type: integer
-
-

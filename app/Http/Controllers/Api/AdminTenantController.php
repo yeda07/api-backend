@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -282,9 +283,22 @@ class AdminTenantController extends Controller
                 return $user->fresh();
             });
 
-            Password::sendResetLink([
-                'email' => $user->email,
-            ]);
+            $resetEmailSent = true;
+
+            try {
+                Password::sendResetLink([
+                    'email' => $user->email,
+                ]);
+            } catch (\Throwable $e) {
+                $resetEmailSent = false;
+
+                Log::warning('No se pudo enviar el reset password al crear usuario de tenant', [
+                    'tenant_uid' => $tenant->uid,
+                    'user_uid' => $user->uid,
+                    'email' => $user->email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return $this->successResponse([
                 'uid' => $user->uid,
@@ -292,6 +306,7 @@ class AdminTenantController extends Controller
                 'email' => $user->email,
                 'tenant_uid' => $tenant->uid,
                 'roles' => [$validated['role'] ?? 'owner'],
+                'reset_email_sent' => $resetEmailSent,
             ], 201, 'Usuario administrador del tenant creado');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());

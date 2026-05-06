@@ -42,6 +42,17 @@ class InventoryController extends Controller
         }
     }
 
+    public function adjustBulk(Request $request)
+    {
+        try {
+            return $this->successResponse($this->inventoryService->adjustStockBulk($request->all()), 200, 'Stock ajustado');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
     public function reserve(Request $request)
     {
         try {
@@ -95,6 +106,15 @@ class InventoryController extends Controller
     {
         try {
             return $this->successResponse($this->inventoryService->movements($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
+    public function movementsSummary(Request $request)
+    {
+        try {
+            return $this->successResponse($this->inventoryService->movementsSummary($request->query()));
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         }

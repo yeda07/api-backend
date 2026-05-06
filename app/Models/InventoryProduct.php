@@ -32,6 +32,7 @@ class InventoryProduct extends Model
     protected $appends = [
         'category_uid',
         'category_name',
+        'unit_cost',
         'stock_physical_total',
         'stock_reserved_total',
         'stock_available_total',
@@ -69,6 +70,11 @@ class InventoryProduct extends Model
     {
         return $this->category?->name
             ?? ($this->category_id ? InventoryCategory::query()->whereKey($this->category_id)->value('name') : null);
+    }
+
+    public function getUnitCostAttribute(): float
+    {
+        return round((float) $this->cost_price, 2);
     }
 
     public function getStockPhysicalTotalAttribute(): int

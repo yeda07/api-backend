@@ -18,8 +18,22 @@ class ActivityService
     {
         $this->syncOverdueStatuses();
 
+        $query = Activity::query()
+            ->with(['owner', 'assignedUser', 'activityable'])
+            ->latest('scheduled_at');
+
+        if (($filters['scope'] ?? null) === 'tenant') {
+            $query->withoutGlobalScope('row_level_security');
+        }
+
+        if (filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false) {
+            $limit = min(max((int) ($filters['per_page'] ?? 25), 1), 100);
+
+            return $query->limit($limit)->get();
+        }
+
         return ApiIndex::paginateOrGet(
-            Activity::query()->with(['owner', 'assignedUser', 'activityable'])->latest('scheduled_at'),
+            $query,
             $filters,
             'activities_page'
         );

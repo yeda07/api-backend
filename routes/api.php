@@ -195,7 +195,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('inventory')->group(function () {
         Route::get('/master', [InventoryController::class, 'master'])->middleware('permission:inventory.read');
         Route::get('/availability', [InventoryController::class, 'availability'])->middleware('permission:inventory.read');
+        Route::get('/movements/summary', [InventoryController::class, 'movementsSummary'])->middleware('permission:inventory.read');
         Route::get('/movements', [InventoryController::class, 'movements'])->middleware('permission:inventory.read');
+        Route::post('/stocks/adjust/bulk', [InventoryController::class, 'adjustBulk'])->middleware('permission:inventory.manage');
         Route::post('/stocks/adjust', [InventoryController::class, 'adjust'])->middleware('permission:inventory.manage');
         Route::post('/reservations', [InventoryController::class, 'reserve'])->middleware('permission:inventory.reserve');
         Route::get('/reservations/source/{sourceType}/{sourceUid}', [InventoryController::class, 'reservationsBySource'])->middleware('permission:inventory.read');
