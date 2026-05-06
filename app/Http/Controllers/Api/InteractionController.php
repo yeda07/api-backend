@@ -13,6 +13,11 @@ class InteractionController extends Controller
     {
     }
 
+    public function index(Request $request)
+    {
+        return $this->successResponse($this->interactionService->list($request->query()));
+    }
+
     public function timeline(string $type, string $uid)
     {
         try {

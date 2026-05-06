@@ -3,10 +3,25 @@
 namespace App\Services;
 
 use App\Models\Interaction;
+use App\Support\ApiIndex;
 use Illuminate\Validation\ValidationException;
 
 class InteractionService
 {
+    public function list(array $filters = [])
+    {
+        $query = Interaction::query()
+            ->with(['owner', 'actor', 'interactable'])
+            ->latest('occurred_at')
+            ->latest();
+
+        if (!empty($filters['type'])) {
+            $query->where('type', $filters['type']);
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'interactions_page');
+    }
+
     public function timeline(string $entityType, string $entityUid)
     {
         $entity = $this->resolveEntity($entityType, $entityUid);

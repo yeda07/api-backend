@@ -33,15 +33,20 @@ use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\RelationController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SearchController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\AdminBillingController;
 use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\AdminTelemetryController;
 use App\Http\Controllers\Api\AdminTenantController;
+use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\SegmentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -154,6 +159,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('interactions')->group(function () {
+        Route::get('/', [InteractionController::class, 'index'])->middleware('permission:interactions.read');
         Route::get('/{type}/{uid}', [InteractionController::class, 'timeline'])->middleware('permission:interactions.read');
         Route::post('/notes', [InteractionController::class, 'note'])->middleware('permission:interactions.create');
         Route::post('/calls', [InteractionController::class, 'call'])->middleware('permission:interactions.create');
@@ -169,7 +175,38 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::delete('/{uid}', [ActivityController::class, 'destroy'])->middleware('permission:activities.delete');
     });
 
+    Route::prefix('segments')->group(function () {
+        Route::get('/', [SegmentController::class, 'index'])->middleware('permission:segments.read');
+        Route::post('/', [SegmentController::class, 'store'])->middleware('permission:segments.manage');
+        Route::get('/{uid}', [SegmentController::class, 'show'])->middleware('permission:segments.read');
+        Route::put('/{uid}', [SegmentController::class, 'update'])->middleware('permission:segments.manage');
+        Route::delete('/{uid}', [SegmentController::class, 'destroy'])->middleware('permission:segments.manage');
+        Route::post('/{uid}/run', [SegmentController::class, 'run'])->middleware('permission:segments.read');
+    });
+
+    Route::prefix('teams')->group(function () {
+        Route::get('/', [TeamController::class, 'index'])->middleware('permission:teams.read');
+        Route::post('/', [TeamController::class, 'store'])->middleware('permission:teams.manage');
+        Route::get('/{uid}', [TeamController::class, 'show'])->middleware('permission:teams.read');
+        Route::put('/{uid}', [TeamController::class, 'update'])->middleware('permission:teams.manage');
+        Route::delete('/{uid}', [TeamController::class, 'destroy'])->middleware('permission:teams.manage');
+    });
+
+    Route::prefix('automation')->group(function () {
+        Route::get('/rules', [AutomationController::class, 'rules'])->middleware('permission:automation.read');
+        Route::get('/rules/{uid}', [AutomationController::class, 'showRule'])->middleware('permission:automation.read');
+        Route::post('/rules', [AutomationController::class, 'storeRule'])->middleware('permission:automation.create');
+        Route::put('/rules/{uid}', [AutomationController::class, 'updateRule'])->middleware('permission:automation.update');
+        Route::delete('/rules/{uid}', [AutomationController::class, 'destroyRule'])->middleware('permission:automation.delete');
+        Route::post('/rules/{uid}/toggle', [AutomationController::class, 'toggleRule'])->middleware('permission:automation.update');
+        Route::get('/assignment-rules', [AutomationController::class, 'assignmentRules'])->middleware('permission:automation.read');
+        Route::post('/assignment-rules', [AutomationController::class, 'storeAssignmentRule'])->middleware('permission:automation.create');
+        Route::put('/assignment-rules/{uid}', [AutomationController::class, 'updateAssignmentRule'])->middleware('permission:automation.update');
+        Route::delete('/assignment-rules/{uid}', [AutomationController::class, 'destroyAssignmentRule'])->middleware('permission:automation.delete');
+    });
+
     Route::prefix('documents')->group(function () {
+        Route::get('/', [DocumentController::class, 'list'])->middleware('permission:documents.read');
         Route::get('/entity/{type}/{uid}', [DocumentController::class, 'index'])->middleware('permission:documents.read');
         Route::get('/account/{accountUid}', [DocumentController::class, 'accountDocuments'])->middleware('permission:documents.read');
         Route::get('/missing/{accountUid}', [DocumentController::class, 'missingDocuments'])->middleware('permission:documents.read');
@@ -178,6 +215,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/{uid}', [DocumentController::class, 'show'])->middleware('permission:documents.read');
         Route::post('/', [DocumentController::class, 'upload'])->middleware('permission:documents.create');
         Route::put('/{uid}', [DocumentController::class, 'update'])->middleware('permission:documents.manage');
+        Route::delete('/{uid}', [DocumentController::class, 'destroy'])->middleware('permission:documents.manage');
     });
 
     Route::prefix('document-types')->group(function () {
@@ -377,6 +415,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
             Route::get('/{uid}', [PartnerController::class, 'showOpportunity'])->middleware('permission:partners.opportunities.read');
             Route::post('/validate', [PartnerController::class, 'validateOpportunity'])->middleware('permission:partners.opportunities.manage');
             Route::post('/{uid}/close', [PartnerController::class, 'closeOpportunity'])->middleware('permission:partners.opportunities.manage');
+            Route::post('/{uid}/approve', [PartnerController::class, 'approveOpportunity'])->middleware('permission:partners.opportunities.manage');
+            Route::post('/{uid}/reject', [PartnerController::class, 'rejectOpportunity'])->middleware('permission:partners.opportunities.manage');
+            Route::post('/{uid}/convert', [PartnerController::class, 'convertOpportunity'])->middleware('permission:partners.opportunities.manage');
         });
     });
 
@@ -430,8 +471,21 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::get('/dashboard/core', [DashboardController::class, 'core'])->middleware('permission:dashboard.read');
 
     Route::prefix('custom-fields')->group(function () {
+        Route::get('/', [CustomFieldController::class, 'index'])->middleware('permission:custom-fields.manage');
         Route::post('/', [CustomFieldController::class, 'store'])->middleware('permission:custom-fields.manage');
+        Route::put('/{uid}', [CustomFieldController::class, 'update'])->middleware('permission:custom-fields.manage');
+        Route::delete('/{uid}', [CustomFieldController::class, 'destroy'])->middleware('permission:custom-fields.manage');
         Route::post('/value', [CustomFieldController::class, 'assign'])->middleware('permission:custom-fields.manage');
+    });
+
+    Route::prefix('settings')->group(function () {
+        Route::get('/localization', [SettingsController::class, 'localization']);
+        Route::put('/localization', [SettingsController::class, 'updateLocalization']);
+    });
+
+    Route::prefix('reports')->group(function () {
+        Route::get('/sales', [ReportController::class, 'sales'])->middleware('permission:finance.read');
+        Route::get('/inventory', [ReportController::class, 'inventory'])->middleware('permission:inventory.report');
     });
 
     Route::get('/metrics/my-usage', [MetricsController::class, 'myUsage'])->middleware('permission:metrics.read');

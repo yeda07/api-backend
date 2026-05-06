@@ -17,6 +17,17 @@ class DocumentController extends Controller
     ) {
     }
 
+    public function list(Request $request)
+    {
+        try {
+            return $this->successResponse($this->documentService->list($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
     public function index(string $type, string $uid)
     {
         try {
@@ -129,6 +140,17 @@ class DocumentController extends Controller
     {
         try {
             return $this->successResponse($this->documentValidationService->getMissingDocuments($accountUid));
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function destroy(string $uid)
+    {
+        try {
+            $this->documentService->deleteDocument($uid);
+
+            return $this->successResponse(null, 200, 'Documento eliminado');
         } catch (\Throwable $e) {
             return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
         }

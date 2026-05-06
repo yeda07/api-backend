@@ -5,18 +5,61 @@ namespace App\Services;
 use App\Models\CustomField;
 use App\Models\CustomFieldValue;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class CustomFieldService
 {
+    public function listFields(array $filters = [])
+    {
+        $tenantId = auth()->user()->tenant_id;
+        $query = CustomField::query()
+            ->where('tenant_id', $tenantId)
+            ->orderBy('entity_type')
+            ->orderBy('name');
+
+        if (!empty($filters['entity_type'])) {
+            $query->where('entity_type', $this->resolveEntityType($filters['entity_type']));
+        }
+
+        return $query->get();
+    }
+
     public function createField(array $data)
     {
-        $data['entity_type'] = $this->resolveEntityType($data['entity_type'] ?? '');
+        $data = $this->validateFieldPayload($data);
+        $data['entity_type'] = $this->resolveEntityType($data['entity_type']);
 
         return CustomField::create([
             'tenant_id' => auth()->user()->tenant_id,
             ...$data,
         ]);
+    }
+
+    public function updateField(string $uid, array $data): CustomField
+    {
+        $field = $this->findField($uid);
+        $validated = $this->validateFieldPayload($data, true);
+
+        if (array_key_exists('entity_type', $validated)) {
+            $validated['entity_type'] = $this->resolveEntityType($validated['entity_type']);
+        }
+
+        $field->update($validated);
+
+        return $field->fresh();
+    }
+
+    public function deleteField(string $uid): void
+    {
+        $field = $this->findField($uid);
+
+        CustomFieldValue::query()
+            ->where('tenant_id', auth()->user()->tenant_id)
+            ->where('custom_field_id', $field->getKey())
+            ->delete();
+
+        $field->delete();
     }
 
     public function assignValue(string $entityType, string $entityUid, string $fieldUid, mixed $value)
@@ -69,6 +112,25 @@ class CustomFieldService
         }
 
         return $resolvedType;
+    }
+
+    private function findField(string $uid): CustomField
+    {
+        return CustomField::query()
+            ->where('tenant_id', auth()->user()->tenant_id)
+            ->where('uid', $uid)
+            ->firstOrFail();
+    }
+
+    private function validateFieldPayload(array $data, bool $partial = false): array
+    {
+        return Validator::make($data, [
+            'entity_type' => [$partial ? 'sometimes' : 'required', 'string'],
+            'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'key' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:text,number,select,date,boolean'],
+            'options' => 'nullable|array',
+        ])->validate();
     }
 
     private function validateValue($field, $value)

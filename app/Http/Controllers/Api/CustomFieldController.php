@@ -16,6 +16,17 @@ class CustomFieldController extends Controller
         $this->service = $service;
     }
 
+    public function index(Request $request)
+    {
+        try {
+            return $this->successResponse($this->service->listFields($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
     public function store(Request $request)
     {
         try {
@@ -47,6 +58,28 @@ class CustomFieldController extends Controller
             ));
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function update(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->service->updateField($uid, $request->all()), 200, 'Campo actualizado');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function destroy(string $uid)
+    {
+        try {
+            $this->service->deleteField($uid);
+
+            return $this->successResponse(null, 200, 'Campo eliminado');
         } catch (\Exception $e) {
             return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
         }

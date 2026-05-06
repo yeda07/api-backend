@@ -11,6 +11,7 @@ use App\Repositories\AlertRuleRepository;
 use App\Repositories\DocumentRepository;
 use App\Repositories\DocumentTypeRepository;
 use App\Repositories\DocumentVersionRepository;
+use App\Support\ApiIndex;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,21 @@ class DocumentService
         $entity = $this->resolveEntity($entityType, $entityUid);
 
         return $this->documentRepository->forEntity($entity);
+    }
+
+    public function list(array $filters = [])
+    {
+        $query = $this->documentRepository->query()->latest();
+
+        if (!empty($filters['account_uid'])) {
+            $query->where('account_id', $this->resolveAccount($filters['account_uid'])->getKey());
+        }
+
+        if (!empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'documents_page');
     }
 
     public function getByAccount(string $accountUid)
@@ -223,6 +239,17 @@ class DocumentService
             'document' => $document,
             'content' => Storage::disk($document->disk)->get($document->path),
         ];
+    }
+
+    public function deleteDocument(string $uid): void
+    {
+        $document = $this->documentRepository->findByUid($uid);
+
+        DB::transaction(function () use ($document) {
+            $document->alerts()->delete();
+            $document->versions()->delete();
+            $document->delete();
+        });
     }
 
     public function calculateStatus(null|string|Carbon $expirationDate, ?int $documentTypeId = null): string

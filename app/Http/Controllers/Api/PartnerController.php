@@ -56,6 +56,21 @@ class PartnerController extends Controller
         return $this->wrap(fn () => $this->partnerOpportunityService->closeOpportunity($uid, $request->all()), 'Oportunidad de partner cerrada');
     }
 
+    public function approveOpportunity(string $uid)
+    {
+        return $this->wrap(fn () => $this->partnerOpportunityService->closeOpportunity($uid, ['status' => 'won']), 'Oportunidad de partner aprobada');
+    }
+
+    public function rejectOpportunity(string $uid)
+    {
+        return $this->wrap(fn () => $this->partnerOpportunityService->closeOpportunity($uid, ['status' => 'lost']), 'Oportunidad de partner rechazada');
+    }
+
+    public function convertOpportunity(string $uid)
+    {
+        return $this->wrap(fn () => $this->partnerOpportunityService->closeOpportunity($uid, ['status' => 'won']), 'Oportunidad de partner convertida');
+    }
+
     private function wrap(\Closure $callback, ?string $message = null, int $status = 200)
     {
         try {
