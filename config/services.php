@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'admin_alerts' => [
+        'email' => env('ADMIN_ALERT_EMAIL'),
+        'slack_webhook_url' => env('ADMIN_ALERT_SLACK_WEBHOOK_URL'),
+    ],
+
 ];

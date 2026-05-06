@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AdminAlertRule;
 use App\Models\SystemLog;
 use App\Models\Tenant;
+use App\Services\AdminAlertEvaluatorService;
 use App\Support\ApiIndex;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -135,7 +136,11 @@ class AdminTelemetryController extends Controller
         try {
             $validated = $request->validate([
                 'nombre' => 'required|string|max:255',
-                'condicion' => 'required|string|max:255',
+                'condicion' => 'required_without:metric|string|max:255',
+                'metric' => 'required_without:condicion|string|in:errores,warnings,latencia,uptime',
+                'operator' => 'required_with:metric|string|in:>,<,>=,<=',
+                'value' => 'required_with:metric|numeric',
+                'period' => 'required_with:metric|string|in:1h,6h,24h,7d',
                 'canales' => 'required|array|min:1',
                 'canales.*' => 'string|in:EMAIL,SLACK,PUSH',
                 'estado' => 'nullable|string|in:ACTIVO,INACTIVO',
@@ -143,7 +148,11 @@ class AdminTelemetryController extends Controller
 
             $rule = AdminAlertRule::query()->create([
                 'name' => $validated['nombre'],
-                'condition_text' => $validated['condicion'],
+                'condition_text' => $validated['condicion'] ?? $this->buildConditionText($validated),
+                'metric' => $validated['metric'] ?? null,
+                'operator' => $validated['operator'] ?? null,
+                'value' => $validated['value'] ?? null,
+                'period' => $validated['period'] ?? null,
                 'channels' => $validated['canales'],
                 'is_active' => ($validated['estado'] ?? 'ACTIVO') === 'ACTIVO',
             ]);
@@ -166,17 +175,34 @@ class AdminTelemetryController extends Controller
             $validated = $request->validate([
                 'nombre' => 'sometimes|string|max:255',
                 'condicion' => 'sometimes|string|max:255',
+                'metric' => 'sometimes|string|in:errores,warnings,latencia,uptime',
+                'operator' => 'sometimes|required_with:metric|string|in:>,<,>=,<=',
+                'value' => 'sometimes|required_with:metric|numeric',
+                'period' => 'sometimes|required_with:metric|string|in:1h,6h,24h,7d',
                 'canales' => 'sometimes|array|min:1',
                 'canales.*' => 'string|in:EMAIL,SLACK,PUSH',
                 'estado' => 'sometimes|string|in:ACTIVO,INACTIVO',
             ]);
 
-            $rule->update([
+            $payload = [
                 'name' => $validated['nombre'] ?? $rule->name,
-                'condition_text' => $validated['condicion'] ?? $rule->condition_text,
                 'channels' => $validated['canales'] ?? $rule->channels,
                 'is_active' => array_key_exists('estado', $validated) ? $validated['estado'] === 'ACTIVO' : $rule->is_active,
-            ]);
+            ];
+
+            foreach (['metric', 'operator', 'value', 'period'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $payload[$field] = $validated[$field];
+                }
+            }
+
+            if (array_key_exists('condicion', $validated)) {
+                $payload['condition_text'] = $validated['condicion'];
+            } elseif (array_intersect(['metric', 'operator', 'value', 'period'], array_keys($validated)) !== []) {
+                $payload['condition_text'] = $this->buildConditionText(array_merge($rule->only(['metric', 'operator', 'value', 'period']), $validated));
+            }
+
+            $rule->update($payload);
 
             return $this->successResponse($this->serializeAlert($rule->fresh()), 200, 'Alerta actualizada');
         } catch (ValidationException $e) {
@@ -197,6 +223,11 @@ class AdminTelemetryController extends Controller
         ]);
 
         return $this->successResponse($this->serializeAlert($rule->fresh()), 200, 'Estado de alerta actualizado');
+    }
+
+    public function evaluateAlerts(AdminAlertEvaluatorService $evaluator)
+    {
+        return $this->successResponse($evaluator->evaluateActiveRules());
     }
 
     private function serializeLog(SystemLog $log): array
@@ -263,10 +294,25 @@ class AdminTelemetryController extends Controller
             'uid' => $rule->uid,
             'nombre' => $rule->name,
             'condicion' => $rule->condition_text,
+            'metric' => $rule->metric,
+            'operator' => $rule->operator,
+            'value' => $rule->value !== null ? (float) $rule->value : null,
+            'period' => $rule->period,
             'canales' => $rule->channels,
             'estado' => $rule->is_active ? 'ACTIVO' : 'INACTIVO',
             'last_triggered_at' => optional($rule->last_triggered_at)?->toISOString(),
         ];
+    }
+
+    private function buildConditionText(array $data): string
+    {
+        return sprintf(
+            '%s %s %s en %s',
+            $data['metric'] ?? '',
+            $data['operator'] ?? '',
+            $data['value'] ?? '',
+            $data['period'] ?? ''
+        );
     }
 
     private function toLogLevel(string $level): string

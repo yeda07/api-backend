@@ -13,6 +13,10 @@ class AdminAlertRule extends Model
         'uid',
         'name',
         'condition_text',
+        'metric',
+        'operator',
+        'value',
+        'period',
         'channels',
         'is_active',
         'last_triggered_at',
@@ -25,6 +29,7 @@ class AdminAlertRule extends Model
     protected $casts = [
         'channels' => 'array',
         'is_active' => 'boolean',
+        'value' => 'decimal:2',
         'last_triggered_at' => 'datetime',
     ];
 }

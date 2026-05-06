@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
 use App\Services\LoggerService;
@@ -14,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+
+    ->withSchedule(function (Schedule $schedule) {
+        $schedule->command('admin-alerts:evaluate')->everyFiveMinutes()->withoutOverlapping();
+    })
 
     ->withMiddleware(function (Middleware $middleware) {
 
