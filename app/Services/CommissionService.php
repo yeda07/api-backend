@@ -32,6 +32,11 @@ class CommissionService
         return CommissionPlan::query()->with('roles')->orderBy('name')->get();
     }
 
+    public function getPlan(string $uid): CommissionPlan
+    {
+        return $this->resolvePlan($uid);
+    }
+
     public function createPlan(array $data): CommissionPlan
     {
         $validated = $this->validatePlan($data);
@@ -80,6 +85,19 @@ class CommissionService
         });
     }
 
+    public function deletePlan(string $uid): void
+    {
+        $plan = $this->resolvePlan($uid);
+
+        if ($plan->assignments()->exists()) {
+            throw ValidationException::withMessages([
+                'plan' => ['No puedes eliminar un plan con asignaciones'],
+            ]);
+        }
+
+        $plan->delete();
+    }
+
     public function assignments(array $filters = [])
     {
         $query = CommissionAssignment::query()->with(['user.roles', 'commissionPlan.roles'])->latest('starts_at');
@@ -97,6 +115,11 @@ class CommissionService
         }
 
         return $query->get();
+    }
+
+    public function getAssignment(string $uid): CommissionAssignment
+    {
+        return CommissionAssignment::query()->with(['user.roles', 'commissionPlan.roles'])->where('uid', $uid)->firstOrFail();
     }
 
     public function createAssignment(array $data): CommissionAssignment
@@ -151,6 +174,11 @@ class CommissionService
         return $assignment->fresh(['user.roles', 'commissionPlan.roles']);
     }
 
+    public function deleteAssignment(string $uid): void
+    {
+        $this->getAssignment($uid)->delete();
+    }
+
     public function targets(?string $userUid = null)
     {
         $query = CommissionTarget::query()->with('user')->orderByDesc('period');
@@ -160,6 +188,11 @@ class CommissionService
         }
 
         return $query->get();
+    }
+
+    public function getTarget(string $uid): CommissionTarget
+    {
+        return CommissionTarget::query()->with('user')->where('uid', $uid)->firstOrFail();
     }
 
     public function upsertTarget(array $data): CommissionTarget
@@ -177,6 +210,34 @@ class CommissionService
             ->where('user_id', $userId)
             ->where('period', $validated['period'])
             ->firstOrFail();
+    }
+
+    public function updateTarget(string $uid, array $data): CommissionTarget
+    {
+        $target = $this->getTarget($uid);
+        $validated = $this->validateTarget($data, true);
+        $payload = [];
+
+        if (array_key_exists('user_uid', $validated)) {
+            $payload['user_id'] = $this->resolveUserId($validated['user_uid']);
+        }
+
+        if (array_key_exists('period', $validated)) {
+            $payload['period'] = $validated['period'];
+        }
+
+        if (array_key_exists('target_amount', $validated)) {
+            $payload['target_amount'] = $validated['target_amount'];
+        }
+
+        $target->update($payload);
+
+        return $target->fresh('user');
+    }
+
+    public function deleteTarget(string $uid): void
+    {
+        $this->getTarget($uid)->delete();
     }
 
     public function rules()
@@ -225,12 +286,27 @@ class CommissionService
 
     public function recordFinancialEvent(array $data): array
     {
+        $data = $this->normalizeFinancialRecordPayload($data);
         $validated = $this->validateFinancialRecord($data);
 
         return DB::transaction(function () use ($validated) {
             $quotation = $this->resolveQuotation($validated['quotation_uid'] ?? null);
-            $entityType = $quotation?->quoteable_type;
-            $entityUid = $quotation?->quoteable?->uid;
+            $entityType = $validated['entity_type'] ?? $quotation?->quoteable_type;
+            $entityUid = $validated['entity_uid'] ?? $quotation?->quoteable?->uid;
+
+            if (!$quotation && (!$entityType || !$entityUid)) {
+                $record = $this->createStandaloneFinancialRecord($validated);
+                $entries = collect();
+
+                return [
+                    'financial_record' => $record,
+                    'commission_entries' => $entries->values(),
+                    'summary' => [
+                        'entries_count' => 0,
+                        'commission_total' => 0,
+                    ],
+                ];
+            }
 
             $record = $this->financialOperationsService->importRecord([
                 'entity_type' => $entityType,
@@ -350,6 +426,10 @@ class CommissionService
 
     public function simulate(array $data): array
     {
+        if (!empty($data['plan_uid'])) {
+            return $this->simulatePlan($data);
+        }
+
         $validated = $this->validateSimulation($data);
         $user = $this->resolveUser($validated['user_uid']);
         $period = $validated['period'] ?? now()->format('Y-m');
@@ -573,13 +653,16 @@ class CommissionService
 
     private function validatePlan(array $data, bool $partial = false): array
     {
+        $data = $this->normalizePlanPayload($data, $partial);
+
         $validator = Validator::make($data, [
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:sale,margin,target'],
             'base_percent' => [$partial ? 'sometimes' : 'required', 'numeric', 'min:0', 'max:100'],
             'tiers_json' => 'sometimes|array',
             'tiers_json.*.threshold' => 'required_with:tiers_json|numeric|min:0',
-            'tiers_json.*.percent' => 'required_with:tiers_json|numeric|min:0|max:100',
+            'tiers_json.*.percent' => 'required_without:tiers_json.*.percentage|numeric|min:0|max:100',
+            'tiers_json.*.percentage' => 'required_without:tiers_json.*.percent|numeric|min:0|max:100',
             'starts_at' => 'nullable|date',
             'ends_at' => 'nullable|date|after_or_equal:starts_at',
             'active' => 'sometimes|boolean',
@@ -594,6 +677,12 @@ class CommissionService
         $validated = $validator->validated();
 
         if (!empty($validated['tiers_json'])) {
+            $validated['tiers_json'] = collect($validated['tiers_json'])
+                ->map(fn (array $tier) => [
+                    'threshold' => $tier['threshold'],
+                    'percent' => $tier['percent'] ?? $tier['percentage'],
+                ])
+                ->all();
             usort($validated['tiers_json'], fn ($a, $b) => $a['threshold'] <=> $b['threshold']);
         }
 
@@ -617,12 +706,18 @@ class CommissionService
         return $validator->validated();
     }
 
-    private function validateTarget(array $data): array
+    private function validateTarget(array $data, bool $partial = false): array
     {
+        if (array_key_exists('goal_value', $data) && !array_key_exists('target_amount', $data)) {
+            $data['target_amount'] = $data['goal_value'];
+        }
+
         $validator = Validator::make($data, [
-            'user_uid' => 'required|uuid',
-            'period' => 'required|string|regex:/^\\d{4}-\\d{2}$/',
-            'target_amount' => 'required|numeric|min:0',
+            'user_uid' => [$partial ? 'sometimes' : 'required', 'uuid'],
+            'metric' => 'sometimes|string|in:total_sales',
+            'period' => [$partial ? 'sometimes' : 'required', 'string', 'regex:/^\\d{4}-(\\d{2}|Q[1-4])$/'],
+            'target_amount' => [$partial ? 'sometimes' : 'required', 'numeric', 'min:0'],
+            'goal_value' => 'sometimes|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -667,6 +762,8 @@ class CommissionService
     {
         $validator = Validator::make($data, [
             'quotation_uid' => 'nullable|uuid',
+            'entity_type' => 'nullable|string|max:255',
+            'entity_uid' => 'nullable|uuid',
             'record_type' => 'required|string|in:invoice_paid,collection_received',
             'source_system' => 'nullable|string|max:255',
             'external_reference' => 'nullable|string|max:255',
@@ -685,6 +782,110 @@ class CommissionService
         }
 
         return $validator->validated();
+    }
+
+    private function createStandaloneFinancialRecord(array $validated): FinancialRecord
+    {
+        return FinancialRecord::query()->create([
+            'owner_user_id' => auth()->id(),
+            'quotation_id' => null,
+            'record_type' => $validated['record_type'],
+            'source_system' => $validated['source_system'] ?? 'manual',
+            'external_reference' => $validated['external_reference'] ?? null,
+            'amount' => $validated['amount'],
+            'outstanding_amount' => $validated['outstanding_amount'] ?? 0,
+            'currency' => $validated['currency'] ?? null,
+            'issued_at' => $validated['issued_at'] ?? null,
+            'due_at' => $validated['due_at'] ?? null,
+            'paid_at' => $validated['paid_at'],
+            'status' => $validated['status'] ?? 'paid',
+            'meta' => $validated['meta'] ?? null,
+        ])->fresh(['owner', 'quotation', 'financeable']);
+    }
+
+    private function normalizePlanPayload(array $data, bool $partial = false): array
+    {
+        if (array_key_exists('base_percentage', $data) && !array_key_exists('base_percent', $data)) {
+            $data['base_percent'] = $data['base_percentage'];
+        }
+
+        if (array_key_exists('tiers', $data) && !array_key_exists('tiers_json', $data)) {
+            $data['tiers_json'] = $data['tiers'];
+        }
+
+        if (array_key_exists('is_active', $data) && !array_key_exists('active', $data)) {
+            $data['active'] = $data['is_active'];
+        }
+
+        if (!$partial && !array_key_exists('type', $data) && !empty($data)) {
+            $data['type'] = 'sale';
+        }
+
+        return $data;
+    }
+
+    private function normalizeFinancialRecordPayload(array $data): array
+    {
+        if (array_key_exists('type', $data) && !array_key_exists('record_type', $data)) {
+            $data['record_type'] = match ($data['type']) {
+                'sale' => 'collection_received',
+                default => $data['type'],
+            };
+        }
+
+        if (array_key_exists('recorded_at', $data) && !array_key_exists('paid_at', $data)) {
+            $data['paid_at'] = $data['recorded_at'];
+        }
+
+        if (!array_key_exists('paid_at', $data)) {
+            $data['paid_at'] = now()->toDateString();
+        }
+
+        if (!array_key_exists('status', $data)) {
+            $data['status'] = 'paid';
+        }
+
+        if (!array_key_exists('source_system', $data)) {
+            $data['source_system'] = 'manual';
+        }
+
+        if (array_key_exists('description', $data)) {
+            $data['meta'] = array_merge($data['meta'] ?? [], ['description' => $data['description']]);
+        }
+
+        return $data;
+    }
+
+    private function simulatePlan(array $data): array
+    {
+        $validated = Validator::make($data, [
+            'plan_uid' => 'required|uuid',
+            'total_sales' => 'required|numeric|min:0',
+            'margin_amount' => 'nullable|numeric|min:0',
+        ])->validate();
+
+        $plan = $this->resolvePlan($validated['plan_uid']);
+        $basisAmount = $plan->type === 'margin'
+            ? (float) ($validated['margin_amount'] ?? 0)
+            : (float) $validated['total_sales'];
+        $metric = $basisAmount;
+        $appliedPercent = (float) $plan->base_percent;
+        $tierApplied = 0;
+
+        foreach (collect($plan->tiers_json ?? [])->sortBy('threshold')->values() as $index => $tier) {
+            if ($metric >= (float) ($tier['threshold'] ?? 0)) {
+                $appliedPercent = (float) ($tier['percent'] ?? $tier['percentage'] ?? $appliedPercent);
+                $tierApplied = $index + 1;
+            }
+        }
+
+        return [
+            'plan_uid' => $plan->uid,
+            'total_sales' => round((float) $validated['total_sales'], 2),
+            'commission_amount' => round($basisAmount * ($appliedPercent / 100), 2),
+            'effective_percentage' => round($appliedPercent, 2),
+            'tier_applied' => $tierApplied,
+        ];
     }
 
     private function resolveProductId(?string $uid): ?int

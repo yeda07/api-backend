@@ -8,6 +8,7 @@ Esta carpeta resume como se esta manejando cada modulo del backend, que endpoint
 - [Alertas administrativas](alertas-administrativas.md)
 - [Agenda y productividad](agenda-productividad.md)
 - [Questions for Backend](questions-backend.md)
+- [Comisiones](comisiones.md)
 
 ## Convenciones generales
 

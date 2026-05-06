@@ -30,6 +30,9 @@ class CommissionPlan extends Model
 
     protected $appends = [
         'role_uids',
+        'base_percentage',
+        'tiers',
+        'is_active',
     ];
 
     protected $casts = [
@@ -56,5 +59,27 @@ class CommissionPlan extends Model
         return $this->relationLoaded('roles')
             ? $this->roles->pluck('uid')->values()->all()
             : $this->roles()->pluck('roles.uid')->values()->all();
+    }
+
+    public function getBasePercentageAttribute(): float
+    {
+        return round((float) $this->base_percent, 2);
+    }
+
+    public function getTiersAttribute(): array
+    {
+        return collect($this->tiers_json ?? [])
+            ->map(fn (array $tier) => [
+                'threshold' => (float) ($tier['threshold'] ?? 0),
+                'percentage' => (float) ($tier['percentage'] ?? $tier['percent'] ?? 0),
+                'percent' => (float) ($tier['percent'] ?? $tier['percentage'] ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function getIsActiveAttribute(): bool
+    {
+        return (bool) $this->active;
     }
 }

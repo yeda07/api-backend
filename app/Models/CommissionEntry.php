@@ -43,11 +43,14 @@ class CommissionEntry extends Model
 
     protected $appends = [
         'user_uid',
+        'user_name',
         'rule_uid',
         'quotation_uid',
         'quotation_item_uid',
         'financial_record_uid',
         'commission_run_uid',
+        'run_uid',
+        'frontend_status',
     ];
 
     protected $casts = [
@@ -123,5 +126,21 @@ class CommissionEntry extends Model
     {
         return $this->commissionRun?->uid
             ?? ($this->commission_run_id ? CommissionRun::query()->whereKey($this->commission_run_id)->value('uid') : null);
+    }
+
+    public function getUserNameAttribute(): ?string
+    {
+        return $this->user?->name
+            ?? ($this->user_id ? User::query()->whereKey($this->user_id)->value('name') : null);
+    }
+
+    public function getRunUidAttribute(): ?string
+    {
+        return $this->commission_run_uid;
+    }
+
+    public function getFrontendStatusAttribute(): string
+    {
+        return $this->status === 'paid' ? 'paid' : 'pending';
     }
 }

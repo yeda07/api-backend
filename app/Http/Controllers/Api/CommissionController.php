@@ -18,6 +18,11 @@ class CommissionController extends Controller
         return $this->successResponse($this->commissionService->plans());
     }
 
+    public function showPlan(string $uid)
+    {
+        return $this->successResponse($this->commissionService->getPlan($uid));
+    }
+
     public function storePlan(Request $request)
     {
         return $this->wrap(fn () => $this->commissionService->createPlan($request->all()), 'Plan de comision creado', 201);
@@ -28,9 +33,23 @@ class CommissionController extends Controller
         return $this->wrap(fn () => $this->commissionService->updatePlan($uid, $request->all()), 'Plan de comision actualizado');
     }
 
+    public function destroyPlan(string $uid)
+    {
+        return $this->wrap(function () use ($uid) {
+            $this->commissionService->deletePlan($uid);
+
+            return null;
+        }, 'Plan de comision eliminado');
+    }
+
     public function assignments(Request $request)
     {
         return $this->successResponse($this->commissionService->assignments($request->query()));
+    }
+
+    public function showAssignment(string $uid)
+    {
+        return $this->successResponse($this->commissionService->getAssignment($uid));
     }
 
     public function storeAssignment(Request $request)
@@ -43,14 +62,42 @@ class CommissionController extends Controller
         return $this->wrap(fn () => $this->commissionService->updateAssignment($uid, $request->all()), 'Asignacion de comision actualizada');
     }
 
+    public function destroyAssignment(string $uid)
+    {
+        return $this->wrap(function () use ($uid) {
+            $this->commissionService->deleteAssignment($uid);
+
+            return null;
+        }, 'Asignacion de comision eliminada');
+    }
+
     public function targets(Request $request)
     {
         return $this->successResponse($this->commissionService->targets($request->query('user_uid')));
     }
 
+    public function showTarget(string $uid)
+    {
+        return $this->successResponse($this->commissionService->getTarget($uid));
+    }
+
     public function storeTarget(Request $request)
     {
         return $this->wrap(fn () => $this->commissionService->upsertTarget($request->all()), 'Meta de comision guardada', 201);
+    }
+
+    public function updateTarget(Request $request, string $uid)
+    {
+        return $this->wrap(fn () => $this->commissionService->updateTarget($uid, $request->all()), 'Meta de comision actualizada');
+    }
+
+    public function destroyTarget(string $uid)
+    {
+        return $this->wrap(function () use ($uid) {
+            $this->commissionService->deleteTarget($uid);
+
+            return null;
+        }, 'Meta de comision eliminada');
     }
 
     public function rules()

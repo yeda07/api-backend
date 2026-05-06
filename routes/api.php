@@ -316,12 +316,19 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('commissions')->group(function () {
         Route::get('/plans', [CommissionController::class, 'plans'])->middleware('permission:commissions.read');
         Route::post('/plans', [CommissionController::class, 'storePlan'])->middleware('permission:commissions.manage');
+        Route::get('/plans/{uid}', [CommissionController::class, 'showPlan'])->middleware('permission:commissions.read');
         Route::put('/plans/{uid}', [CommissionController::class, 'updatePlan'])->middleware('permission:commissions.manage');
+        Route::delete('/plans/{uid}', [CommissionController::class, 'destroyPlan'])->middleware('permission:commissions.manage');
         Route::get('/assignments', [CommissionController::class, 'assignments'])->middleware('permission:commissions.read');
         Route::post('/assignments', [CommissionController::class, 'storeAssignment'])->middleware('permission:commissions.manage');
+        Route::get('/assignments/{uid}', [CommissionController::class, 'showAssignment'])->middleware('permission:commissions.read');
         Route::put('/assignments/{uid}', [CommissionController::class, 'updateAssignment'])->middleware('permission:commissions.manage');
+        Route::delete('/assignments/{uid}', [CommissionController::class, 'destroyAssignment'])->middleware('permission:commissions.manage');
         Route::get('/targets', [CommissionController::class, 'targets'])->middleware('permission:commissions.read');
         Route::post('/targets', [CommissionController::class, 'storeTarget'])->middleware('permission:commissions.manage');
+        Route::get('/targets/{uid}', [CommissionController::class, 'showTarget'])->middleware('permission:commissions.read');
+        Route::put('/targets/{uid}', [CommissionController::class, 'updateTarget'])->middleware('permission:commissions.manage');
+        Route::delete('/targets/{uid}', [CommissionController::class, 'destroyTarget'])->middleware('permission:commissions.manage');
         Route::get('/rules', [CommissionController::class, 'rules'])->middleware('permission:commissions.read');
         Route::post('/rules', [CommissionController::class, 'storeRule'])->middleware('permission:commissions.manage');
         Route::put('/rules/{uid}', [CommissionController::class, 'updateRule'])->middleware('permission:commissions.manage');

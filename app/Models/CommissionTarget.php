@@ -27,6 +27,10 @@ class CommissionTarget extends Model
 
     protected $appends = [
         'user_uid',
+        'user_name',
+        'metric',
+        'goal_value',
+        'current_value',
     ];
 
     protected $casts = [
@@ -42,5 +46,26 @@ class CommissionTarget extends Model
     {
         return $this->user?->uid
             ?? ($this->user_id ? User::query()->whereKey($this->user_id)->value('uid') : null);
+    }
+
+    public function getUserNameAttribute(): ?string
+    {
+        return $this->user?->name
+            ?? ($this->user_id ? User::query()->whereKey($this->user_id)->value('name') : null);
+    }
+
+    public function getMetricAttribute(): string
+    {
+        return 'total_sales';
+    }
+
+    public function getGoalValueAttribute(): float
+    {
+        return round((float) $this->target_amount, 2);
+    }
+
+    public function getCurrentValueAttribute(): float
+    {
+        return 0.0;
     }
 }
