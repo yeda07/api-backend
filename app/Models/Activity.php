@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Account;
+use App\Models\Contact;
 use App\Models\Traits\AppliesRowLevelSecurity;
 use App\Models\Traits\HasPublicUid;
 use App\Models\Traits\HasTenantRelation;
@@ -22,6 +24,7 @@ class Activity extends Model
         'title',
         'description',
         'status',
+        'priority',
         'scheduled_at',
         'completed_at',
         'activityable_type',
@@ -39,7 +42,13 @@ class Activity extends Model
     protected $appends = [
         'owner_user_uid',
         'assigned_user_uid',
+        'assigned_to_uid',
+        'assigned_to_name',
         'activityable_uid',
+        'contact_uid',
+        'contact_name',
+        'account_uid',
+        'account_name',
     ];
 
     protected $casts = [
@@ -72,9 +81,55 @@ class Activity extends Model
         return $this->assignedUser?->uid;
     }
 
+    public function getAssignedToUidAttribute()
+    {
+        return $this->assignedUser?->uid;
+    }
+
+    public function getAssignedToNameAttribute()
+    {
+        return $this->assignedUser?->name;
+    }
+
     public function getActivityableUidAttribute()
     {
         return $this->activityable?->uid;
+    }
+
+    public function getContactUidAttribute()
+    {
+        return $this->activityable instanceof Contact ? $this->activityable->uid : null;
+    }
+
+    public function getContactNameAttribute()
+    {
+        return $this->activityable instanceof Contact ? $this->activityable->display_name : null;
+    }
+
+    public function getAccountUidAttribute()
+    {
+        if ($this->activityable instanceof Account) {
+            return $this->activityable->uid;
+        }
+
+        if ($this->activityable instanceof Contact) {
+            return $this->activityable->account?->uid;
+        }
+
+        return null;
+    }
+
+    public function getAccountNameAttribute()
+    {
+        if ($this->activityable instanceof Account) {
+            return $this->activityable->name;
+        }
+
+        if ($this->activityable instanceof Contact) {
+            return $this->activityable->account?->name;
+        }
+
+        return null;
     }
 
     public function resolveDefaultOwnerUserId(): ?int

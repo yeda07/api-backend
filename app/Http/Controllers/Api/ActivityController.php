@@ -27,11 +27,22 @@ class ActivityController extends Controller
     {
         try {
             $validated = $request->validate([
-                'from' => 'required|date',
-                'to' => 'required|date|after_or_equal:from',
+                'from' => 'required_without:start|date',
+                'to' => 'required_without:end|date',
+                'start' => 'required_without:from|date',
+                'end' => 'required_without:to|date',
             ]);
 
-            return $this->successResponse($this->activityService->getByDateRange($validated['from'], $validated['to']));
+            $from = $validated['from'] ?? $validated['start'];
+            $to = $validated['to'] ?? $validated['end'];
+
+            if (strtotime($to) < strtotime($from)) {
+                throw ValidationException::withMessages([
+                    'end' => ['La fecha final debe ser igual o posterior a la inicial'],
+                ]);
+            }
+
+            return $this->successResponse($this->activityService->getByDateRange($from, $to));
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {

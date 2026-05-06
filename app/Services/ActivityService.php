@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Support\ApiIndex;
 use App\Models\Activity;
+use App\Models\Contact;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -94,14 +95,18 @@ class ActivityService
     private function validate(array $data, bool $partial = false): array
     {
         $validator = Validator::make($data, [
-            'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:task,reminder,meeting'],
+            'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:task,call,meeting,email,note,reminder'],
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'description' => 'nullable|string',
-            'status' => 'sometimes|string|in:pending,completed,overdue',
+            'status' => 'sometimes|string|in:pending,in_progress,completed,cancelled,overdue',
+            'priority' => 'sometimes|string|in:low,medium,high',
             'scheduled_at' => [$partial ? 'sometimes' : 'required', 'date'],
             'assigned_user_uid' => 'nullable|uuid',
+            'assigned_to_uid' => 'nullable|uuid',
             'entity_type' => 'nullable|string',
             'entity_uid' => 'nullable|uuid',
+            'contact_uid' => 'nullable|uuid',
+            'account_uid' => 'nullable|uuid',
         ]);
 
         if ($validator->fails()) {
@@ -110,10 +115,26 @@ class ActivityService
 
         $validated = $validator->validated();
 
+        if (!empty($validated['assigned_user_uid']) && !empty($validated['assigned_to_uid']) && $validated['assigned_user_uid'] !== $validated['assigned_to_uid']) {
+            throw ValidationException::withMessages([
+                'assigned_to_uid' => ['No puede diferir de assigned_user_uid'],
+            ]);
+        }
+
         if (!empty($validated['entity_type']) xor !empty($validated['entity_uid'])) {
             throw ValidationException::withMessages([
                 'entity_uid' => ['Debes enviar entity_type y entity_uid juntos'],
             ]);
+        }
+
+        if (!empty($validated['contact_uid']) && !empty($validated['account_uid'])) {
+            $contact = Contact::query()->where('uid', $validated['contact_uid'])->first();
+
+            if ($contact && $contact->account_uid && $contact->account_uid !== $validated['account_uid']) {
+                throw ValidationException::withMessages([
+                    'account_uid' => ['La cuenta enviada no corresponde al contacto'],
+                ]);
+            }
         }
 
         return $validated;
@@ -126,11 +147,25 @@ class ActivityService
             'title' => $data['title'] ?? $activity?->title,
             'description' => array_key_exists('description', $data) ? $data['description'] : $activity?->description,
             'status' => $data['status'] ?? $activity?->status ?? 'pending',
+            'priority' => $data['priority'] ?? $activity?->priority ?? 'medium',
             'scheduled_at' => $data['scheduled_at'] ?? $activity?->scheduled_at,
         ];
 
-        if (array_key_exists('assigned_user_uid', $data)) {
-            $payload['assigned_user_id'] = $this->resolveUserId($data['assigned_user_uid']);
+        if (array_key_exists('assigned_user_uid', $data) || array_key_exists('assigned_to_uid', $data)) {
+            $payload['assigned_user_id'] = $this->resolveUserId($data['assigned_to_uid'] ?? $data['assigned_user_uid'] ?? null);
+        }
+
+        if (array_key_exists('contact_uid', $data) || array_key_exists('account_uid', $data)) {
+            if (!empty($data['contact_uid'])) {
+                $data['entity_type'] = 'contact';
+                $data['entity_uid'] = $data['contact_uid'];
+            } elseif (!empty($data['account_uid'])) {
+                $data['entity_type'] = 'account';
+                $data['entity_uid'] = $data['account_uid'];
+            } else {
+                $data['entity_type'] = null;
+                $data['entity_uid'] = null;
+            }
         }
 
         if (array_key_exists('entity_type', $data) || array_key_exists('entity_uid', $data)) {
