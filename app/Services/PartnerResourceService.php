@@ -20,6 +20,7 @@ class PartnerResourceService
 
     public function resources(array $filters = [])
     {
+        $filters = $this->normalizeResourcePayload($filters);
         $validated = Validator::make($filters, [
             'type' => 'nullable|string|in:sales,training',
             'partner_uid' => 'nullable|uuid',
@@ -31,6 +32,7 @@ class PartnerResourceService
 
     public function uploadResource(array $data, UploadedFile $file): PartnerResource
     {
+        $data = $this->normalizeResourcePayload($data);
         $validated = Validator::make($data, [
             'title' => 'required|string|max:255',
             'type' => 'required|string|in:sales,training',
@@ -79,5 +81,19 @@ class PartnerResourceService
         $partner = $this->partnerService->getPartnerByUid($partnerUid);
 
         return $partner->resources()->where('is_active', true)->get();
+    }
+
+    private function normalizeResourcePayload(array $data): array
+    {
+        if (array_key_exists('material_type', $data) && !array_key_exists('type', $data)) {
+            $data['type'] = match ($data['material_type']) {
+                'training', 'guide' => 'training',
+                default => 'sales',
+            };
+        }
+
+        unset($data['material_type'], $data['description'], $data['file_name'], $data['file_size'], $data['uploaded_at'], $data['uploaded_by'], $data['tags'], $data['download_count']);
+
+        return $data;
     }
 }

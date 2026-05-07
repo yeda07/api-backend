@@ -118,6 +118,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('contacts')->group(function () {
         Route::get('/', [ContactController::class, 'index'])->middleware('permission:contacts.read');
+        Route::post('/check-duplicate', [ContactController::class, 'checkDuplicate'])->middleware('permission:contacts.read');
         Route::get('/{uid}', [ContactController::class, 'show'])->middleware('permission:contacts.read');
         Route::post('/', [ContactController::class, 'store'])->middleware('permission:contacts.create');
         Route::put('/{uid}', [ContactController::class, 'update'])->middleware('permission:contacts.update');

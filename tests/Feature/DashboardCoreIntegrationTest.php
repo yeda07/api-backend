@@ -164,12 +164,12 @@ class DashboardCoreIntegrationTest extends TestCase
             'scheduled_at' => now()->addHour(),
         ]);
 
-        $this->getJson('/api/activities?scope=tenant&per_page=10&paginate=false')
+        $this->getJson('/api/activities?per_page=10&paginate=false')
             ->assertOk()
             ->assertJsonPath('data.0.uid', $activity->uid)
             ->assertJsonPath('meta', null);
 
-        $this->getJson('/api/activities?per_page=10&paginate=false')
+        $this->getJson('/api/activities?per_page=10')
             ->assertOk()
             ->assertJsonCount(0, 'data');
     }

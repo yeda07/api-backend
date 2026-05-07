@@ -38,6 +38,17 @@ class ContactController extends Controller
         }
     }
 
+    public function checkDuplicate(Request $request)
+    {
+        try {
+            return $this->successResponse($this->service->checkDuplicate($request->all()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
     public function update(Request $request, string $uid)
     {
         try {

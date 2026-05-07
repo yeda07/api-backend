@@ -48,7 +48,13 @@ class PartnerController extends Controller
 
     public function validateOpportunity(Request $request)
     {
-        return $this->wrap(fn () => $this->partnerOpportunityService->checkConflict($request->all()));
+        return $this->wrap(function () use ($request) {
+            if ($request->has('uids')) {
+                return $this->partnerOpportunityService->validateOpportunities($request->all());
+            }
+
+            return $this->partnerOpportunityService->checkConflict($request->all());
+        });
     }
 
     public function closeOpportunity(Request $request, string $uid)

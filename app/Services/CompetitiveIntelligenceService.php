@@ -24,6 +24,8 @@ class CompetitiveIntelligenceService
 
     public function createCompetitor(array $data): Competitor
     {
+        $data = $this->normalizeCompetitorPayload($data);
+
         $validated = Validator::make($data, [
             'name' => 'required|string|max:255',
             'key' => 'required|string|max:100',
@@ -50,6 +52,7 @@ class CompetitiveIntelligenceService
     public function updateCompetitor(string $uid, array $data): Competitor
     {
         $competitor = $this->findCompetitor($uid);
+        $data = $this->normalizeCompetitorPayload($data, true);
 
         $validated = Validator::make($data, [
             'name' => 'sometimes|string|max:255',
@@ -97,6 +100,8 @@ class CompetitiveIntelligenceService
 
     public function createBattlecard(array $data): Battlecard
     {
+        $data = $this->normalizeBattlecardPayload($data);
+
         $validated = Validator::make($data, [
             'competitor_uid' => 'required|uuid',
             'title' => 'required|string|max:255',
@@ -121,6 +126,7 @@ class CompetitiveIntelligenceService
     public function updateBattlecard(string $uid, array $data): Battlecard
     {
         $battlecard = $this->findBattlecard($uid);
+        $data = $this->normalizeBattlecardPayload($data);
 
         $validated = Validator::make($data, [
             'competitor_uid' => 'sometimes|uuid',
@@ -184,6 +190,7 @@ class CompetitiveIntelligenceService
 
     public function createLostReason(array $data): LostReason
     {
+        $data = $this->normalizeLostReasonPayload($data);
         $validated = $this->validateLostReason($data);
         $entity = $this->resolveOptionalEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
 
@@ -205,6 +212,7 @@ class CompetitiveIntelligenceService
     public function updateLostReason(string $uid, array $data): LostReason
     {
         $lostReason = $this->findLostReason($uid);
+        $data = $this->normalizeLostReasonPayload($data);
         $validated = $this->validateLostReason($data, true);
         $payload = [];
 
@@ -284,6 +292,97 @@ class CompetitiveIntelligenceService
             'estimated_value' => 'nullable|numeric|min:0',
             'meta' => 'nullable|array',
         ])->validate();
+    }
+
+    private function normalizeCompetitorPayload(array $data, bool $partial = false): array
+    {
+        if (!$partial && empty($data['key']) && !empty($data['name'])) {
+            $data['key'] = str($data['name'])->lower()->slug('-')->toString();
+        }
+
+        if (array_key_exists('description', $data) && !array_key_exists('notes', $data)) {
+            $data['notes'] = $data['description'];
+        }
+
+        unset($data['description'], $data['strength_score']);
+
+        return $data;
+    }
+
+    private function normalizeBattlecardPayload(array $data): array
+    {
+        if (array_key_exists('description', $data) && !array_key_exists('summary', $data)) {
+            $data['summary'] = $data['description'];
+        }
+
+        if (array_key_exists('strengths', $data) && !array_key_exists('differentiators', $data)) {
+            $data['differentiators'] = $data['strengths'];
+        }
+
+        if (array_key_exists('weaknesses', $data) && !array_key_exists('recommended_actions', $data)) {
+            $data['recommended_actions'] = $data['weaknesses'];
+        }
+
+        if (array_key_exists('objections', $data) && !array_key_exists('objection_handlers', $data)) {
+            $data['objection_handlers'] = collect($data['objections'])
+                ->map(function ($objection) {
+                    if (!is_array($objection)) {
+                        return $objection;
+                    }
+
+                    return [
+                        'objection' => $objection['objection'] ?? null,
+                        'response' => $objection['response'] ?? null,
+                    ];
+                })
+                ->all();
+        }
+
+        unset($data['competitor_name'], $data['description'], $data['strengths'], $data['weaknesses'], $data['objections']);
+
+        return $data;
+    }
+
+    private function normalizeLostReasonPayload(array $data): array
+    {
+        if (array_key_exists('lost_reason_category', $data) && !array_key_exists('reason_type', $data)) {
+            $data['reason_type'] = match ($data['lost_reason_category']) {
+                'Precio' => 'price',
+                'Producto' => 'features',
+                'Relacion', 'Relación' => 'relationship',
+                'Timing' => 'timing',
+                'Servicio' => 'implementation',
+                default => 'other',
+            };
+        }
+
+        if (array_key_exists('lost_reason_detail', $data) && !array_key_exists('details', $data)) {
+            $data['details'] = $data['lost_reason_detail'];
+        }
+
+        if (array_key_exists('deal_value', $data) && !array_key_exists('estimated_value', $data)) {
+            $data['estimated_value'] = $data['deal_value'];
+        }
+
+        if (array_key_exists('closed_date', $data) && !array_key_exists('lost_at', $data)) {
+            $data['lost_at'] = $data['closed_date'];
+        }
+
+        if (!array_key_exists('summary', $data) && !empty($data['details'])) {
+            $data['summary'] = str($data['details'])->limit(250, '')->toString();
+        }
+
+        unset(
+            $data['account_name'],
+            $data['competitor_name'],
+            $data['lost_reason_category'],
+            $data['lost_reason_detail'],
+            $data['deal_value'],
+            $data['closed_date'],
+            $data['sales_rep']
+        );
+
+        return $data;
     }
 
     private function ensureUniqueCompetitorKey(string $key, ?int $ignoreId = null): void

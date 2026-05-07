@@ -39,7 +39,14 @@ class Contact extends Model
 
     protected $appends = [
         'account_uid',
+        'company_uid',
+        'company_name',
         'owner_user_uid',
+        'name',
+        'job_title',
+        'type',
+        'status',
+        'id_number',
     ];
 
     // Relación con Account
@@ -61,7 +68,19 @@ class Contact extends Model
 
     public function getAccountUidAttribute()
     {
-        return $this->account?->uid;
+        return $this->account?->uid
+            ?? ($this->account_id ? Account::query()->whereKey($this->account_id)->value('uid') : null);
+    }
+
+    public function getCompanyUidAttribute()
+    {
+        return $this->account_uid;
+    }
+
+    public function getCompanyNameAttribute()
+    {
+        return $this->account?->name
+            ?? ($this->account_id ? Account::query()->whereKey($this->account_id)->value('name') : null);
     }
 
     public function getOwnerUserUidAttribute()
@@ -92,6 +111,31 @@ class Contact extends Model
     //  Helper
     public function getDisplayNameAttribute()
     {
-        return $this->first_name . ' ' . $this->last_name;
+        return trim($this->first_name . ' ' . $this->last_name);
+    }
+
+    public function getNameAttribute()
+    {
+        return $this->display_name;
+    }
+
+    public function getJobTitleAttribute()
+    {
+        return $this->position;
+    }
+
+    public function getTypeAttribute()
+    {
+        return 'person';
+    }
+
+    public function getStatusAttribute()
+    {
+        return 'active';
+    }
+
+    public function getIdNumberAttribute()
+    {
+        return null;
     }
 }

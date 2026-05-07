@@ -36,8 +36,16 @@ class PartnerOpportunity extends Model
 
     protected $appends = [
         'partner_uid',
+        'partner_name',
         'account_uid',
+        'client_name',
+        'client_email',
         'opportunity_uid',
+        'product',
+        'estimated_value',
+        'registered_date',
+        'notes',
+        'assigned_to_internal',
     ];
 
     protected $casts = [
@@ -65,9 +73,19 @@ class PartnerOpportunity extends Model
         return $this->hasMany(OpportunityConflict::class);
     }
 
+    public function getStatusAttribute($value): string
+    {
+        return $value === 'open' ? 'pending' : $value;
+    }
+
     public function getPartnerUidAttribute()
     {
         return $this->partner?->uid;
+    }
+
+    public function getPartnerNameAttribute(): ?string
+    {
+        return $this->partner?->name;
     }
 
     public function getAccountUidAttribute()
@@ -75,8 +93,45 @@ class PartnerOpportunity extends Model
         return $this->account?->uid;
     }
 
+    public function getClientNameAttribute(): ?string
+    {
+        return $this->account?->name;
+    }
+
+    public function getClientEmailAttribute(): ?string
+    {
+        return $this->account?->email;
+    }
+
     public function getOpportunityUidAttribute()
     {
         return $this->opportunity?->uid;
+    }
+
+    public function getProductAttribute(): ?string
+    {
+        return $this->description ? data_get(json_decode($this->description, true), 'product') : null;
+    }
+
+    public function getEstimatedValueAttribute(): float
+    {
+        return round((float) $this->amount, 2);
+    }
+
+    public function getRegisteredDateAttribute(): ?string
+    {
+        return $this->created_at?->toISOString();
+    }
+
+    public function getNotesAttribute(): ?string
+    {
+        $decoded = $this->description ? json_decode($this->description, true) : null;
+
+        return is_array($decoded) ? ($decoded['notes'] ?? null) : $this->description;
+    }
+
+    public function getAssignedToInternalAttribute(): ?string
+    {
+        return $this->opportunity?->owner?->name;
     }
 }

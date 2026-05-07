@@ -9,6 +9,10 @@ Esta carpeta resume como se esta manejando cada modulo del backend, que endpoint
 - [Agenda y productividad](agenda-productividad.md)
 - [Questions for Backend](questions-backend.md)
 - [Comisiones](comisiones.md)
+- [Contactos y CRM](contactos-crm.md)
+- [Dashboard](dashboard.md)
+- [Inteligencia competitiva](inteligencia-competitiva.md)
+- [Partners](partners.md)
 
 ## Convenciones generales
 

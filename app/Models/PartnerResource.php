@@ -34,8 +34,68 @@ class PartnerResource extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $appends = [
+        'description',
+        'material_type',
+        'file_name',
+        'file_size',
+        'uploaded_at',
+        'uploaded_by',
+        'tags',
+        'download_count',
+    ];
+
     public function partners()
     {
         return $this->belongsToMany(Partner::class, 'partner_access')->withTimestamps();
+    }
+
+    public function getDescriptionAttribute(): ?string
+    {
+        return null;
+    }
+
+    public function getMaterialTypeAttribute(): string
+    {
+        return match ($this->type) {
+            'training' => 'training',
+            default => 'deck',
+        };
+    }
+
+    public function getFileNameAttribute(): ?string
+    {
+        return $this->original_name;
+    }
+
+    public function getFileSizeAttribute(): string
+    {
+        $size = (int) $this->size;
+
+        if ($size >= 1048576) {
+            return round($size / 1048576, 1) . ' MB';
+        }
+
+        return round($size / 1024, 1) . ' KB';
+    }
+
+    public function getUploadedAtAttribute(): ?string
+    {
+        return $this->created_at?->toISOString();
+    }
+
+    public function getUploadedByAttribute(): ?string
+    {
+        return null;
+    }
+
+    public function getTagsAttribute(): array
+    {
+        return [];
+    }
+
+    public function getDownloadCountAttribute(): int
+    {
+        return 0;
     }
 }

@@ -36,6 +36,11 @@ class Account extends Model
 
     protected $appends = [
         'owner_user_uid',
+        'tax_id',
+        'status',
+        'country',
+        'city',
+        'company_size',
     ];
 
     public function tenant()
@@ -71,6 +76,31 @@ class Account extends Model
     public function getOwnerUserUidAttribute()
     {
         return $this->owner?->uid;
+    }
+
+    public function getTaxIdAttribute()
+    {
+        return $this->document;
+    }
+
+    public function getStatusAttribute()
+    {
+        return 'active';
+    }
+
+    public function getCountryAttribute()
+    {
+        return null;
+    }
+
+    public function getCityAttribute()
+    {
+        return null;
+    }
+
+    public function getCompanySizeAttribute()
+    {
+        return null;
     }
 
     public function getDisplayNameAttribute()

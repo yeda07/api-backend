@@ -29,6 +29,15 @@ class Partner extends Model
 
     protected $appends = [
         'account_uid',
+        'partner_type',
+        'contact_name',
+        'contact_email',
+        'phone',
+        'region',
+        'registered_opportunities',
+        'converted_deals',
+        'joined_date',
+        'notes',
     ];
 
     protected $casts = [
@@ -53,5 +62,54 @@ class Partner extends Model
     public function getAccountUidAttribute()
     {
         return $this->account?->uid;
+    }
+
+    public function getPartnerTypeAttribute(): ?string
+    {
+        return $this->type;
+    }
+
+    public function getContactNameAttribute(): ?string
+    {
+        return $this->contact_info['contact_name'] ?? $this->contact_info['name'] ?? null;
+    }
+
+    public function getContactEmailAttribute(): ?string
+    {
+        return $this->contact_info['contact_email'] ?? $this->contact_info['email'] ?? null;
+    }
+
+    public function getPhoneAttribute(): ?string
+    {
+        return $this->contact_info['phone'] ?? null;
+    }
+
+    public function getRegionAttribute(): ?string
+    {
+        return $this->contact_info['region'] ?? null;
+    }
+
+    public function getRegisteredOpportunitiesAttribute(): int
+    {
+        return $this->relationLoaded('opportunities')
+            ? $this->opportunities->count()
+            : $this->opportunities()->count();
+    }
+
+    public function getConvertedDealsAttribute(): int
+    {
+        return $this->relationLoaded('opportunities')
+            ? $this->opportunities->whereIn('status', ['won', 'closed'])->count()
+            : $this->opportunities()->whereIn('status', ['won', 'closed'])->count();
+    }
+
+    public function getJoinedDateAttribute(): ?string
+    {
+        return $this->created_at?->toISOString();
+    }
+
+    public function getNotesAttribute(): ?string
+    {
+        return $this->contact_info['notes'] ?? null;
     }
 }

@@ -30,6 +30,7 @@ class AccountService
     {
         PlanLimitService::check('accounts');
 
+        $data = $this->normalizeFrontendPayload($data);
         $this->validate($data);
         $this->validateDuplicates($data);
 
@@ -40,6 +41,7 @@ class AccountService
     {
         $account = $this->repo->findByUid($uid);
 
+        $data = $this->normalizeFrontendPayload($data);
         $this->validate($data);
         $this->validateDuplicates($data, $account->id);
 
@@ -112,5 +114,16 @@ class AccountService
             'phone' => $data['phone'] ?? null,
             'address' => $data['address'] ?? null,
         ];
+    }
+
+    private function normalizeFrontendPayload(array $data): array
+    {
+        if (array_key_exists('tax_id', $data) && !array_key_exists('document', $data)) {
+            $data['document'] = $data['tax_id'];
+        }
+
+        unset($data['tax_id'], $data['status'], $data['country'], $data['city'], $data['company_size']);
+
+        return $data;
     }
 }

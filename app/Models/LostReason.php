@@ -39,10 +39,17 @@ class LostReason extends Model
 
     protected $appends = [
         'competitor_uid',
+        'competitor_name',
         'opportunity_uid',
         'owner_user_uid',
         'entity_uid',
         'entity_type',
+        'account_name',
+        'deal_value',
+        'lost_reason_category',
+        'lost_reason_detail',
+        'closed_date',
+        'sales_rep',
     ];
 
     protected $casts = [
@@ -76,6 +83,11 @@ class LostReason extends Model
         return $this->competitor?->uid;
     }
 
+    public function getCompetitorNameAttribute(): ?string
+    {
+        return $this->competitor?->name;
+    }
+
     public function getOpportunityUidAttribute(): ?string
     {
         return $this->opportunity?->uid;
@@ -99,5 +111,45 @@ class LostReason extends Model
             CrmEntity::class => 'crm-entity',
             default => null,
         };
+    }
+
+    public function getAccountNameAttribute(): ?string
+    {
+        return $this->lossable?->display_name
+            ?? $this->lossable?->name
+            ?? $this->opportunity?->account?->name
+            ?? null;
+    }
+
+    public function getDealValueAttribute(): float
+    {
+        return round((float) ($this->estimated_value ?? 0), 2);
+    }
+
+    public function getLostReasonCategoryAttribute(): string
+    {
+        return match ($this->reason_type) {
+            'price' => 'Precio',
+            'features' => 'Producto',
+            'relationship' => 'Relacion',
+            'timing' => 'Timing',
+            'implementation', 'procurement' => 'Servicio',
+            default => 'Otro',
+        };
+    }
+
+    public function getLostReasonDetailAttribute(): ?string
+    {
+        return $this->details ?? $this->summary;
+    }
+
+    public function getClosedDateAttribute(): ?string
+    {
+        return $this->lost_at?->toISOString();
+    }
+
+    public function getSalesRepAttribute(): ?string
+    {
+        return $this->owner?->name;
     }
 }

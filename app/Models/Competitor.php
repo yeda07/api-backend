@@ -28,6 +28,11 @@ class Competitor extends Model
         'tenant_id',
     ];
 
+    protected $appends = [
+        'description',
+        'strength_score',
+    ];
+
     protected $casts = [
         'strengths' => 'array',
         'weaknesses' => 'array',
@@ -42,5 +47,15 @@ class Competitor extends Model
     public function lostReasons()
     {
         return $this->hasMany(LostReason::class);
+    }
+
+    public function getDescriptionAttribute(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function getStrengthScoreAttribute(): int
+    {
+        return min(10, max(0, count($this->strengths ?? []) * 2));
     }
 }

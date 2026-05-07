@@ -31,6 +31,11 @@ class Battlecard extends Model
 
     protected $appends = [
         'competitor_uid',
+        'competitor_name',
+        'description',
+        'strengths',
+        'weaknesses',
+        'objections',
     ];
 
     protected $casts = [
@@ -48,5 +53,42 @@ class Battlecard extends Model
     public function getCompetitorUidAttribute(): ?string
     {
         return $this->competitor?->uid;
+    }
+
+    public function getCompetitorNameAttribute(): ?string
+    {
+        return $this->competitor?->name;
+    }
+
+    public function getDescriptionAttribute(): ?string
+    {
+        return $this->summary;
+    }
+
+    public function getStrengthsAttribute(): array
+    {
+        return $this->differentiators ?? [];
+    }
+
+    public function getWeaknessesAttribute(): array
+    {
+        return $this->recommended_actions ?? [];
+    }
+
+    public function getObjectionsAttribute(): array
+    {
+        return collect($this->objection_handlers ?? [])
+            ->map(function ($handler) {
+                if (!is_array($handler)) {
+                    return $handler;
+                }
+
+                return [
+                    'objection' => $handler['objection'] ?? $handler['question'] ?? $handler['title'] ?? null,
+                    'response' => $handler['response'] ?? $handler['answer'] ?? $handler['handling'] ?? null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

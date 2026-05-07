@@ -23,11 +23,13 @@ class ActivityService
             ->with(['owner', 'assignedUser', 'activityable'])
             ->latest('scheduled_at');
 
-        if (($filters['scope'] ?? null) === 'tenant') {
+        $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
+
+        if (($filters['scope'] ?? null) === 'tenant' || $withoutPagination) {
             $query->withoutGlobalScope('row_level_security');
         }
 
-        if (filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false) {
+        if ($withoutPagination) {
             $limit = min(max((int) ($filters['per_page'] ?? 25), 1), 100);
 
             return $query->limit($limit)->get();

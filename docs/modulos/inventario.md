@@ -4,6 +4,20 @@
 
 El modulo de inventario esta implementado para catalogo de productos, bodegas, stock por bodega, movimientos, reservas, transferencias y reportes. Tambien se alineo con el contrato del frontend para resumenes globales, costos unitarios y entrada de mercancia en bulk.
 
+## Revision contra `inventory.md`
+
+El documento marcaba como pendientes:
+
+- `GET /api/inventory/movements/summary`
+- `POST /api/inventory/stocks/adjust/bulk`
+- `summary.active_products` en `/api/inventory/master`
+- `summary.out_of_stock_count` en `/api/inventory/master`
+- `unit_cost` en productos
+- `summary.total_warehouses` y `summary.active_warehouses` en bodegas
+- `data[].summary.total_value` por bodega
+
+Todo eso ya esta implementado y cubierto por pruebas de integracion.
+
 ## Rutas principales
 
 | Metodo | Endpoint | Permiso | Uso |
@@ -117,4 +131,3 @@ Cobertura:
 - `unit_cost` y `quantity` compatibles con frontend.
 - Bulk adjust.
 - Summary mensual de movimientos.
-

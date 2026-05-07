@@ -23,7 +23,9 @@ class PartnerResourceController extends Controller
         try {
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
-                'type' => 'required|string|in:sales,training',
+                'type' => 'required_without:material_type|string|in:sales,training',
+                'material_type' => 'required_without:type|string|in:deck,training,product_sheet,guide,contract_template',
+                'description' => 'nullable|string',
                 'partner_uids' => 'sometimes|array',
                 'partner_uids.*' => 'uuid',
                 'is_active' => 'sometimes|boolean',

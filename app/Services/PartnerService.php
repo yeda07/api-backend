@@ -18,14 +18,21 @@ class PartnerService
     {
         $validated = Validator::make($filters, [
             'type' => 'nullable|string|in:distributor,reseller,ally',
-            'status' => 'nullable|string|in:active,inactive',
+            'partner_type' => 'nullable|string|in:distributor,reseller,ally',
+            'status' => 'nullable|string|in:active,inactive,prospect',
         ])->validate();
+
+        if (!empty($validated['partner_type']) && empty($validated['type'])) {
+            $validated['type'] = $validated['partner_type'];
+            unset($validated['partner_type']);
+        }
 
         return $this->partnerRepository->all($validated);
     }
 
     public function createPartner(array $data): Partner
     {
+        $data = $this->normalizeFrontendPayload($data);
         $validated = $this->validate($data);
 
         return $this->partnerRepository->create([
@@ -41,6 +48,7 @@ class PartnerService
     public function updatePartner(string $uid, array $data): Partner
     {
         $partner = $this->partnerRepository->findByUid($uid);
+        $data = $this->normalizeFrontendPayload($data);
         $validated = $this->validate($data, true);
 
         $payload = [];
@@ -67,7 +75,7 @@ class PartnerService
         $validator = Validator::make($data, [
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:distributor,reseller,ally'],
-            'status' => 'sometimes|string|in:active,inactive',
+            'status' => 'sometimes|string|in:active,inactive,prospect',
             'account_uid' => 'nullable|uuid',
             'contact_info' => 'nullable|array',
         ]);
@@ -77,6 +85,29 @@ class PartnerService
         }
 
         return $validator->validated();
+    }
+
+    private function normalizeFrontendPayload(array $data): array
+    {
+        if (array_key_exists('partner_type', $data) && !array_key_exists('type', $data)) {
+            $data['type'] = $data['partner_type'];
+        }
+
+        $contactInfo = $data['contact_info'] ?? [];
+
+        foreach (['contact_name', 'contact_email', 'phone', 'region', 'notes'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $contactInfo[$field] = $data[$field];
+            }
+        }
+
+        if (!empty($contactInfo)) {
+            $data['contact_info'] = $contactInfo;
+        }
+
+        unset($data['partner_type'], $data['contact_name'], $data['contact_email'], $data['phone'], $data['region'], $data['notes'], $data['registered_opportunities'], $data['converted_deals'], $data['joined_date']);
+
+        return $data;
     }
 
     private function resolveAccountId(?string $uid): ?int

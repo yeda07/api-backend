@@ -49,6 +49,18 @@ class ContactRepository
         return $contact->delete();
     }
 
+    public function emailExists(?string $email, ?string $excludeUid = null): bool
+    {
+        if (!$email) {
+            return false;
+        }
+
+        return Contact::where('tenant_id', auth()->user()->tenant_id)
+            ->where('email', $email)
+            ->when($excludeUid, fn ($q) => $q->where('uid', '!=', $excludeUid))
+            ->exists();
+    }
+
     private function existsByEmail(array $data, ?int $ignoreId = null): bool
     {
         if (empty($data['email'])) {
