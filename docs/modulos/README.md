@@ -13,6 +13,8 @@ Esta carpeta resume como se esta manejando cada modulo del backend, que endpoint
 - [Dashboard](dashboard.md)
 - [Inteligencia competitiva](inteligencia-competitiva.md)
 - [Partners](partners.md)
+- [Plataforma general](platform-general.md)
+- [Proyectos](proyectos.md)
 
 ## Convenciones generales
 

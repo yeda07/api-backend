@@ -4,23 +4,24 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Currency;
+use App\Services\PlatformInitService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class SettingsController extends Controller
 {
+    public function __construct(private readonly PlatformInitService $platformInitService)
+    {
+    }
+
     public function localization(Request $request)
     {
         $user = $request->user();
         $tenant = $user->tenant;
 
-        return $this->successResponse([
+        return $this->successResponse(array_merge([
             'tenant_uid' => $tenant?->uid,
-            'timezone' => $tenant?->timezone ?? 'UTC',
-            'currency' => $tenant?->currency?->code ?? $tenant?->currency ?? 'USD',
-            'date_format' => $tenant?->date_format ?? 'Y-m-d',
-            'user_timezone' => $user->timezone ?? null,
-        ]);
+        ], $this->platformInitService->localization($user)));
     }
 
     public function updateLocalization(Request $request)

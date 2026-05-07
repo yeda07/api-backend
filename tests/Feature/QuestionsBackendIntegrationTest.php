@@ -67,7 +67,7 @@ class QuestionsBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.timezone', 'America/Bogota')
             ->assertJsonPath('data.currency', 'COP')
-            ->assertJsonPath('data.date_format', 'd/m/Y')
+            ->assertJsonPath('data.date_format', 'DD/MM/YYYY')
             ->assertJsonPath('data.user_timezone', 'America/Bogota');
 
         $this->assertSame('America/Bogota', $user->fresh()->timezone);

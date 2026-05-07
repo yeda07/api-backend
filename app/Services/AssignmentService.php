@@ -52,15 +52,18 @@ class AssignmentService
     {
         $validator = Validator::make($data, [
             'user_uid' => 'required|uuid',
-            'role' => 'required|string|in:consultant,tech,manager',
-            'hours_allocated' => 'required|numeric|min:0',
+            'role' => 'required|string|in:consultant,tech,manager,developer,designer,qa,analyst',
+            'hours_allocated' => 'sometimes|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
             throw new ValidationException($validator);
         }
 
-        return $validator->validated();
+        $validated = $validator->validated();
+        $validated['hours_allocated'] = $validated['hours_allocated'] ?? 0;
+
+        return $validated;
     }
 
     private function resolveUser(string $uid): User

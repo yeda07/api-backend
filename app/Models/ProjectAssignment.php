@@ -30,6 +30,8 @@ class ProjectAssignment extends Model
     protected $appends = [
         'project_uid',
         'user_uid',
+        'user_name',
+        'assigned_at',
     ];
 
     protected $casts = [
@@ -56,5 +58,16 @@ class ProjectAssignment extends Model
     {
         return $this->user?->uid
             ?? ($this->user_id ? User::query()->whereKey($this->user_id)->value('uid') : null);
+    }
+
+    public function getUserNameAttribute(): ?string
+    {
+        return $this->user?->name
+            ?? ($this->user_id ? User::query()->whereKey($this->user_id)->value('name') : null);
+    }
+
+    public function getAssignedAtAttribute(): ?string
+    {
+        return $this->created_at?->toISOString();
     }
 }

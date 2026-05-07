@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\TenantOptionController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\SegmentController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +80,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token'])->group(func
 
 Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/auth/init', [AuthController::class, 'init']);
     Route::post('/2fa/recovery-codes/regenerate', [AuthController::class, 'regenerateRecoveryCodes']);
 
     Route::get('/users', [UserController::class, 'index'])->middleware('permission:users.manage');
@@ -489,6 +491,18 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('settings')->group(function () {
         Route::get('/localization', [SettingsController::class, 'localization']);
         Route::put('/localization', [SettingsController::class, 'updateLocalization']);
+    });
+
+    Route::prefix('tenant')->group(function () {
+        Route::get('/payment-methods', [TenantOptionController::class, 'paymentMethods']);
+        Route::get('/lead-origins', [TenantOptionController::class, 'leadOrigins']);
+        Route::get('/institution-types', [TenantOptionController::class, 'institutionTypes']);
+        Route::get('/company-sizes', [TenantOptionController::class, 'companySizes']);
+        Route::get('/industries', [TenantOptionController::class, 'industries']);
+        Route::get('/opportunity-products', [TenantOptionController::class, 'opportunityProducts']);
+        Route::get('/lost-reason-categories', [TenantOptionController::class, 'lostReasonCategories']);
+        Route::get('/activity-types', [TenantOptionController::class, 'activityTypes']);
+        Route::get('/commission-plan-types', [TenantOptionController::class, 'commissionPlanTypes']);
     });
 
     Route::prefix('reports')->group(function () {

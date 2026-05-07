@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\PlatformInitService;
 use App\Services\TwoFactorService;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     public function __construct(
-        protected TwoFactorService $twoFactorService
+        protected TwoFactorService $twoFactorService,
+        protected PlatformInitService $platformInitService
     ) {
     }
 
@@ -94,6 +96,11 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return $this->successResponse($this->serializeUser($request->user()));
+    }
+
+    public function init(Request $request)
+    {
+        return $this->successResponse($this->platformInitService->init($request->user()));
     }
 
     public function logout(Request $request)

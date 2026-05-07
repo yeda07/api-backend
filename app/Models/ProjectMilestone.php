@@ -15,6 +15,7 @@ class ProjectMilestone extends Model
         'uid',
         'tenant_id',
         'project_id',
+        'assigned_user_id',
         'name',
         'description',
         'due_date',
@@ -26,10 +27,13 @@ class ProjectMilestone extends Model
         'id',
         'tenant_id',
         'project_id',
+        'assigned_user_id',
     ];
 
     protected $appends = [
         'project_uid',
+        'title',
+        'assigned_to_uid',
     ];
 
     protected $casts = [
@@ -41,9 +45,30 @@ class ProjectMilestone extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function assignedUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
     public function getProjectUidAttribute()
     {
         return $this->project?->uid
             ?? ($this->project_id ? Project::query()->whereKey($this->project_id)->value('uid') : null);
+    }
+
+    public function getTitleAttribute(): ?string
+    {
+        return $this->name;
+    }
+
+    public function getStatusAttribute($value): string
+    {
+        return $value === 'done' ? 'completed' : $value;
+    }
+
+    public function getAssignedToUidAttribute(): ?string
+    {
+        return $this->assignedUser?->uid
+            ?? ($this->assigned_user_id ? User::query()->whereKey($this->assigned_user_id)->value('uid') : null);
     }
 }
