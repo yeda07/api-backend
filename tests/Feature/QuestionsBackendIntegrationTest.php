@@ -158,14 +158,16 @@ class QuestionsBackendIntegrationTest extends TestCase
 
     public function test_reports_aliases_are_available(): void
     {
-        $this->authenticateWithPermissions(['finance.read', 'inventory.report']);
+        $this->authenticateWithPermissions(['reports.read']);
 
         $this->getJson('/api/reports/sales')
             ->assertOk()
+            ->assertJsonPath('data.kpis.Total Generadas', 0)
             ->assertJsonPath('data.monthly_sales', 0);
 
         $this->getJson('/api/reports/inventory')
             ->assertOk()
+            ->assertJsonPath('data.kpis.Productos', 0)
             ->assertJsonPath('data.rupture_risk.critical_products_count', 0);
     }
 

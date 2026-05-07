@@ -506,8 +506,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('reports')->group(function () {
-        Route::get('/sales', [ReportController::class, 'sales'])->middleware('permission:finance.read');
-        Route::get('/inventory', [ReportController::class, 'inventory'])->middleware('permission:inventory.report');
+        Route::get('/sales', [ReportController::class, 'sales'])->middleware('permission:reports.read');
+        Route::get('/inventory', [ReportController::class, 'inventory'])->middleware('permission:reports.read');
+        Route::get('/filters', [ReportController::class, 'filters'])->middleware('permission:reports.read');
     });
 
     Route::get('/metrics/my-usage', [MetricsController::class, 'myUsage'])->middleware('permission:metrics.read');

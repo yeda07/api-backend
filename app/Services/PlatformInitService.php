@@ -11,7 +11,7 @@ class PlatformInitService
         'dashboard' => ['label' => 'Dashboard', 'permissions' => ['dashboard.read']],
         'inventory' => ['label' => 'Inventario', 'permissions' => ['inventory.read', 'inventory.manage', 'inventory.reserve', 'inventory.report']],
         'sales' => ['label' => 'Ventas', 'permissions' => ['opportunities.read', 'opportunities.manage', 'quotes.read', 'quotes.manage', 'quotations.read', 'quotations.manage', 'products.read', 'products.manage']],
-        'reports' => ['label' => 'Reportes', 'permissions' => ['finance.read', 'inventory.report']],
+        'reports' => ['label' => 'Reportes', 'permissions' => ['reports.read', 'finance.read', 'inventory.report']],
         'crm' => ['label' => 'CRM', 'permissions' => ['accounts.read', 'accounts.create', 'accounts.update', 'accounts.delete', 'contacts.read', 'contacts.create', 'contacts.update', 'contacts.delete', 'crm-entities.read', 'crm-entities.create', 'crm-entities.update']],
         'projects' => ['label' => 'Proyectos', 'permissions' => ['projects.read', 'projects.manage']],
         'incentives' => ['label' => 'Incentivos y Comisiones', 'permissions' => ['commissions.read', 'commissions.manage']],

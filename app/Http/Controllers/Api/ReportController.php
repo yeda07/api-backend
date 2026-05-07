@@ -3,30 +3,37 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\FinancialDashboardService;
-use App\Services\InventoryService;
+use App\Services\ReportService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class ReportController extends Controller
 {
     public function __construct(
-        private readonly InventoryService $inventoryService,
-        private readonly FinancialDashboardService $financialDashboardService
+        private readonly ReportService $reportService
     ) {
     }
 
     public function inventory(Request $request)
     {
         try {
-            return $this->successResponse($this->inventoryService->report($request->query()));
+            return $this->successResponse($this->reportService->inventory($request->query()));
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         }
     }
 
-    public function sales()
+    public function sales(Request $request)
     {
-        return $this->successResponse($this->financialDashboardService->dashboard());
+        try {
+            return $this->successResponse($this->reportService->sales($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
+    public function filters()
+    {
+        return $this->successResponse($this->reportService->filters());
     }
 }

@@ -67,6 +67,7 @@ class PermissionSeeder extends Seeder
             ['key' => 'opportunities.manage', 'module' => 'opportunities', 'action' => 'manage', 'description' => 'Administrar pipeline y oportunidades'],
             ['key' => 'finance.read', 'module' => 'finance', 'action' => 'read', 'description' => 'Ver finanzas operativas'],
             ['key' => 'finance.manage', 'module' => 'finance', 'action' => 'manage', 'description' => 'Sincronizar finanzas operativas'],
+            ['key' => 'reports.read', 'module' => 'reports', 'action' => 'read', 'description' => 'Ver reportes unificados'],
             ['key' => 'custom-fields.manage', 'module' => 'custom-fields', 'action' => 'manage', 'description' => 'Administrar campos personalizados'],
             ['key' => 'logs.read', 'module' => 'logs', 'action' => 'read', 'description' => 'Ver logs del tenant'],
             ['key' => 'metrics.read', 'module' => 'metrics', 'action' => 'read', 'description' => 'Ver metricas del tenant'],
