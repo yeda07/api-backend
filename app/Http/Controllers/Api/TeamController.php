@@ -35,9 +35,25 @@ class TeamController extends Controller
 
     public function destroy(string $uid)
     {
-        $this->teamService->delete($uid);
+        return $this->wrap(function () use ($uid) {
+            $this->teamService->delete($uid);
 
-        return $this->successResponse(null, 200, 'Equipo eliminado');
+            return null;
+        }, 'Team deleted');
+    }
+
+    public function addMember(Request $request, string $uid)
+    {
+        return $this->wrap(fn () => $this->teamService->addMember($uid, $request->all()), 'Miembro agregado');
+    }
+
+    public function removeMember(string $uid, string $userUid)
+    {
+        return $this->wrap(function () use ($uid, $userUid) {
+            $this->teamService->removeMember($uid, $userUid);
+
+            return null;
+        }, 'Member removed');
     }
 
     private function wrap(\Closure $callback, string $message, int $status = 200)

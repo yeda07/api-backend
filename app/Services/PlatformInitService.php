@@ -18,7 +18,7 @@ class PlatformInitService
         'partners' => ['label' => 'Canales & Partners', 'permissions' => ['partners.read', 'partners.manage', 'partners.opportunities.read', 'partners.opportunities.manage', 'partners.resources.read', 'partners.resources.manage']],
         'intelligence' => ['label' => 'Inteligencia Competitiva', 'permissions' => ['competitive-intelligence.read', 'competitive-intelligence.manage', 'competitive-intelligence.report']],
         'automation' => ['label' => 'Automatizacion', 'permissions' => ['automation.read', 'automation.create', 'automation.update', 'automation.delete', 'segments.read', 'segments.manage']],
-        'settings' => ['label' => 'Configuracion', 'permissions' => ['users.manage', 'custom-fields.manage']],
+        'settings' => ['label' => 'Configuracion', 'permissions' => ['settings.manage', 'users.manage', 'custom-fields.manage']],
     ];
 
     public function init(User $user): array
@@ -55,7 +55,7 @@ class PlatformInitService
         return [
             'currency' => $currencyCode,
             'currency_symbol' => $currency?->symbol ?? '$',
-            'locale' => $this->localeFor($currencyCode),
+            'locale' => $tenant?->locale ?? $this->localeFor($currencyCode),
             'timezone' => $tenant?->timezone ?? 'UTC',
             'date_format' => $this->frontendDateFormat($tenant?->date_format ?? 'Y-m-d'),
             'language' => 'es',

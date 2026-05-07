@@ -31,6 +31,7 @@ class SettingsController extends Controller
                 'timezone' => 'sometimes|string|max:100',
                 'currency' => 'sometimes|string|max:10',
                 'date_format' => 'sometimes|string|max:50',
+                'locale' => 'sometimes|string|max:20',
                 'user_timezone' => 'sometimes|nullable|string|max:100',
             ]);
 
@@ -39,7 +40,7 @@ class SettingsController extends Controller
 
             $tenantPayload = [];
 
-            foreach (['timezone', 'date_format'] as $field) {
+            foreach (['timezone', 'date_format', 'locale'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $tenantPayload[$field] = $validated[$field];
                 }

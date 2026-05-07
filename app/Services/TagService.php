@@ -24,8 +24,9 @@ class TagService
         return Tag::query()->create([
             'name' => $data['name'],
             'key' => $data['key'],
-            'color' => $data['color'],
+            'color' => $this->normalizeColor($data['color']),
             'category' => $data['category'] ?? 'general',
+            'entity_types' => $this->normalizeEntityTypes($data['entity_types'] ?? []),
         ]);
     }
 
@@ -40,8 +41,9 @@ class TagService
         $tag->update([
             'name' => $data['name'] ?? $tag->name,
             'key' => $data['key'] ?? $tag->key,
-            'color' => $data['color'] ?? $tag->color,
+            'color' => array_key_exists('color', $data) ? $this->normalizeColor($data['color']) : $tag->color,
             'category' => $data['category'] ?? $tag->category,
+            'entity_types' => array_key_exists('entity_types', $data) ? $this->normalizeEntityTypes($data['entity_types'] ?? []) : $tag->entity_types,
         ]);
 
         return $tag->fresh();
@@ -122,5 +124,34 @@ class TagService
         }
 
         return $entity;
+    }
+
+    private function normalizeColor(string $color): string
+    {
+        $map = [
+            'blue' => '#2563eb',
+            'red' => '#dc2626',
+            'green' => '#16a34a',
+            'yellow' => '#ca8a04',
+            'orange' => '#ea580c',
+            'purple' => '#9333ea',
+            'pink' => '#db2777',
+            'gray' => '#6b7280',
+            'grey' => '#6b7280',
+            'default' => '#6b7280',
+        ];
+
+        $normalized = strtolower(trim($color));
+
+        return $map[$normalized] ?? $color;
+    }
+
+    private function normalizeEntityTypes(array $entityTypes): array
+    {
+        return collect($entityTypes)
+            ->map(fn (string $type) => strtoupper($type))
+            ->unique()
+            ->values()
+            ->all();
     }
 }

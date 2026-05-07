@@ -26,6 +26,8 @@ class TagController extends Controller
                 'key' => 'required|string|max:100',
                 'color' => 'required|string|max:20',
                 'category' => 'nullable|string|max:100',
+                'entity_types' => 'nullable|array',
+                'entity_types.*' => 'string|in:CONTACT,COMPANY,LEAD,DEAL,contact,company,lead,deal',
             ]);
 
             return $this->successResponse($this->tagService->create($validated), 201, 'Etiqueta creada');
@@ -44,6 +46,8 @@ class TagController extends Controller
                 'key' => 'sometimes|string|max:100',
                 'color' => 'sometimes|string|max:20',
                 'category' => 'sometimes|string|max:100',
+                'entity_types' => 'nullable|array',
+                'entity_types.*' => 'string|in:CONTACT,COMPANY,LEAD,DEAL,contact,company,lead,deal',
             ]);
 
             return $this->successResponse($this->tagService->update($uid, $validated), 200, 'Etiqueta actualizada');

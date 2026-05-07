@@ -96,7 +96,7 @@ class PlatformGeneralIntegrationTest extends TestCase
             'currency_id' => $currency->getKey(),
         ]);
         $tenant->forceFill(['timezone' => 'America/Bogota', 'date_format' => 'd/m/Y'])->save();
-        $user = $this->tenantUser($tenant, []);
+        $user = $this->tenantUser($tenant, ['settings.manage']);
         Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
 
         $this->getJson('/api/settings/localization')

@@ -24,6 +24,7 @@ class Tenant extends Model
         'limite_api_calls',
         'plan_id',
         'currency_id',
+        'locale',
         'is_active',
         'expires_at',
     ];

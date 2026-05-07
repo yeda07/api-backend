@@ -17,11 +17,16 @@ class Tag extends Model
         'key',
         'color',
         'category',
+        'entity_types',
     ];
 
     protected $hidden = [
         'id',
         'tenant_id',
+    ];
+
+    protected $casts = [
+        'entity_types' => 'array',
     ];
 
     public function accounts()

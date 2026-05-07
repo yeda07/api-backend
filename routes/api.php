@@ -193,6 +193,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/{uid}', [TeamController::class, 'show'])->middleware('permission:teams.read');
         Route::put('/{uid}', [TeamController::class, 'update'])->middleware('permission:teams.manage');
         Route::delete('/{uid}', [TeamController::class, 'destroy'])->middleware('permission:teams.manage');
+        Route::post('/{uid}/members', [TeamController::class, 'addMember'])->middleware('permission:teams.manage');
+        Route::delete('/{uid}/members/{userUid}', [TeamController::class, 'removeMember'])->middleware('permission:teams.manage');
     });
 
     Route::prefix('automation')->group(function () {
@@ -494,8 +496,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('settings')->group(function () {
-        Route::get('/localization', [SettingsController::class, 'localization']);
-        Route::put('/localization', [SettingsController::class, 'updateLocalization']);
+        Route::get('/localization', [SettingsController::class, 'localization'])->middleware('permission:settings.manage');
+        Route::put('/localization', [SettingsController::class, 'updateLocalization'])->middleware('permission:settings.manage');
     });
 
     Route::prefix('tenant')->group(function () {

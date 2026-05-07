@@ -103,6 +103,12 @@ class CustomFieldService
 
     private function resolveEntityType(string $entityType): string
     {
+        $entityType = match ($entityType) {
+            'companies', 'company' => 'accounts',
+            'opportunities', 'opportunity', 'products', 'product' => 'crm_entities',
+            default => $entityType,
+        };
+
         $resolvedType = crm_entity_model_class($entityType);
 
         if (!$resolvedType) {
@@ -124,13 +130,35 @@ class CustomFieldService
 
     private function validateFieldPayload(array $data, bool $partial = false): array
     {
-        return Validator::make($data, [
-            'entity_type' => [$partial ? 'sometimes' : 'required', 'string'],
-            'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+        $validated = Validator::make($data, [
+            'entity_type' => [$partial ? 'sometimes' : 'required_without:module', 'string'],
+            'module' => [$partial ? 'sometimes' : 'nullable', 'string'],
+            'name' => [$partial ? 'sometimes' : 'required_without:label', 'string', 'max:255'],
+            'label' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:255'],
             'key' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:text,number,select,date,boolean'],
+            'required' => 'sometimes|boolean',
             'options' => 'nullable|array',
         ])->validate();
+
+        if (!empty($validated['module']) && empty($validated['entity_type'])) {
+            $validated['entity_type'] = $validated['module'];
+        }
+
+        if (!empty($validated['label'])) {
+            $validated['name'] = $validated['label'];
+        }
+
+        unset($validated['module'], $validated['label']);
+
+        if (array_key_exists('required', $validated)) {
+            $options = $validated['options'] ?? [];
+            $options['required'] = (bool) $validated['required'];
+            $validated['options'] = $options;
+            unset($validated['required']);
+        }
+
+        return $validated;
     }
 
     private function validateValue($field, $value)

@@ -69,6 +69,7 @@ class PermissionSeeder extends Seeder
             ['key' => 'finance.manage', 'module' => 'finance', 'action' => 'manage', 'description' => 'Sincronizar finanzas operativas'],
             ['key' => 'reports.read', 'module' => 'reports', 'action' => 'read', 'description' => 'Ver reportes unificados'],
             ['key' => 'custom-fields.manage', 'module' => 'custom-fields', 'action' => 'manage', 'description' => 'Administrar campos personalizados'],
+            ['key' => 'settings.manage', 'module' => 'settings', 'action' => 'manage', 'description' => 'Administrar configuracion del tenant'],
             ['key' => 'logs.read', 'module' => 'logs', 'action' => 'read', 'description' => 'Ver logs del tenant'],
             ['key' => 'metrics.read', 'module' => 'metrics', 'action' => 'read', 'description' => 'Ver metricas del tenant'],
             ['key' => 'plans.manage', 'module' => 'plans', 'action' => 'manage', 'description' => 'Administrar planes'],

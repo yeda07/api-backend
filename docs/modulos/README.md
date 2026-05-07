@@ -17,6 +17,7 @@ Esta carpeta resume como se esta manejando cada modulo del backend, que endpoint
 - [Proyectos](proyectos.md)
 - [Reportes](reportes.md)
 - [Ventas](ventas.md)
+- [Settings](settings.md)
 
 ## Convenciones generales
 

@@ -28,8 +28,8 @@ class TeamService
             $memberUids = $validated['member_uids'] ?? [];
             unset($validated['member_uids']);
 
-            $validated['manager_user_id'] = $this->resolveUserId($validated['manager_uid'] ?? null);
-            unset($validated['manager_uid']);
+            $validated['manager_user_id'] = $this->resolveUserId($validated['manager_uid'] ?? $validated['leader_uid'] ?? null);
+            unset($validated['manager_uid'], $validated['leader_uid'], $validated['leader_name']);
 
             $team = Team::query()->create($validated);
             $this->syncMembers($team, $memberUids);
@@ -47,10 +47,10 @@ class TeamService
             $memberUids = $validated['member_uids'] ?? null;
             unset($validated['member_uids']);
 
-            if (array_key_exists('manager_uid', $validated)) {
-                $validated['manager_user_id'] = $this->resolveUserId($validated['manager_uid']);
-                unset($validated['manager_uid']);
+            if (array_key_exists('manager_uid', $validated) || array_key_exists('leader_uid', $validated)) {
+                $validated['manager_user_id'] = $this->resolveUserId($validated['manager_uid'] ?? $validated['leader_uid']);
             }
+            unset($validated['manager_uid'], $validated['leader_uid'], $validated['leader_name']);
 
             $team->update($validated);
 
@@ -64,7 +64,33 @@ class TeamService
 
     public function delete(string $uid): void
     {
-        $this->get($uid)->delete();
+        $team = $this->get($uid);
+
+        if ($team->members()->exists()) {
+            throw ValidationException::withMessages([
+                'team' => ['No puedes eliminar un equipo con miembros asignados'],
+            ]);
+        }
+
+        $team->delete();
+    }
+
+    public function addMember(string $uid, array $data): Team
+    {
+        $validated = Validator::make($data, [
+            'user_uid' => 'required|uuid',
+        ])->validate();
+
+        $team = $this->get($uid);
+        $team->members()->syncWithoutDetaching([$this->resolveUserId($validated['user_uid'])]);
+
+        return $team->fresh(['manager', 'members']);
+    }
+
+    public function removeMember(string $uid, string $userUid): void
+    {
+        $team = $this->get($uid);
+        $team->members()->detach($this->resolveUserId($userUid));
     }
 
     private function validate(array $data, bool $partial = false): array
@@ -73,6 +99,8 @@ class TeamService
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'description' => 'nullable|string',
             'manager_uid' => 'nullable|uuid',
+            'leader_uid' => 'nullable|uuid',
+            'leader_name' => 'nullable|string|max:255',
             'member_uids' => 'sometimes|array',
             'member_uids.*' => 'uuid',
             'is_active' => 'sometimes|boolean',

@@ -28,6 +28,13 @@ class CustomField extends Model
         'options' => 'array'
     ];
 
+    protected $appends = [
+        'label',
+        'module',
+        'required',
+        'select_options',
+    ];
+
     /*
     |--------------------------------------------------------------------------
     | RELACIONES
@@ -65,5 +72,32 @@ class CustomField extends Model
     public function hasOptions()
     {
         return !empty($this->options);
+    }
+
+    public function getLabelAttribute()
+    {
+        return $this->name;
+    }
+
+    public function getModuleAttribute()
+    {
+        return match ($this->entity_type) {
+            Account::class => 'companies',
+            Contact::class => 'contacts',
+            CrmEntity::class => 'opportunities',
+            default => $this->entity_type,
+        };
+    }
+
+    public function getRequiredAttribute(): bool
+    {
+        return (bool) ($this->options['required'] ?? false);
+    }
+
+    public function getSelectOptionsAttribute(): ?array
+    {
+        return $this->type === self::TYPE_SELECT
+            ? ($this->options['values'] ?? $this->options['options'] ?? null)
+            : null;
     }
 }

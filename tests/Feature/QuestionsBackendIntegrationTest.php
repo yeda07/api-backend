@@ -51,7 +51,7 @@ class QuestionsBackendIntegrationTest extends TestCase
 
     public function test_localization_settings_can_be_read_and_updated(): void
     {
-        $user = $this->authenticateWithPermissions([]);
+        $user = $this->authenticateWithPermissions(['settings.manage']);
         Currency::query()->create([
             'code' => 'COP',
             'name' => 'Colombian Peso',
