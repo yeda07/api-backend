@@ -459,6 +459,11 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/payments', [FinancialOperationsController::class, 'registerPayment'])->middleware('permission:finance.manage');
         Route::get('/alerts', [FinancialOperationsController::class, 'alerts'])->middleware('permission:finance.read');
         Route::post('/sync-overdue', [FinancialOperationsController::class, 'syncOverdueInvoices'])->middleware('permission:finance.manage');
+        Route::get('/credit/rules', [FinancialOperationsController::class, 'creditRules'])->middleware('permission:finance.read');
+        Route::put('/credit/rules', [FinancialOperationsController::class, 'updateCreditRules'])->middleware('permission:finance.manage');
+        Route::get('/credit/exceptions', [FinancialOperationsController::class, 'creditExceptions'])->middleware('permission:finance.read');
+        Route::post('/credit/exceptions', [FinancialOperationsController::class, 'storeCreditException'])->middleware('permission:finance.manage');
+        Route::put('/credit/exceptions/{uid}', [FinancialOperationsController::class, 'updateCreditException'])->middleware('permission:finance.manage');
         Route::get('/credit/{type}/{uid}', [FinancialOperationsController::class, 'creditSummary'])->middleware('permission:finance.read');
         Route::put('/credit/{type}/{uid}', [FinancialOperationsController::class, 'updateCreditProfile'])->middleware('permission:finance.manage');
         Route::get('/customer/{type}/{uid}/summary', [FinancialOperationsController::class, 'customerSummary'])->middleware('permission:finance.read');

@@ -118,6 +118,47 @@ class FinancialOperationsController extends Controller
         }
     }
 
+    public function creditRules()
+    {
+        return $this->successResponse($this->creditService->rules());
+    }
+
+    public function updateCreditRules(Request $request)
+    {
+        try {
+            return $this->successResponse($this->creditService->updateRules($request->all()), 200, 'Reglas de credito actualizadas');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
+    public function creditExceptions()
+    {
+        return $this->successResponse($this->creditService->exceptions());
+    }
+
+    public function storeCreditException(Request $request)
+    {
+        try {
+            return $this->successResponse($this->creditService->formatException(
+                $this->creditService->createException($request->all())
+            ), 201, 'Excepcion de credito creada');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
+    public function updateCreditException(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->creditService->formatException(
+                $this->creditService->updateException($uid, $request->all())
+            ), 200, 'Excepcion de credito actualizada');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
     public function syncOverdueInvoices()
     {
         return $this->successResponse($this->invoiceService->syncOverdue(), 200, 'Facturas vencidas sincronizadas');

@@ -2,13 +2,104 @@
 
 namespace App\Services;
 
+use App\Models\Account;
+use App\Models\Contact;
 use App\Models\CreditProfile;
+use App\Models\CreditRule;
 use App\Models\FinancialRecord;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class CreditService
 {
+    public function rules(): array
+    {
+        $rule = $this->getOrCreateRules();
+
+        return $this->formatRules($rule);
+    }
+
+    public function updateRules(array $data): array
+    {
+        $validated = Validator::make($data, [
+            'max_days' => 'required|integer|min:0',
+            'max_amount' => 'required|numeric|min:0',
+            'auto_block' => 'required|boolean',
+        ])->validate();
+
+        $rule = $this->getOrCreateRules();
+        $rule->update($validated);
+
+        return $this->formatRules($rule->fresh());
+    }
+
+    public function exceptions(): array
+    {
+        return CreditProfile::query()
+            ->with('creditable')
+            ->whereIn('creditable_type', [Account::class, Contact::class])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (CreditProfile $profile) => $this->formatException($profile))
+            ->values()
+            ->all();
+    }
+
+    public function createException(array $data): CreditProfile
+    {
+        $validated = $this->validateException($data);
+        $client = $this->resolveClient($validated['client_uid']);
+
+        $profile = $this->getOrCreateProfile($client);
+        $profile->update([
+            'credit_limit' => $validated['credit_limit'],
+            'max_days_overdue' => $validated['max_days'],
+            'auto_block' => !($validated['is_active'] ?? true),
+            'status' => ($validated['is_active'] ?? true) ? 'ok' : 'blocked',
+            'meta' => array_merge($profile->meta ?? [], [
+                'client_identifier' => $validated['client_identifier'] ?? null,
+                'is_credit_exception' => true,
+            ]),
+        ]);
+
+        return $profile->fresh('creditable');
+    }
+
+    public function updateException(string $uid, array $data): CreditProfile
+    {
+        $profile = CreditProfile::query()->where('uid', $uid)->firstOrFail();
+        $validated = $this->validateException($data, true);
+
+        if (!empty($validated['client_uid'])) {
+            $client = $this->resolveClient($validated['client_uid']);
+            $profile->creditable_type = get_class($client);
+            $profile->creditable_id = $client->getKey();
+        }
+
+        if (array_key_exists('credit_limit', $validated)) {
+            $profile->credit_limit = $validated['credit_limit'];
+        }
+
+        if (array_key_exists('max_days', $validated)) {
+            $profile->max_days_overdue = $validated['max_days'];
+        }
+
+        if (array_key_exists('is_active', $validated)) {
+            $profile->auto_block = !$validated['is_active'];
+            $profile->status = $validated['is_active'] ? 'ok' : 'blocked';
+        }
+
+        $meta = $profile->meta ?? [];
+        if (array_key_exists('client_identifier', $validated)) {
+            $meta['client_identifier'] = $validated['client_identifier'];
+        }
+        $meta['is_credit_exception'] = true;
+        $profile->meta = $meta;
+        $profile->save();
+
+        return $profile->fresh('creditable');
+    }
+
     public function summary(string $entityType, string $entityUid): array
     {
         $entity = $this->resolveEntity($entityType, $entityUid);
@@ -76,6 +167,64 @@ class CreditService
                 'status' => 'ok',
             ]
         );
+    }
+
+    private function getOrCreateRules(): CreditRule
+    {
+        return CreditRule::query()->firstOrCreate([], [
+            'max_days' => 30,
+            'max_amount' => 50000,
+            'auto_block' => true,
+        ]);
+    }
+
+    private function formatRules(CreditRule $rule): array
+    {
+        return [
+            'max_days' => (int) $rule->max_days,
+            'max_amount' => (float) $rule->max_amount,
+            'auto_block' => (bool) $rule->auto_block,
+        ];
+    }
+
+    public function formatException(CreditProfile $profile): array
+    {
+        return [
+            'uid' => $profile->uid,
+            'client_uid' => $profile->creditable_uid,
+            'client_name' => $profile->creditable?->display_name
+                ?? $profile->creditable?->name
+                ?? null,
+            'client_identifier' => $profile->meta['client_identifier'] ?? $profile->creditable?->document ?? $profile->creditable?->email,
+            'credit_limit' => (float) $profile->credit_limit,
+            'max_days' => (int) $profile->max_days_overdue,
+            'is_active' => $profile->status !== 'blocked',
+        ];
+    }
+
+    private function validateException(array $data, bool $partial = false): array
+    {
+        return Validator::make($data, [
+            'client_uid' => [$partial ? 'sometimes' : 'required', 'uuid'],
+            'client_identifier' => 'nullable|string|max:255',
+            'credit_limit' => [$partial ? 'sometimes' : 'required', 'numeric', 'min:0'],
+            'max_days' => [$partial ? 'sometimes' : 'required', 'integer', 'min:0'],
+            'is_active' => [$partial ? 'sometimes' : 'required', 'boolean'],
+        ])->validate();
+    }
+
+    private function resolveClient(string $uid)
+    {
+        $client = Account::query()->where('uid', $uid)->first()
+            ?? Contact::query()->where('uid', $uid)->first();
+
+        if (!$client) {
+            throw ValidationException::withMessages([
+                'client_uid' => ['El cliente no existe o no pertenece a este tenant'],
+            ]);
+        }
+
+        return $client;
     }
 
     private function summaryForEntity($entity): array
