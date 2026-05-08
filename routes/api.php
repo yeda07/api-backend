@@ -344,6 +344,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/my-summary', [CommissionController::class, 'mySummary'])->middleware('permission:commissions.read');
         Route::get('/dashboard/{userUid}', [CommissionController::class, 'dashboard'])->middleware('permission:commissions.read');
         Route::post('/simulate', [CommissionController::class, 'simulate'])->middleware('permission:commissions.read');
+        Route::get('/history/pdf', [CommissionController::class, 'historyPdf'])->middleware('permission:commissions.read');
         Route::get('/runs', [CommissionController::class, 'runs'])->middleware('permission:commissions.read');
         Route::post('/runs', [CommissionController::class, 'storeRun'])->middleware('permission:commissions.manage');
         Route::post('/runs/{uid}/approve', [CommissionController::class, 'approveRun'])->middleware('permission:commissions.manage');

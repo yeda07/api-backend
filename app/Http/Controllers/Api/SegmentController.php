@@ -13,9 +13,9 @@ class SegmentController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->segmentService->list());
+        return $this->successResponse($this->segmentService->list($request->query()));
     }
 
     public function show(string $uid)

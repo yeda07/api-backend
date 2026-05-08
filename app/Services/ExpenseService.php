@@ -51,9 +51,9 @@ class ExpenseService
         ExpenseCategory::query()->where('uid', $uid)->firstOrFail()->delete();
     }
 
-    public function suppliers()
+    public function suppliers(array $filters = [])
     {
-        return Supplier::query()->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(Supplier::query()->orderBy('name'), $filters, 'expense_suppliers_page');
     }
 
     public function costCenters()

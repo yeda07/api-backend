@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\PartnerResource;
+use App\Support\ApiIndex;
 
 class PartnerResourceRepository
 {
@@ -13,13 +14,16 @@ class PartnerResourceRepository
 
     public function all(array $filters = [])
     {
-        return $this->query()
-            ->when(!empty($filters['type']), fn ($query) => $query->where('type', $filters['type']))
-            ->when(isset($filters['is_active']) && $filters['is_active'] !== '', fn ($query) => $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOL)))
-            ->when(!empty($filters['partner_uid']), function ($query) use ($filters) {
-                $query->whereHas('partners', fn ($builder) => $builder->where('uid', $filters['partner_uid']));
-            })
-            ->get();
+        return ApiIndex::paginateOrGet(
+            $this->query()
+                ->when(!empty($filters['type']), fn ($query) => $query->where('type', $filters['type']))
+                ->when(isset($filters['is_active']) && $filters['is_active'] !== '', fn ($query) => $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOL)))
+                ->when(!empty($filters['partner_uid']), function ($query) use ($filters) {
+                    $query->whereHas('partners', fn ($builder) => $builder->where('uid', $filters['partner_uid']));
+                }),
+            $filters,
+            'partner_resources_page'
+        );
     }
 
     public function findByUid(string $uid): PartnerResource

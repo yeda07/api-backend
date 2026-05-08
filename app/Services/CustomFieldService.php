@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CustomField;
 use App\Models\CustomFieldValue;
+use App\Support\ApiIndex;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +23,7 @@ class CustomFieldService
             $query->where('entity_type', $this->resolveEntityType($filters['entity_type']));
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'custom_fields_page');
     }
 
     public function createField(array $data)

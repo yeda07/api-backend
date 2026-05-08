@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\Segment;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\Validator;
 
 class SegmentService
@@ -14,9 +15,9 @@ class SegmentService
     {
     }
 
-    public function list()
+    public function list(array $filters = [])
     {
-        return Segment::query()->latest()->get();
+        return ApiIndex::paginateOrGet(Segment::query()->latest(), $filters, 'segments_page');
     }
 
     public function get(string $uid): Segment

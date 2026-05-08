@@ -15,6 +15,8 @@ use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\ApiIndex;
+use App\Support\SimplePdf;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -27,9 +29,13 @@ class CommissionService
     {
     }
 
-    public function plans()
+    public function plans(array $filters = [])
     {
-        return CommissionPlan::query()->with('roles')->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            CommissionPlan::query()->with('roles')->orderBy('name'),
+            $filters,
+            'commission_plans_page'
+        );
     }
 
     public function getPlan(string $uid): CommissionPlan
@@ -114,7 +120,7 @@ class CommissionService
             $query->where('active', filter_var($filters['active'], FILTER_VALIDATE_BOOLEAN));
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'commission_assignments_page');
     }
 
     public function getAssignment(string $uid): CommissionAssignment
@@ -179,7 +185,7 @@ class CommissionService
         $this->getAssignment($uid)->delete();
     }
 
-    public function targets(?string $userUid = null)
+    public function targets(?string $userUid = null, array $filters = [])
     {
         $query = CommissionTarget::query()->with('user')->orderByDesc('period');
 
@@ -187,7 +193,7 @@ class CommissionService
             $query->where('user_id', $this->resolveUserId($userUid));
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'commission_targets_page');
     }
 
     public function getTarget(string $uid): CommissionTarget
@@ -240,9 +246,13 @@ class CommissionService
         $this->getTarget($uid)->delete();
     }
 
-    public function rules()
+    public function rules(array $filters = [])
     {
-        return CommissionRule::query()->with('product')->orderBy('name')->get();
+        return ApiIndex::paginateOrGet(
+            CommissionRule::query()->with('product')->orderBy('name'),
+            $filters,
+            'commission_rules_page'
+        );
     }
 
     public function createRule(array $data): CommissionRule
@@ -338,7 +348,7 @@ class CommissionService
         });
     }
 
-    public function entries(?string $userUid = null)
+    public function entries(?string $userUid = null, array $filters = [])
     {
         $query = CommissionEntry::query()
             ->with(['user', 'rule.product', 'quotation', 'quotationItem', 'financialRecord', 'commissionRun'])
@@ -348,7 +358,7 @@ class CommissionService
             $query->where('user_id', $this->resolveUserId($userUid));
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'commission_entries_page');
     }
 
     public function payEntry(string $uid, ?string $paidAt = null): CommissionEntry
@@ -466,7 +476,39 @@ class CommissionService
             $query->where('status', $filters['status']);
         }
 
-        return $query->get();
+        return ApiIndex::paginateOrGet($query, $filters, 'commission_runs_page');
+    }
+
+    public function historyPdf(array $filters = []): string
+    {
+        $period = $filters['period'] ?? now()->format('Y-m');
+        $start = Carbon::createFromFormat('Y-m-d', $period . '-01')->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+        $entries = CommissionEntry::query()
+            ->with(['user', 'quotation'])
+            ->whereBetween('earned_at', [$start->toDateString(), $end->toDateString()])
+            ->latest('earned_at')
+            ->get();
+
+        $lines = [
+            'Periodo: ' . $period,
+            'Comisiones: ' . $entries->count(),
+            'Base total: ' . number_format((float) $entries->sum('base_amount'), 2),
+            'Comision total: ' . number_format((float) $entries->sum('commission_amount'), 2),
+            'Generado: ' . now()->toDateTimeString(),
+            '',
+        ];
+
+        if (filter_var($filters['include_sales_detail'] ?? true, FILTER_VALIDATE_BOOLEAN)) {
+            foreach ($entries->take(30) as $entry) {
+                $lines[] = ($entry->earned_at?->toDateString() ?? '-') . ' | '
+                    . ($entry->user?->name ?? 'Usuario') . ' | '
+                    . number_format((float) $entry->base_amount, 2) . ' | '
+                    . number_format((float) $entry->commission_amount, 2);
+            }
+        }
+
+        return SimplePdf::document('Historial de Comisiones', $lines);
     }
 
     public function createRun(array $data): CommissionRun

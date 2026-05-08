@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\PartnerOpportunity;
+use App\Support\ApiIndex;
 
 class PartnerOpportunityRepository
 {
@@ -13,15 +14,18 @@ class PartnerOpportunityRepository
 
     public function all(array $filters = [])
     {
-        return $this->query()
-            ->when(!empty($filters['partner_uid']), function ($query) use ($filters) {
-                $query->whereHas('partner', fn ($builder) => $builder->where('uid', $filters['partner_uid']));
-            })
-            ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-            ->when(!empty($filters['account_uid']), function ($query) use ($filters) {
-                $query->whereHas('account', fn ($builder) => $builder->where('uid', $filters['account_uid']));
-            })
-            ->get();
+        return ApiIndex::paginateOrGet(
+            $this->query()
+                ->when(!empty($filters['partner_uid']), function ($query) use ($filters) {
+                    $query->whereHas('partner', fn ($builder) => $builder->where('uid', $filters['partner_uid']));
+                })
+                ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+                ->when(!empty($filters['account_uid']), function ($query) use ($filters) {
+                    $query->whereHas('account', fn ($builder) => $builder->where('uid', $filters['account_uid']));
+                }),
+            $filters,
+            'partner_opportunities_page'
+        );
     }
 
     public function findByUid(string $uid): PartnerOpportunity

@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
+use App\Models\Account;
+use App\Models\Contact;
+use App\Models\CrmEntity;
 use App\Models\User;
 use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
@@ -188,7 +191,22 @@ class OpportunityService
         $query->where(function ($builder) use ($search) {
             $builder
                 ->where('title', 'like', '%' . $search . '%')
-                ->orWhere('description', 'like', '%' . $search . '%');
+                ->orWhere('description', 'like', '%' . $search . '%')
+                ->orWhereHasMorph('opportunityable', [Account::class], function ($entityQuery) use ($search) {
+                    $entityQuery
+                        ->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%')
+                        ->orWhere('document', 'like', '%' . $search . '%');
+                })
+                ->orWhereHasMorph('opportunityable', [Contact::class], function ($entityQuery) use ($search) {
+                    $entityQuery
+                        ->where('first_name', 'like', '%' . $search . '%')
+                        ->orWhere('last_name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%');
+                })
+                ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($search) {
+                    $entityQuery->where('type', 'like', '%' . $search . '%');
+                });
         });
     }
 

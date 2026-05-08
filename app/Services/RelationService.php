@@ -15,14 +15,14 @@ class RelationService
         $this->repo = $repo;
     }
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->repo->all();
+        return $this->repo->all($filters);
     }
 
-    public function getAllWithEntities()
+    public function getAllWithEntities(array $filters = [])
     {
-        return $this->repo->getWithEntities();
+        return $this->repo->getWithEntities($filters);
     }
 
     public function getByEntity(string $type, string $uid)

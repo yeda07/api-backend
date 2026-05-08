@@ -13,9 +13,9 @@ class AutomationController extends Controller
     {
     }
 
-    public function rules()
+    public function rules(Request $request)
     {
-        return $this->successResponse($this->automationService->listRules());
+        return $this->successResponse($this->automationService->listRules($request->query()));
     }
 
     public function showRule(string $uid)
@@ -45,9 +45,9 @@ class AutomationController extends Controller
         return $this->successResponse($this->automationService->toggleRule($uid), 200, 'Rule toggled');
     }
 
-    public function assignmentRules()
+    public function assignmentRules(Request $request)
     {
-        return $this->successResponse($this->automationService->listAssignmentRules());
+        return $this->successResponse($this->automationService->listAssignmentRules($request->query()));
     }
 
     public function storeAssignmentRule(Request $request)

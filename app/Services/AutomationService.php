@@ -6,6 +6,7 @@ use App\Models\Activity;
 use App\Models\AutomationAssignmentRule;
 use App\Models\AutomationRule;
 use App\Models\User;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -21,9 +22,9 @@ class AutomationService
     {
     }
 
-    public function listRules()
+    public function listRules(array $filters = [])
     {
-        return AutomationRule::query()->latest()->get();
+        return ApiIndex::paginateOrGet(AutomationRule::query()->latest(), $filters, 'automation_rules_page');
     }
 
     public function getRule(string $uid): AutomationRule
@@ -57,9 +58,13 @@ class AutomationService
         return $rule->fresh();
     }
 
-    public function listAssignmentRules()
+    public function listAssignmentRules(array $filters = [])
     {
-        return AutomationAssignmentRule::query()->with('assignedTo')->latest()->get();
+        return ApiIndex::paginateOrGet(
+            AutomationAssignmentRule::query()->with('assignedTo')->latest(),
+            $filters,
+            'automation_assignment_rules_page'
+        );
     }
 
     public function createAssignmentRule(array $data): AutomationAssignmentRule

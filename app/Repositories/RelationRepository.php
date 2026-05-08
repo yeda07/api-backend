@@ -6,12 +6,13 @@ use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\Relation;
+use App\Support\ApiIndex;
 
 class RelationRepository
 {
-    public function all()
+    public function all(array $filters = [])
     {
-        return Relation::all();
+        return ApiIndex::paginateOrGet(Relation::query(), $filters, 'relations_page');
     }
 
     public function findByEntity(string $type, int $entityId)
@@ -54,9 +55,10 @@ class RelationRepository
         return $relation->delete();
     }
 
-    public function getWithEntities()
+    public function getWithEntities(array $filters = [])
     {
-        return Relation::all()->map(function ($rel) {
+        $result = ApiIndex::paginateOrGet(Relation::query(), $filters, 'relations_page');
+        $mapper = function ($rel) {
             $from = $this->resolveModel($rel->from_type, $rel->from_id);
             $to = $this->resolveModel($rel->to_type, $rel->to_id);
 
@@ -70,7 +72,11 @@ class RelationRepository
                 'to_uid' => $to?->uid,
                 'relation_type' => $rel->relation_type,
             ];
-        });
+        };
+
+        return method_exists($result, 'through')
+            ? $result->through($mapper)
+            : $result->map($mapper);
     }
 
     public function getHierarchy(string $type, int $entityId)

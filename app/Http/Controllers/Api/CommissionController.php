@@ -13,9 +13,9 @@ class CommissionController extends Controller
     {
     }
 
-    public function plans()
+    public function plans(Request $request)
     {
-        return $this->successResponse($this->commissionService->plans());
+        return $this->successResponse($this->commissionService->plans($request->query()));
     }
 
     public function showPlan(string $uid)
@@ -73,7 +73,7 @@ class CommissionController extends Controller
 
     public function targets(Request $request)
     {
-        return $this->successResponse($this->commissionService->targets($request->query('user_uid')));
+        return $this->successResponse($this->commissionService->targets($request->query('user_uid'), $request->query()));
     }
 
     public function showTarget(string $uid)
@@ -100,9 +100,9 @@ class CommissionController extends Controller
         }, 'Meta de comision eliminada');
     }
 
-    public function rules()
+    public function rules(Request $request)
     {
-        return $this->successResponse($this->commissionService->rules());
+        return $this->successResponse($this->commissionService->rules($request->query()));
     }
 
     public function storeRule(Request $request)
@@ -131,7 +131,7 @@ class CommissionController extends Controller
 
     public function entries(Request $request)
     {
-        return $this->successResponse($this->commissionService->entries($request->query('user_uid')));
+        return $this->successResponse($this->commissionService->entries($request->query('user_uid'), $request->query()));
     }
 
     public function payEntry(Request $request, string $uid)
@@ -157,6 +157,14 @@ class CommissionController extends Controller
     public function runs(Request $request)
     {
         return $this->successResponse($this->commissionService->runs($request->query()));
+    }
+
+    public function historyPdf(Request $request)
+    {
+        return response($this->commissionService->historyPdf($request->query()), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="commission-history.pdf"',
+        ]);
     }
 
     public function storeRun(Request $request)

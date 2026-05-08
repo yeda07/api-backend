@@ -322,7 +322,8 @@ class PurchaseOrderService
             $query->where('status', $validated['status']);
         }
 
-        $orders = $query->get()->map(function (PurchaseOrder $order) {
+        $result = ApiIndex::paginateOrGet($query, $filters, 'purchase_order_payables_page');
+        $orders = collect(method_exists($result, 'items') ? $result->items() : $result)->map(function (PurchaseOrder $order) {
             if ($order->status !== 'paid'
                 && $order->due_date
                 && now()->startOfDay()->gt($order->due_date->copy()->startOfDay())
@@ -346,6 +347,7 @@ class PurchaseOrderService
                     'outstanding_total' => round((float) $group->sum(fn (PurchaseOrder $order) => $order->outstanding_total), 2),
                 ])->values(),
             'orders' => $orders->values(),
+            'pagination' => method_exists($result, 'currentPage') ? ApiIndex::meta($result)['pagination'] : null,
         ];
     }
 

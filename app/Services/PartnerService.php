@@ -7,6 +7,7 @@ use App\Models\Partner;
 use App\Models\PartnerOpportunity;
 use App\Models\PartnerResource;
 use App\Repositories\PartnerRepository;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -30,12 +31,18 @@ class PartnerService
             unset($validated['partner_type']);
         }
 
-        $partners = $this->partnerRepository->all($validated);
+        $repositoryFilters = array_merge($filters, $validated);
+        unset($repositoryFilters['partner_type']);
+
+        $partners = $this->partnerRepository->all($repositoryFilters);
 
         if (($validated['with'] ?? null) === 'stats') {
+            $partnersPayload = method_exists($partners, 'items') ? $partners->items() : $partners;
+
             return [
-                'partners' => $partners,
+                'partners' => $partnersPayload,
                 'stats' => $this->stats(),
+                'pagination' => method_exists($partners, 'currentPage') ? ApiIndex::meta($partners)['pagination'] : null,
             ];
         }
 

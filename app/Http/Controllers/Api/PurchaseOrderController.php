@@ -60,7 +60,17 @@ class PurchaseOrderController extends Controller
 
     public function payables(Request $request)
     {
-        return $this->successResponse($this->purchaseOrderService->payables($request->query()));
+        $data = $this->purchaseOrderService->payables($request->query());
+        $pagination = $data['pagination'] ?? null;
+        unset($data['pagination']);
+
+        return response()->json([
+            'success' => true,
+            'message' => null,
+            'data' => $data,
+            'meta' => $pagination ? ['pagination' => $pagination] : null,
+            'errors' => null,
+        ]);
     }
 
     private function wrap(\Closure $callback, ?string $message = null, int $status = 200)

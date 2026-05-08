@@ -31,7 +31,7 @@ class PartnerOpportunityService
             $validated['status'] = 'open';
         }
 
-        return $this->partnerOpportunityRepository->all($validated);
+        return $this->partnerOpportunityRepository->all(array_merge($filters, $validated));
     }
 
     public function createOpportunity(array $data): PartnerOpportunity

@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\Partner;
+use App\Support\ApiIndex;
 
 class PartnerRepository
 {
@@ -13,10 +14,13 @@ class PartnerRepository
 
     public function all(array $filters = [])
     {
-        return $this->query()
-            ->when(!empty($filters['type']), fn ($query) => $query->where('type', $filters['type']))
-            ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-            ->get();
+        return ApiIndex::paginateOrGet(
+            $this->query()
+                ->when(!empty($filters['type']), fn ($query) => $query->where('type', $filters['type']))
+                ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status'])),
+            $filters,
+            'partners_page'
+        );
     }
 
     public function findByUid(string $uid): Partner

@@ -597,7 +597,7 @@ class InventoryService
         ];
     }
 
-    public function movements(array $filters): array
+    public function movements(array $filters)
     {
         $validated = Validator::make($filters, [
             'product_uid' => 'nullable|uuid',
@@ -610,7 +610,7 @@ class InventoryService
         $productId = !empty($validated['product_uid']) ? $this->getProductByUid($validated['product_uid'])->getKey() : null;
         $warehouseId = !empty($validated['warehouse_uid']) ? $this->getWarehouseByUid($validated['warehouse_uid'])->getKey() : null;
 
-        $movements = InventoryMovement::query()
+        $query = InventoryMovement::query()
             ->with(['product', 'fromWarehouse', 'toWarehouse', 'performedBy'])
             ->when($productId, fn ($query) => $query->where('product_id', $productId))
             ->when($warehouseId, function ($query) use ($warehouseId) {
@@ -622,13 +622,9 @@ class InventoryService
             ->when(!empty($validated['reference_type']), fn ($query) => $query->where('reference_type', $validated['reference_type']))
             ->when(!empty($validated['reference_uid']), fn ($query) => $query->where('reference_uid', $validated['reference_uid']))
             ->when(!empty($validated['type']), fn ($query) => $query->where('type', $validated['type']))
-            ->latest()
-            ->get();
+            ->latest();
 
-        return [
-            'filters' => $validated,
-            'data' => $movements,
-        ];
+        return ApiIndex::paginateOrGet($query, $filters, 'inventory_movements_page');
     }
 
     public function movementsSummary(array $filters = []): array

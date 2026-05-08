@@ -3,6 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\InventoryProduct;
+use App\Models\Account;
+use App\Models\CommissionEntry;
+use App\Models\Opportunity;
+use App\Models\OpportunityStage;
 use App\Models\Partner;
 use App\Models\Permission;
 use App\Models\Product;
@@ -129,6 +133,29 @@ class BackendAuditIntegrationTest extends TestCase
         $user = $this->tenantUser($tenant, ['opportunities.read', 'partners.read']);
         Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
 
+        $account = Account::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'owner_user_id' => $user->getKey(),
+            'name' => 'Empresa Buscada',
+            'document' => 'AUDIT-SEARCH-' . uniqid(),
+        ]);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Leads',
+            'key' => 'leads-audit',
+            'position' => 1,
+            'is_active' => true,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'opportunityable_type' => Account::class,
+            'opportunityable_id' => $account->getKey(),
+            'title' => 'Renovacion anual',
+            'amount' => 1000,
+        ]);
+
         Partner::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Distribuidor Norte',
@@ -136,14 +163,79 @@ class BackendAuditIntegrationTest extends TestCase
             'status' => 'active',
         ]);
 
-        $this->getJson('/api/opportunities/board?search=empresa')
+        $this->getJson('/api/opportunities/board?search=Buscada')
             ->assertOk()
-            ->assertJsonStructure(['data' => ['stages']]);
+            ->assertJsonPath('data.stages.0.items.0.uid', $opportunity->uid);
 
         $this->getJson('/api/partners?with=stats')
             ->assertOk()
             ->assertJsonPath('data.stats.total_partners', 1)
             ->assertJsonPath('data.stats.active_partners', 1);
+    }
+
+    public function test_commission_history_pdf_and_paginated_audit_endpoints_are_available(): void
+    {
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Audit Pagination',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $user = $this->tenantUser($tenant, [
+            'commissions.read',
+            'partners.read',
+            'partners.opportunities.read',
+            'partners.resources.read',
+            'opportunities.read',
+            'inventory.read',
+            'purchases.read',
+            'segments.read',
+            'automation.read',
+            'custom-fields.manage',
+            'finance.read',
+            'expenses.read',
+            'relations.read',
+        ]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        CommissionEntry::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'user_id' => $user->getKey(),
+            'base_amount' => 1000,
+            'rate_percent' => 10,
+            'commission_amount' => 100,
+            'status' => 'earned',
+            'earned_at' => now()->toDateString(),
+        ]);
+
+        $this->get('/api/commissions/history/pdf?period=' . now()->format('Y-m'))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        foreach ([
+            '/api/commissions/entries?per_page=1',
+            '/api/commissions/runs?per_page=1',
+            '/api/commissions/plans?per_page=1',
+            '/api/commissions/rules?per_page=1',
+            '/api/commissions/targets?per_page=1',
+            '/api/partners?per_page=1',
+            '/api/partners/opportunities?per_page=1',
+            '/api/partner-resources?per_page=1',
+            '/api/inventory/movements?per_page=1',
+            '/api/purchases/payables?per_page=1',
+            '/api/segments?per_page=1',
+            '/api/automation/rules?per_page=1',
+            '/api/automation/assignment-rules?per_page=1',
+            '/api/currency/rates?per_page=1',
+            '/api/custom-fields?per_page=1',
+            '/api/expenses/suppliers?per_page=1',
+            '/api/relations?per_page=1',
+            '/api/relations/with-entities?per_page=1',
+        ] as $endpoint) {
+            $response = $this->getJson($endpoint);
+            $response->assertOk();
+
+            $this->assertIsArray($response->json('meta.pagination'), 'Missing pagination meta for ' . $endpoint);
+        }
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User

@@ -36,9 +36,9 @@ class ExpenseController extends Controller
         }, 'Categoria de gasto eliminada');
     }
 
-    public function suppliers()
+    public function suppliers(Request $request)
     {
-        return $this->successResponse($this->expenseService->suppliers());
+        return $this->successResponse($this->expenseService->suppliers($request->query()));
     }
 
     public function costCenters()

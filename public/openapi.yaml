@@ -1084,6 +1084,36 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /commissions/history/pdf:
+    get:
+      description: >-
+        Requiere permiso commissions.read. Genera un PDF con el historial de comisiones.
+      tags: [Commissions]
+      summary: 'Exportar PDF - commissions/history/pdf'
+      parameters:
+        - in: query
+          name: period
+          required: false
+          schema:
+            type: string
+            example: '2026-05'
+        - in: query
+          name: include_sales_detail
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: PDF generado
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /commissions/plans/{uid}:
     put:
       description: >-
@@ -3964,9 +3994,15 @@ paths:
   /opportunities/board:
     get:
       description: >-
-        Requiere permiso opportunities.read.
+        Requiere permiso opportunities.read. El parametro search busca por oportunidad y por cliente relacionado.
       tags: [Opportunities]
       summary: 'Consultar tablero - opportunities/board'
+      parameters:
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: Operacion exitosa

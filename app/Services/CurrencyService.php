@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Currency;
 use App\Models\ExchangeRate;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -22,14 +23,18 @@ class CurrencyService
         $from = strtoupper($validated['from_currency'] ?? $validated['from'] ?? 'USD');
         $to = strtoupper($validated['to_currency'] ?? $validated['to'] ?? '');
 
-        return ExchangeRate::query()
+        $query = ExchangeRate::query()
             ->when($from, fn ($query) => $query->where('from_currency', $from))
             ->when($to !== '', fn ($query) => $query->where('to_currency', $to))
             ->when(!empty($validated['rate_date']), fn ($query) => $query->whereDate('rate_date', $validated['rate_date']))
-            ->orderByDesc('rate_date')
-            ->get()
-            ->map(fn (ExchangeRate $rate) => $this->formatRate($rate))
-            ->values();
+            ->orderByDesc('rate_date');
+
+        $result = ApiIndex::paginateOrGet($query, $filters, 'currency_rates_page');
+        $mapper = fn (ExchangeRate $rate) => $this->formatRate($rate);
+
+        return method_exists($result, 'through')
+            ? $result->through($mapper)
+            : $result->map($mapper)->values();
     }
 
     public function upsertRate(array $data): ExchangeRate

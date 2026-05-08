@@ -3346,6 +3346,20 @@ Permiso: `commissions.read`.
 Filtro opcional:
 
 - `user_uid`
+- `per_page`
+- `page`
+
+### `GET /api/commissions/history/pdf`
+
+Auth requerida.
+Permiso: `commissions.read`.
+
+Genera un PDF real con el historial de comisiones del periodo solicitado.
+
+Filtros opcionales:
+
+- `period` en formato `YYYY-MM`
+- `include_sales_detail`
 
 ### `POST /api/commissions/financial-records`
 
@@ -3370,6 +3384,8 @@ Filtros opcionales:
 
 - `user_uid`
 - `status`
+- `per_page`
+- `page`
 
 ### `POST /api/commissions/runs`
 
@@ -3412,6 +3428,7 @@ Marca la liquidacion como `paid` y sincroniza sus entradas asociadas.
 - [x] dashboard por vendedor
 - [x] entradas de comision desde recaudos
 - [x] historial de comisiones
+- [x] exportacion PDF de historial
 - [x] liquidaciones con estados `pending`, `approved`, `paid`
 - [x] compatibilidad con reglas historicas
 
@@ -4009,6 +4026,7 @@ Capacidades:
 
 - etapas por tenant
 - board por etapa
+- busqueda del board por titulo, descripcion y cliente relacionado en cuenta/contacto
 - resumen agregado del pipeline
 - oportunidades ligadas a cuentas, contactos o entidades CRM
 

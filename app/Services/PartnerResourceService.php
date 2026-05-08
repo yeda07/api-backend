@@ -27,7 +27,7 @@ class PartnerResourceService
             'is_active' => 'nullable',
         ])->validate();
 
-        return $this->partnerResourceRepository->all($validated);
+        return $this->partnerResourceRepository->all(array_merge($filters, $validated));
     }
 
     public function uploadResource(array $data, UploadedFile $file): PartnerResource
