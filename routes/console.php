@@ -73,44 +73,74 @@ Artisan::command('admin-alerts:evaluate', function () {
     return 0;
 })->purpose('Evaluate active platform telemetry alert rules');
 
-Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--password=} {--regenerate-password}', function (string $email) {
+Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--password=} {--regenerate-password} {--reset-2fa}', function (string $email) {
     $name = (string) $this->option('name');
-    $password = $this->option('password');
+    $providedPassword = $this->option('password');
+    $password = $providedPassword;
     $regeneratePassword = (bool) $this->option('regenerate-password');
+    $resetTwoFactor = (bool) $this->option('reset-2fa');
     $shouldShowPassword = false;
 
     if (!$password) {
         $password = \Illuminate\Support\Str::random(16);
     }
 
-    $user = User::withoutGlobalScopes()->where('email', $email)->first();
+    if (strlen((string) $password) < 12) {
+        $this->error('La password del superadmin debe tener al menos 12 caracteres.');
+        return 1;
+    }
 
-    if ($user && !$regeneratePassword) {
+    $user = User::withoutGlobalScopes()->where('email', $email)->first();
+    $shouldUpdatePassword = !$user || $regeneratePassword || filled($providedPassword);
+
+    if ($user && !$shouldUpdatePassword) {
         $this->warn('El usuario ya existe. Se mantuvo su password actual.');
     }
 
-    if (!$user || $regeneratePassword || $this->option('password')) {
+    if ($shouldUpdatePassword) {
         $shouldShowPassword = true;
+    }
+
+    $payload = [
+        'name' => $name,
+        'password' => $shouldUpdatePassword ? Hash::make($password) : $user->password,
+        'tenant_id' => null,
+        'is_platform_admin' => true,
+    ];
+
+    if ($resetTwoFactor) {
+        $payload = array_merge($payload, [
+            'two_factor_secret' => null,
+            'two_factor_confirmed_at' => null,
+            'two_factor_recovery_codes' => null,
+            'failed_login_attempts' => 0,
+            'locked_until' => null,
+        ]);
     }
 
     $user = User::withoutGlobalScopes()->updateOrCreate(
         ['email' => $email],
-        [
-            'name' => $name,
-            'password' => $user && !$regeneratePassword ? $user->password : Hash::make($password),
-            'tenant_id' => null,
-            'is_platform_admin' => true,
-        ]
+        $payload
     );
 
-    $permission = Permission::query()->where('key', 'plans.manage')->first();
+    $permissions = Permission::query()
+        ->whereIn('key', [
+            'plans.manage',
+            'admin.dashboard.read',
+            'admin.tenants.manage',
+            'admin.billing.manage',
+            'admin.telemetry.read',
+            'admin.alerts.manage',
+            'users.manage',
+        ])
+        ->get();
 
-    if (!$permission) {
-        $this->error('No existe el permiso plans.manage. Ejecuta primero los seeders de permisos.');
+    if ($permissions->isEmpty()) {
+        $this->error('No existen permisos administrativos. Ejecuta primero los seeders de permisos.');
         return 1;
     }
 
-    $user->givePermissionTo($permission);
+    $permissions->each(fn (Permission $permission) => $user->givePermissionTo($permission));
 
     $this->info('Superadmin global listo.');
     $this->line('Email: ' . $user->email);
@@ -118,6 +148,11 @@ Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--pass
     $this->line('UID: ' . $user->uid);
     $this->line('is_platform_admin: true');
     $this->line('tenant_id: null');
+    $this->line('Permisos admin sincronizados: ' . $permissions->pluck('key')->implode(', '));
+
+    if ($resetTwoFactor) {
+        $this->line('2FA reseteado: si');
+    }
 
     if ($shouldShowPassword) {
         $this->line('Password temporal: ' . $password);
