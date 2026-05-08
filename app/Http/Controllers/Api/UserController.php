@@ -65,6 +65,9 @@ class UserController extends Controller
                 'name' => 'sometimes|string|max:255',
                 'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($currentUser->id)],
                 'password' => 'sometimes|string|min:6',
+                'is_active' => 'sometimes|boolean',
+                'active' => 'sometimes|boolean',
+                'status' => 'sometimes|string|in:ACTIVO,INACTIVO,active,inactive',
             ]);
 
             return $this->successResponse(

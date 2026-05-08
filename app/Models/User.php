@@ -43,6 +43,8 @@ class User extends Authenticatable
     protected $appends = [
         'tenant_uid',
         'manager_uid',
+        'is_active',
+        'status',
     ];
 
     protected $casts = [
@@ -87,6 +89,16 @@ class User extends Authenticatable
     public function getManagerUidAttribute()
     {
         return $this->manager?->uid;
+    }
+
+    public function getIsActiveAttribute(): bool
+    {
+        return !$this->isLocked();
+    }
+
+    public function getStatusAttribute(): string
+    {
+        return $this->is_active ? 'ACTIVO' : 'INACTIVO';
     }
 
     public function isLocked(): bool

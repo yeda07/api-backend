@@ -63,6 +63,21 @@ class UserRepository
             $data['password'] = Hash::make($data['password']);
         }
 
+        if (array_key_exists('status', $data)) {
+            $data['is_active'] = in_array($data['status'], ['ACTIVO', 'active'], true);
+            unset($data['status']);
+        }
+
+        if (array_key_exists('active', $data)) {
+            $data['is_active'] = (bool) $data['active'];
+            unset($data['active']);
+        }
+
+        if (array_key_exists('is_active', $data)) {
+            $data['locked_until'] = $data['is_active'] ? null : now()->addYears(100);
+            unset($data['is_active']);
+        }
+
         $user->update($data);
 
         return $user->fresh(['roles', 'permissions']);

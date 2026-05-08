@@ -786,6 +786,22 @@ Permite actualizar:
 - `name`
 - `email`
 - `password`
+- `is_active`
+- `active`
+- `status`
+
+Para activar/desactivar usuarios desde Settings:
+
+```json
+{
+  "is_active": false
+}
+```
+
+La respuesta incluye:
+
+- `is_active`: `true` o `false`
+- `status`: `ACTIVO` o `INACTIVO`
 
 ### `DELETE /api/users/{uid}`
 
@@ -1632,17 +1648,23 @@ Payload:
 {
   "name": "VIP",
   "key": "vip",
-  "color": "#FFD700",
-  "category": "segment"
+  "color": "green",
+  "category": "segment",
+  "entity_types": ["CONTACT", "COMPANY"]
 }
 ```
+
+Notas:
+
+- `color` acepta nombres (`green`, `blue`, `red`, etc.) o hex. El backend normaliza nombres a hex.
+- `entity_types` es opcional y acepta `CONTACT`, `COMPANY`, `LEAD`, `DEAL`.
 
 ### `PUT /api/tags/{uid}`
 
 Auth requerida.
 Permiso: `tags.manage`.
 
-Permite actualizar `name`, `key`, `color` y `category`.
+Permite actualizar `name`, `key`, `color`, `category` y `entity_types`.
 
 ### `DELETE /api/tags/{uid}`
 
@@ -2810,6 +2832,67 @@ Estados soportados:
 - `ok`
 - `blocked`
 
+### `GET /api/finance/credit/rules`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Devuelve reglas globales de credito del tenant:
+
+```json
+{
+  "max_days": 30,
+  "max_amount": 50000,
+  "auto_block": true
+}
+```
+
+### `PUT /api/finance/credit/rules`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Payload:
+
+```json
+{
+  "max_days": 45,
+  "max_amount": 125000,
+  "auto_block": false
+}
+```
+
+### `GET /api/finance/credit/exceptions`
+
+Auth requerida.
+Permiso: `finance.read`.
+
+Lista excepciones de credito por cliente.
+
+### `POST /api/finance/credit/exceptions`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Payload:
+
+```json
+{
+  "client_uid": "uuid",
+  "client_identifier": "RFC-123",
+  "credit_limit": 150000,
+  "max_days": 60,
+  "is_active": true
+}
+```
+
+### `PUT /api/finance/credit/exceptions/{uid}`
+
+Auth requerida.
+Permiso: `finance.manage`.
+
+Actualiza `client_uid`, `client_identifier`, `credit_limit`, `max_days` o `is_active`.
+
 ### Tasas de Cambio
 
 ### `GET /api/currency/rates`
@@ -2817,7 +2900,16 @@ Estados soportados:
 Auth requerida.
 Permiso: `finance.read`.
 
-Lista tasas de cambio registradas.
+Lista tasas de cambio registradas. La respuesta incluye campos listos para frontend:
+
+- `code`
+- `name`
+- `rate`
+- `last_update`
+- `status`
+- `from_currency`
+- `to_currency`
+- `rate_date`
 
 ### `POST /api/currency/rates`
 
@@ -2854,6 +2946,104 @@ Payload:
   "date": "2026-04-08"
 }
 ```
+
+Tambien acepta aliases frontend:
+
+```json
+{
+  "amount": 100,
+  "from": "USD",
+  "to": "COP"
+}
+```
+
+La respuesta incluye `converted_amount`, `result`, `rate` y `rate_date`.
+
+## Reportes Unificados
+
+### `GET /api/reports/sales`
+
+Auth requerida.
+Permiso: `reports.read`.
+
+Query params opcionales:
+
+- `tab`: `status`, `products`, `distributors`, `vs`
+- `period`: `Hoy`, `Esta semana`, `Este mes`, `Este trimestre`, `Personalizado`
+- `warehouse`
+- `category`
+- `start_date`
+- `end_date`
+
+Devuelve `kpis`, `chart_data` y `table_data`.
+
+### `GET /api/reports/inventory`
+
+Auth requerida.
+Permiso: `reports.read`.
+
+Query params opcionales:
+
+- `tab`: `warehouse`, `risk`, `movements`, `category`, `b2b`
+- mismos filtros de periodo, bodega y categoria
+
+Devuelve `kpis`, `chart_data`, `table_data` y `most_critical` cuando `tab=risk`.
+
+### `GET /api/reports/filters`
+
+Auth requerida.
+Permiso: `reports.read`.
+
+Devuelve opciones de filtros:
+
+- `warehouses`
+- `categories`
+
+## Settings
+
+### `GET /api/settings/localization`
+
+Auth requerida.
+Permiso: `settings.manage`.
+
+Devuelve configuracion de localizacion del tenant:
+
+- `currency`
+- `currency_symbol`
+- `locale`
+- `timezone`
+- `date_format`
+- `language`
+- `user_timezone`
+
+### `PUT /api/settings/localization`
+
+Auth requerida.
+Permiso: `settings.manage`.
+
+Permite actualizar `currency`, `locale`, `timezone`, `date_format` y `user_timezone`.
+
+### `POST /api/teams/{uid}/members`
+
+Auth requerida.
+Permiso: `teams.manage`.
+
+Payload:
+
+```json
+{
+  "user_uid": "uuid"
+}
+```
+
+La respuesta de teams incluye `leader_uid`, `leader_name`, `members_count` y `members[]`.
+
+### `DELETE /api/teams/{uid}/members/{userUid}`
+
+Auth requerida.
+Permiso: `teams.manage`.
+
+Remueve un miembro del equipo. `DELETE /api/teams/{uid}` solo permite eliminar equipos sin miembros.
 
 ### `GET /api/finance/alerts`
 
@@ -3597,6 +3787,7 @@ Success:
 ### `POST /api/custom-fields`
 
 Auth requerida.
+Permiso: `custom-fields.manage`.
 
 Payload:
 
@@ -3639,10 +3830,37 @@ Success:
 Notas:
 
 - `entity_type` acepta aliases publicos como `account`, `contact` o `crm-entity`.
+- tambien acepta contrato frontend con `module`, `label` y `required`.
+
+### `GET /api/custom-fields`
+
+Auth requerida.
+Permiso: `custom-fields.manage`.
+
+Lista campos personalizados. Filtro opcional:
+
+- `entity_type`
+
+La respuesta incluye aliases frontend `label`, `module`, `required` y `select_options`.
+
+### `PUT /api/custom-fields/{uid}`
+
+Auth requerida.
+Permiso: `custom-fields.manage`.
+
+Permite actualizar `entity_type`, `module`, `name`, `label`, `key`, `type`, `required` y `options`.
+
+### `DELETE /api/custom-fields/{uid}`
+
+Auth requerida.
+Permiso: `custom-fields.manage`.
+
+Elimina el campo y sus valores asociados.
 
 ### `POST /api/custom-fields/value`
 
 Auth requerida.
+Permiso: `custom-fields.manage`.
 
 Payload:
 

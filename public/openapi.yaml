@@ -37,8 +37,11 @@ tags:
   - name: RBAC
   - name: Relations
   - name: Search
+  - name: Reports
+  - name: Settings
   - name: Tags
   - name: Tasks
+  - name: Teams
 paths:
   /2fa/confirm:
     post:
@@ -49,14 +52,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/CurrencyConvertRequest'
       responses:
         '200':
           description: Operacion exitosa
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CurrencyConversion'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -1908,13 +1916,42 @@ paths:
         Requiere permiso finance.read.
       tags: [Currency]
       summary: 'Listar tasas - currency/rates'
+      parameters:
+        - in: query
+          name: from_currency
+          schema:
+            type: string
+        - in: query
+          name: to_currency
+          schema:
+            type: string
+        - in: query
+          name: from
+          schema:
+            type: string
+        - in: query
+          name: to
+          schema:
+            type: string
+        - in: query
+          name: rate_date
+          schema:
+            type: string
+            format: date
       responses:
         '200':
           description: Operacion exitosa
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessEnvelope'
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CurrencyRate'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -1940,6 +1977,27 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
   /custom-fields:
+    get:
+      description: >-
+        Requiere permiso custom-fields.manage.
+      tags: [CustomFields]
+      summary: Listar campos personalizados
+      parameters:
+        - in: query
+          name: entity_type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     post:
       description: >-
         Requiere permiso custom-fields.manage.
@@ -1960,6 +2018,37 @@ paths:
                 $ref: '#/components/schemas/SuccessEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /custom-fields/{uid}:
+    put:
+      description: >-
+        Requiere permiso custom-fields.manage.
+      tags: [CustomFields]
+      summary: Actualizar campo personalizado
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomFieldRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      description: >-
+        Requiere permiso custom-fields.manage.
+      tags: [CustomFields]
+      summary: Eliminar campo personalizado
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
         '422':
           $ref: '#/components/responses/ValidationError'
   /custom-fields/value:
@@ -2814,6 +2903,90 @@ paths:
                 $ref: '#/components/schemas/SuccessEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /finance/credit/rules:
+    get:
+      tags: [Finance]
+      summary: Consultar reglas globales de credito
+      description: Requiere permiso `finance.read`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CreditRules'
+    put:
+      tags: [Finance]
+      summary: Actualizar reglas globales de credito
+      description: Requiere permiso `finance.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditRules'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /finance/credit/exceptions:
+    get:
+      tags: [Finance]
+      summary: Listar excepciones de credito
+      description: Requiere permiso `finance.read`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CreditException'
+    post:
+      tags: [Finance]
+      summary: Crear excepcion de credito
+      description: Requiere permiso `finance.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditExceptionRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /finance/credit/exceptions/{uid}:
+    put:
+      tags: [Finance]
+      summary: Actualizar excepcion de credito
+      description: Requiere permiso `finance.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditExceptionRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
         '422':
           $ref: '#/components/responses/ValidationError'
   /finance/customer/{type}/{uid}/summary:
@@ -6007,6 +6180,188 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /reports/sales:
+    get:
+      tags: [Reports]
+      summary: Reporte unificado de ventas
+      description: Requiere permiso `reports.read`.
+      parameters:
+        - in: query
+          name: tab
+          schema:
+            type: string
+            enum: [status, products, distributors, vs]
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [Hoy, Esta semana, Este mes, Este trimestre, Personalizado]
+        - in: query
+          name: warehouse
+          schema:
+            type: string
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UnifiedReport'
+  /reports/inventory:
+    get:
+      tags: [Reports]
+      summary: Reporte unificado de inventario
+      description: Requiere permiso `reports.read`.
+      parameters:
+        - in: query
+          name: tab
+          schema:
+            type: string
+            enum: [warehouse, risk, movements, category, b2b]
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [Hoy, Esta semana, Este mes, Este trimestre, Personalizado]
+        - in: query
+          name: warehouse
+          schema:
+            type: string
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UnifiedReport'
+  /reports/filters:
+    get:
+      tags: [Reports]
+      summary: Opciones de filtros para reportes
+      description: Requiere permiso `reports.read`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ReportFilters'
+  /settings/localization:
+    get:
+      tags: [Settings]
+      summary: Consultar localizacion del tenant
+      description: Requiere permiso `settings.manage`.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LocalizationSettings'
+    put:
+      tags: [Settings]
+      summary: Actualizar localizacion del tenant
+      description: Requiere permiso `settings.manage`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalizationSettingsRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /teams/{uid}/members:
+    post:
+      tags: [Teams]
+      summary: Agregar miembro a equipo
+      description: Requiere permiso `teams.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_uid]
+              properties:
+                user_uid:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /teams/{uid}/members/{userUid}:
+    delete:
+      tags: [Teams]
+      summary: Remover miembro de equipo
+      description: Requiere permiso `teams.manage`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: userUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /users:
     get:
       description: >-
@@ -6359,6 +6714,272 @@ components:
           type: string
           format: password
           example: secret123
+        is_active:
+          type: boolean
+          description: Activa o desactiva el usuario desde Settings.
+          example: true
+        active:
+          type: boolean
+          description: Alias frontend de is_active.
+          example: true
+        status:
+          type: string
+          enum: [ACTIVO, INACTIVO, active, inactive]
+          example: ACTIVO
+    CreditRules:
+      type: object
+      required: [max_days, max_amount, auto_block]
+      properties:
+        max_days:
+          type: integer
+          example: 30
+        max_amount:
+          type: number
+          format: float
+          example: 50000
+        auto_block:
+          type: boolean
+          example: true
+    CreditException:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        client_uid:
+          type: string
+          format: uuid
+        client_name:
+          type: string
+          example: Cliente ABC
+        client_identifier:
+          type: string
+          example: RFC-123
+        credit_limit:
+          type: number
+          format: float
+          example: 150000
+        max_days:
+          type: integer
+          example: 60
+        is_active:
+          type: boolean
+          example: true
+    CreditExceptionRequest:
+      type: object
+      properties:
+        client_uid:
+          type: string
+          format: uuid
+        client_identifier:
+          type: string
+          example: RFC-123
+        credit_limit:
+          type: number
+          format: float
+          example: 150000
+        max_days:
+          type: integer
+          example: 60
+        is_active:
+          type: boolean
+          example: true
+    CurrencyRate:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: COP
+        name:
+          type: string
+          example: Peso colombiano
+        rate:
+          type: number
+          format: float
+          example: 4000
+        last_update:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, outdated]
+        from_currency:
+          type: string
+          example: USD
+        to_currency:
+          type: string
+          example: COP
+        rate_date:
+          type: string
+          format: date
+    CurrencyConvertRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: float
+          example: 1000
+        from_currency:
+          type: string
+          example: USD
+        to_currency:
+          type: string
+          example: COP
+        from:
+          type: string
+          example: USD
+        to:
+          type: string
+          example: COP
+        rate_date:
+          type: string
+          format: date
+    CurrencyConversion:
+      type: object
+      properties:
+        amount:
+          type: number
+          format: float
+        from_currency:
+          type: string
+        to_currency:
+          type: string
+        rate:
+          type: number
+          format: float
+        converted_amount:
+          type: number
+          format: float
+        result:
+          type: number
+          format: float
+        rate_date:
+          type: string
+          format: date
+    CustomFieldRequest:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          example: contact
+        module:
+          type: string
+          example: contacts
+        name:
+          type: string
+          example: Codigo de Licitacion
+        label:
+          type: string
+          example: Codigo de Licitacion
+        key:
+          type: string
+          example: codigo_licitacion
+        type:
+          type: string
+          enum: [text, number, date, select, boolean]
+        required:
+          type: boolean
+          example: false
+        options:
+          type: object
+          nullable: true
+    UnifiedReport:
+      type: object
+      properties:
+        kpis:
+          type: object
+          additionalProperties: true
+        chart_data:
+          type: object
+          properties:
+            series:
+              type: array
+              items:
+                type: number
+            labels:
+              type: array
+              nullable: true
+              items:
+                type: string
+            categories:
+              type: array
+              nullable: true
+              items:
+                type: string
+        table_data:
+          type: array
+          items:
+            type: object
+        most_critical:
+          type: object
+          nullable: true
+    ReportFilters:
+      type: object
+      properties:
+        warehouses:
+          type: array
+          items:
+            $ref: '#/components/schemas/OptionItem'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/OptionItem'
+    OptionItem:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+    LocalizationSettings:
+      type: object
+      properties:
+        tenant_uid:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: COP
+        currency_symbol:
+          type: string
+          example: $
+        locale:
+          type: string
+          example: es-CO
+        timezone:
+          type: string
+          example: America/Bogota
+        date_format:
+          type: string
+          example: DD/MM/YYYY
+        language:
+          type: string
+          example: es
+        user_timezone:
+          type: string
+          nullable: true
+    LocalizationSettingsRequest:
+      type: object
+      properties:
+        currency:
+          type: string
+          example: USD
+        locale:
+          type: string
+          example: en-US
+        timezone:
+          type: string
+          example: America/Bogota
+        date_format:
+          type: string
+          example: Y-m-d
+        user_timezone:
+          type: string
+          nullable: true
     PlanRequest:
       type: object
       properties:
