@@ -6650,6 +6650,15 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Sanctum
+  parameters:
+    UidPath:
+      in: path
+      name: uid
+      required: true
+      description: Identificador publico UUID del recurso.
+      schema:
+        type: string
+        format: uuid
   responses:
     GenericSuccess:
       description: Operacion exitosa
