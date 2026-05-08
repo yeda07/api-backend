@@ -22,6 +22,15 @@ class ContactController extends Controller
         return $this->successResponse($this->service->getAll($request->query()));
     }
 
+    public function export(Request $request)
+    {
+        try {
+            return $this->service->export($request->all());
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
     public function show(string $uid)
     {
         return $this->successResponse($this->service->getByUid($uid));

@@ -19,6 +19,9 @@ class PlatformInitService
         'intelligence' => ['label' => 'Inteligencia Competitiva', 'permissions' => ['competitive-intelligence.read', 'competitive-intelligence.manage', 'competitive-intelligence.report']],
         'automation' => ['label' => 'Automatizacion', 'permissions' => ['automation.read', 'automation.create', 'automation.update', 'automation.delete', 'segments.read', 'segments.manage']],
         'settings' => ['label' => 'Configuracion', 'permissions' => ['settings.manage', 'users.manage', 'custom-fields.manage']],
+        'tasks' => ['label' => 'Tareas', 'permissions' => ['tasks.read', 'tasks.create', 'tasks.update', 'tasks.delete']],
+        'expenses' => ['label' => 'Gastos', 'permissions' => ['expenses.read', 'expenses.manage', 'expenses.report']],
+        'purchases' => ['label' => 'Compras', 'permissions' => ['purchases.read', 'purchases.manage']],
     ];
 
     private const MODULE_ITEMS = [
@@ -77,6 +80,17 @@ class PlatformInitService
         'automation' => [
             ['key' => 'rules', 'label' => 'Reglas', 'permissions' => ['automation.read', 'automation.create', 'automation.update', 'automation.delete']],
             ['key' => 'assignment', 'label' => 'Asignacion', 'permissions' => ['automation.read', 'automation.create', 'automation.update', 'automation.delete']],
+        ],
+        'tasks' => [
+            ['key' => 'tasks', 'label' => 'Tareas', 'permissions' => ['tasks.read', 'tasks.create', 'tasks.update', 'tasks.delete']],
+        ],
+        'expenses' => [
+            ['key' => 'expenses', 'label' => 'Gastos', 'permissions' => ['expenses.read', 'expenses.manage']],
+            ['key' => 'expense-report', 'label' => 'Reportes de Gastos', 'permissions' => ['expenses.report']],
+        ],
+        'purchases' => [
+            ['key' => 'orders', 'label' => 'Ordenes de Compra', 'permissions' => ['purchases.read', 'purchases.manage']],
+            ['key' => 'payables', 'label' => 'Cuentas por Pagar', 'permissions' => ['purchases.read']],
         ],
     ];
 

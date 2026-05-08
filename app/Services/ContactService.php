@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\Contact;
 use App\Repositories\ContactRepository;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -11,7 +12,7 @@ class ContactService
 {
     protected $repo;
 
-    public function __construct(ContactRepository $repo)
+    public function __construct(ContactRepository $repo, private readonly ExportService $exportService)
     {
         $this->repo = $repo;
     }
@@ -85,6 +86,51 @@ class ContactService
                 ? Account::query()->where('document', $taxId)->exists()
                 : false,
         ];
+    }
+
+    public function export(array $payload)
+    {
+        $validated = Validator::make($payload, [
+            'format' => 'required|string|in:excel,pdf,csv',
+            'fields' => 'nullable|array',
+            'fields.*' => 'string',
+            'filters' => 'nullable|array',
+        ])->validate();
+
+        $filters = $validated['filters'] ?? [];
+        $rows = Contact::query()
+            ->with('account')
+            ->when(!empty($filters['search']), function ($query) use ($filters) {
+                $search = $filters['search'];
+                $query->where(function ($builder) use ($search) {
+                    $builder
+                        ->where('first_name', 'like', '%' . $search . '%')
+                        ->orWhere('last_name', 'like', '%' . $search . '%')
+                        ->orWhere('email', 'like', '%' . $search . '%')
+                        ->orWhere('phone', 'like', '%' . $search . '%')
+                        ->orWhereHas('account', fn ($accountQuery) => $accountQuery->where('name', 'like', '%' . $search . '%'));
+                });
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(50000)
+            ->get()
+            ->map(fn (Contact $contact) => [
+                'uid' => $contact->uid,
+                'first_name' => $contact->first_name,
+                'last_name' => $contact->last_name,
+                'email' => $contact->email,
+                'phone' => $contact->phone,
+                'position' => $contact->position,
+                'account' => $contact->account?->name,
+                'created_at' => $contact->created_at?->toDateTimeString(),
+            ]);
+
+        return $this->exportService->file('contactos', $rows, [
+            'format' => $validated['format'],
+            'fields' => $validated['fields'] ?? [],
+            'filters' => $filters,
+        ]);
     }
 
     private function validate(array $data): void

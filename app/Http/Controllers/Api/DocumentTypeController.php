@@ -39,4 +39,17 @@ class DocumentTypeController extends Controller
             return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
         }
     }
+
+    public function destroy(string $uid)
+    {
+        try {
+            $this->documentTypeService->deleteType($uid);
+
+            return $this->successResponse(null, 200, 'Tipo de documento eliminado');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
 }

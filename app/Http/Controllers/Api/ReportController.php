@@ -32,8 +32,26 @@ class ReportController extends Controller
         }
     }
 
+    public function exportSales(Request $request)
+    {
+        try {
+            return $this->reportService->exportSales($request->all());
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
     public function filters()
     {
         return $this->successResponse($this->reportService->filters());
+    }
+
+    public function exportInventory(Request $request)
+    {
+        try {
+            return $this->reportService->exportInventory($request->all());
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
     }
 }

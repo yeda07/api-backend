@@ -42,4 +42,9 @@ class DocumentTypeRepository
 
         return $documentType->fresh('alertRules');
     }
+
+    public function delete(DocumentType $documentType): void
+    {
+        $documentType->delete();
+    }
 }

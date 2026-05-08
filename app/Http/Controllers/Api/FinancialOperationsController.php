@@ -68,6 +68,15 @@ class FinancialOperationsController extends Controller
         }
     }
 
+    public function exportInvoices(Request $request)
+    {
+        try {
+            return $this->invoiceService->export($request->all());
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
     public function createInvoice(Request $request)
     {
         try {

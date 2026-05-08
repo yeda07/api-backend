@@ -17,7 +17,8 @@ class InvoiceService
         private readonly InventoryService $inventoryService,
         private readonly CreditService $creditService,
         private readonly FinancialOperationsService $financialOperationsService,
-        private readonly DocumentValidationService $documentValidationService
+        private readonly DocumentValidationService $documentValidationService,
+        private readonly ExportService $exportService
     ) {
     }
 
@@ -155,6 +156,48 @@ class InvoiceService
 
             return $invoice->fresh(['quotation', 'invoiceable', 'payments']);
         });
+    }
+
+    public function export(array $payload)
+    {
+        $validated = Validator::make($payload, [
+            'format' => 'required|string|in:excel,pdf,csv',
+            'fields' => 'nullable|array',
+            'fields.*' => 'string',
+            'filters' => 'nullable|array',
+            'filters.status' => 'nullable|string|in:draft,issued,partial,paid,overdue',
+            'filters.date_from' => 'nullable|date_format:Y-m-d',
+            'filters.date_to' => 'nullable|date_format:Y-m-d',
+        ])->validate();
+
+        $filters = $validated['filters'] ?? [];
+        $rows = Invoice::query()
+            ->with(['quotation', 'invoiceable', 'payments'])
+            ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+            ->when(!empty($filters['date_from']), fn ($query) => $query->whereDate('issued_at', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn ($query) => $query->whereDate('issued_at', '<=', $filters['date_to']))
+            ->latest('issued_at')
+            ->limit(50000)
+            ->get()
+            ->map(fn (Invoice $invoice) => [
+                'uid' => $invoice->uid,
+                'invoice_number' => $invoice->invoice_number,
+                'customer' => $invoice->invoiceable?->display_name ?? $invoice->invoiceable?->name,
+                'status' => $invoice->status,
+                'currency' => $invoice->currency,
+                'subtotal' => (float) $invoice->subtotal,
+                'total' => (float) $invoice->total,
+                'paid_total' => (float) $invoice->paid_total,
+                'outstanding_total' => (float) $invoice->outstanding_total,
+                'issued_at' => $invoice->issued_at?->toDateString(),
+                'due_date' => $invoice->due_date?->toDateString(),
+            ]);
+
+        return $this->exportService->file('facturas', $rows, [
+            'format' => $validated['format'],
+            'fields' => $validated['fields'] ?? [],
+            'filters' => $filters,
+        ]);
     }
 
     public function syncOverdue(): array

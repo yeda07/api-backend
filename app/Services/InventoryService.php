@@ -17,6 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
+    public function __construct(private readonly ExportService $exportService)
+    {
+    }
+
     public function listCategories(array $filters = [])
     {
         return ApiIndex::paginateOrGet(
@@ -123,6 +127,84 @@ class InventoryService
     public function deleteProduct(string $uid): void
     {
         $this->getProductByUid($uid)->delete();
+    }
+
+    public function exportProducts(array $payload)
+    {
+        $validated = $this->validateExportPayload($payload);
+        $filters = $validated['filters'] ?? [];
+
+        $rows = InventoryProduct::query()
+            ->with(['category', 'stocks.warehouse'])
+            ->when(!empty($filters['search']), function ($query) use ($filters) {
+                $search = $filters['search'];
+                $query->where(function ($builder) use ($search) {
+                    $builder->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('sku', 'like', '%' . $search . '%');
+                });
+            })
+            ->when(!empty($filters['category_uid']), fn ($query) => $query->where('category_id', $this->resolveCategoryId($filters['category_uid']) ?: 0))
+            ->when(array_key_exists('is_active', $filters), fn ($query) => $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN)))
+            ->when(!empty($filters['warehouse_uid']), function ($query) use ($filters) {
+                $query->whereHas('stocks.warehouse', fn ($warehouseQuery) => $warehouseQuery->where('uid', $filters['warehouse_uid']));
+            })
+            ->orderBy('name')
+            ->limit(50000)
+            ->get()
+            ->map(fn (InventoryProduct $product) => [
+                'uid' => $product->uid,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'category' => $product->category?->name,
+                'cost_price' => (float) $product->cost_price,
+                'reorder_point' => (int) $product->reorder_point,
+                'is_active' => (bool) $product->is_active,
+                'physical_stock' => (int) $product->stocks->sum('physical_stock'),
+                'reserved_stock' => (int) $product->stocks->sum('reserved_stock'),
+            ]);
+
+        return $this->exportService->file('inventario-productos', $rows, [
+            'format' => $validated['format'],
+            'fields' => $validated['fields'] ?? [],
+            'filters' => $filters,
+        ]);
+    }
+
+    public function exportStock(array $payload)
+    {
+        $validated = $this->validateExportPayload($payload);
+        $filters = $validated['filters'] ?? [];
+        $masterFilters = [
+            'category_uid' => $filters['category_uid'] ?? null,
+            'warehouse_uid' => $filters['warehouse_uid'] ?? null,
+            'stock_state' => $filters['stock_status'] ?? $filters['stock_state'] ?? null,
+        ];
+
+        $rows = collect($this->master(array_filter($masterFilters, fn ($value) => $value !== null && $value !== ''))['data'])
+            ->when(!empty($filters['search']), function (Collection $rows) use ($filters) {
+                $search = strtolower((string) $filters['search']);
+
+                return $rows->filter(fn (array $row) => str_contains(strtolower($row['name'] ?? ''), $search)
+                    || str_contains(strtolower($row['sku'] ?? ''), $search));
+            })
+            ->map(fn (array $row) => [
+                'uid' => $row['uid'],
+                'sku' => $row['sku'],
+                'name' => $row['name'],
+                'category' => $row['category_name'] ?? null,
+                'stock_state' => $row['stock_state'],
+                'physical_stock' => (int) $row['stock_physical_total'],
+                'reserved_stock' => (int) $row['stock_reserved_total'],
+                'available_stock' => (int) $row['stock_available_total'],
+                'reorder_point' => (int) $row['reorder_point'],
+            ])
+            ->values();
+
+        return $this->exportService->file('inventario-stock', $rows, [
+            'format' => $validated['format'],
+            'fields' => $validated['fields'] ?? [],
+            'filters' => $filters,
+        ]);
     }
 
     public function listWarehouses(array $filters = [])
@@ -814,6 +896,16 @@ class InventoryService
             'warehouse_stocks.*.warehouse_uid' => 'required_with:warehouse_stocks|uuid',
             'warehouse_stocks.*.physical_stock' => 'required_without:warehouse_stocks.*.quantity|integer|min:0',
             'warehouse_stocks.*.quantity' => 'required_without:warehouse_stocks.*.physical_stock|integer|min:0',
+        ])->validate();
+    }
+
+    private function validateExportPayload(array $payload): array
+    {
+        return Validator::make($payload, [
+            'format' => 'required|string|in:excel,pdf,csv',
+            'fields' => 'nullable|array',
+            'fields.*' => 'string',
+            'filters' => 'nullable|array',
         ])->validate();
     }
 

@@ -168,9 +168,11 @@ class OpportunityService
             $this->applyOpportunitySearch($opportunityQuery, $validated['search']);
         }
 
-        $opportunities = $opportunityQuery->get()->groupBy('stage_id');
+        $result = ApiIndex::paginateOrGet($opportunityQuery->latest(), $filters, 'opportunities_board_page');
+        $items = collect(method_exists($result, 'items') ? $result->items() : $result);
+        $opportunities = $items->groupBy('stage_id');
 
-        return [
+        $payload = [
             'stages' => $stages->map(function (OpportunityStage $stage) use ($opportunities) {
                 $items = $opportunities->get($stage->getKey(), collect())->values();
 
@@ -184,6 +186,12 @@ class OpportunityService
                 ];
             })->values(),
         ];
+
+        if (method_exists($result, 'currentPage')) {
+            $payload['pagination'] = ApiIndex::meta($result)['pagination'];
+        }
+
+        return $payload;
     }
 
     private function applyOpportunitySearch($query, string $search): void

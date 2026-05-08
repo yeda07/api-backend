@@ -18,7 +18,8 @@ class ReportService
 {
     public function __construct(
         private readonly InventoryService $inventoryService,
-        private readonly FinancialDashboardService $financialDashboardService
+        private readonly FinancialDashboardService $financialDashboardService,
+        private readonly ExportService $exportService
     ) {
     }
 
@@ -130,6 +131,32 @@ class ReportService
         ];
     }
 
+    public function exportSales(array $payload)
+    {
+        $validated = $this->validateExportPayload($payload, ['status', 'products', 'distributors', 'vs']);
+        $filters = array_merge($validated['filters'] ?? [], ['tab' => $validated['tab'] ?? 'status']);
+        $report = $this->sales($filters);
+
+        return $this->exportService->file('reporte-ventas', $report['table_data'] ?? [], [
+            'format' => $validated['format'],
+            'fields' => $validated['fields'] ?? [],
+            'filters' => $filters,
+        ]);
+    }
+
+    public function exportInventory(array $payload)
+    {
+        $validated = $this->validateExportPayload($payload, ['warehouse', 'risk', 'movements', 'category', 'b2b']);
+        $filters = array_merge($validated['filters'] ?? [], ['tab' => $validated['tab'] ?? 'warehouse']);
+        $report = $this->inventory($filters);
+
+        return $this->exportService->file('reporte-inventario', $report['table_data'] ?? [], [
+            'format' => $validated['format'],
+            'fields' => $validated['fields'] ?? [],
+            'filters' => $filters,
+        ]);
+    }
+
     private function validateFilters(array $filters, array $tabs, string $defaultTab): array
     {
         return Validator::make($filters, [
@@ -143,6 +170,17 @@ class ReportService
             'tab' => $defaultTab,
             'period' => 'Este mes',
         ];
+    }
+
+    private function validateExportPayload(array $payload, array $tabs): array
+    {
+        return Validator::make($payload, [
+            'format' => 'required|string|in:excel,pdf,csv',
+            'fields' => 'nullable|array',
+            'fields.*' => 'string',
+            'filters' => 'nullable|array',
+            'tab' => 'nullable|string|in:' . implode(',', $tabs),
+        ])->validate();
     }
 
     private function dateRange(array $filters): array

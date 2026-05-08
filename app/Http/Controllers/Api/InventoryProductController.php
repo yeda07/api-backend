@@ -18,6 +18,15 @@ class InventoryProductController extends Controller
         return $this->successResponse($this->inventoryService->listProducts($request->query()));
     }
 
+    public function export(Request $request)
+    {
+        try {
+            return $this->inventoryService->exportProducts($request->all());
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
     public function store(Request $request)
     {
         try {

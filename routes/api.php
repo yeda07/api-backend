@@ -120,6 +120,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('contacts')->group(function () {
         Route::get('/', [ContactController::class, 'index'])->middleware('permission:contacts.read');
+        Route::post('/export', [ContactController::class, 'export'])->middleware('permission:contacts.read');
         Route::post('/check-duplicate', [ContactController::class, 'checkDuplicate'])->middleware('permission:contacts.read');
         Route::get('/{uid}', [ContactController::class, 'show'])->middleware('permission:contacts.read');
         Route::post('/', [ContactController::class, 'store'])->middleware('permission:contacts.create');
@@ -227,6 +228,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/', [DocumentTypeController::class, 'index'])->middleware('permission:documents.read');
         Route::post('/', [DocumentTypeController::class, 'store'])->middleware('permission:documents.manage');
         Route::put('/{uid}', [DocumentTypeController::class, 'update'])->middleware('permission:documents.manage');
+        Route::delete('/{uid}', [DocumentTypeController::class, 'destroy'])->middleware('permission:documents.manage');
     });
 
     Route::prefix('document-alerts')->group(function () {
@@ -249,6 +251,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/movements/transfer', [InventoryController::class, 'transfer'])->middleware('permission:inventory.manage');
         Route::get('/report', [InventoryController::class, 'report'])->middleware('permission:inventory.report');
         Route::get('/report/export', [InventoryController::class, 'exportReport'])->middleware('permission:inventory.report');
+        Route::post('/stock/export', [InventoryController::class, 'exportStock'])->middleware('permission:inventory.read');
 
         Route::prefix('categories')->group(function () {
             Route::get('/', [InventoryCategoryController::class, 'index'])->middleware('permission:inventory.read');
@@ -259,6 +262,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
         Route::prefix('products')->group(function () {
             Route::get('/', [InventoryProductController::class, 'index'])->middleware('permission:inventory.read');
+            Route::post('/export', [InventoryProductController::class, 'export'])->middleware('permission:inventory.read');
             Route::post('/', [InventoryProductController::class, 'store'])->middleware('permission:inventory.manage');
             Route::put('/{uid}', [InventoryProductController::class, 'update'])->middleware('permission:inventory.manage');
             Route::delete('/{uid}', [InventoryProductController::class, 'destroy'])->middleware('permission:inventory.manage');
@@ -457,6 +461,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/records', [FinancialOperationsController::class, 'index'])->middleware('permission:finance.read');
         Route::post('/import', [FinancialOperationsController::class, 'import'])->middleware('permission:finance.manage');
         Route::get('/invoices', [FinancialOperationsController::class, 'invoices'])->middleware('permission:finance.read');
+        Route::post('/invoices/export', [FinancialOperationsController::class, 'exportInvoices'])->middleware('permission:finance.read');
         Route::post('/invoices', [FinancialOperationsController::class, 'createInvoice'])->middleware('permission:finance.manage');
         Route::get('/payments', [FinancialOperationsController::class, 'payments'])->middleware('permission:finance.read');
         Route::post('/payments', [FinancialOperationsController::class, 'registerPayment'])->middleware('permission:finance.manage');
@@ -478,6 +483,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/rates', [CurrencyController::class, 'storeRate'])->middleware('permission:finance.manage');
         Route::post('/convert', [CurrencyController::class, 'convert'])->middleware('permission:finance.read');
     });
+
+    Route::post('/sales/finance/invoices/export', [FinancialOperationsController::class, 'exportInvoices'])->middleware('permission:finance.read');
 
     Route::prefix('payments')->group(function () {
         Route::post('/', [FinancialOperationsController::class, 'registerPayment'])->middleware('permission:finance.manage');
@@ -515,7 +522,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('reports')->group(function () {
         Route::get('/sales', [ReportController::class, 'sales'])->middleware('permission:reports.read');
+        Route::post('/sales/export', [ReportController::class, 'exportSales'])->middleware('permission:reports.read');
         Route::get('/inventory', [ReportController::class, 'inventory'])->middleware('permission:reports.read');
+        Route::post('/inventory/export', [ReportController::class, 'exportInventory'])->middleware('permission:reports.read');
         Route::get('/filters', [ReportController::class, 'filters'])->middleware('permission:reports.read');
     });
 

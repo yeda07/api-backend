@@ -7,6 +7,7 @@ use App\Repositories\AlertRuleRepository;
 use App\Repositories\DocumentTypeRepository;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class DocumentTypeService
 {
@@ -57,6 +58,19 @@ class DocumentTypeService
 
             return $updated->fresh('alertRules');
         });
+    }
+
+    public function deleteType(string $uid): void
+    {
+        $documentType = $this->documentTypeRepository->findByUid($uid);
+
+        if ($documentType->documents()->exists()) {
+            throw ValidationException::withMessages([
+                'document_type' => ['No puedes eliminar un tipo documental con documentos asociados'],
+            ]);
+        }
+
+        $this->documentTypeRepository->delete($documentType);
     }
 
     private function validate(array $data, bool $partial = false): array

@@ -142,4 +142,13 @@ class InventoryController extends Controller
             return $this->errorResponse('Validation error', 422, $e->errors());
         }
     }
+
+    public function exportStock(Request $request)
+    {
+        try {
+            return $this->inventoryService->exportStock($request->all());
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
 }
