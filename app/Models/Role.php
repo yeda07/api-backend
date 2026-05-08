@@ -28,6 +28,10 @@ class Role extends Model
         'is_system' => 'boolean',
     ];
 
+    protected $appends = [
+        'total_users',
+    ];
+
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
@@ -43,5 +47,10 @@ class Role extends Model
     {
         return $this->belongsToMany(User::class, 'role_user')
             ->withTimestamps();
+    }
+
+    public function getTotalUsersAttribute(): int
+    {
+        return (int) ($this->attributes['users_count'] ?? $this->attributes['total_usuarios'] ?? 0);
     }
 }

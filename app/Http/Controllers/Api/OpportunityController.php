@@ -91,9 +91,9 @@ class OpportunityController extends Controller
         }
     }
 
-    public function board()
+    public function board(Request $request)
     {
-        return $this->successResponse($this->opportunityService->board());
+        return $this->successResponse($this->opportunityService->board($request->query()));
     }
 
     public function summary()

@@ -41,18 +41,16 @@ class FinancialDashboardService
     public function getWeeklySales(): array
     {
         return Invoice::query()
-            ->selectRaw("strftime('%Y-%W', issued_at) as week_key, SUM(total) as total_sales")
             ->whereNotNull('issued_at')
-            ->groupBy('week_key')
-            ->orderByDesc('week_key')
-            ->limit(8)
+            ->where('issued_at', '>=', now()->subWeeks(8)->startOfWeek())
+            ->orderBy('issued_at')
             ->get()
-            ->reverse()
-            ->values()
-            ->map(fn ($row) => [
-                'week' => $row->week_key,
-                'total_sales' => round((float) $row->total_sales, 2),
+            ->groupBy(fn (Invoice $invoice) => $invoice->issued_at?->format('o-W'))
+            ->map(fn ($invoices, string $week) => [
+                'week' => $week,
+                'total_sales' => round((float) $invoices->sum('total'), 2),
             ])
+            ->values()
             ->all();
     }
 

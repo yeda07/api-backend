@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Partner;
+use App\Models\PartnerOpportunity;
+use App\Models\PartnerResource;
 use App\Repositories\PartnerRepository;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +22,7 @@ class PartnerService
             'type' => 'nullable|string|in:distributor,reseller,ally',
             'partner_type' => 'nullable|string|in:distributor,reseller,ally',
             'status' => 'nullable|string|in:active,inactive,prospect',
+            'with' => 'nullable|string',
         ])->validate();
 
         if (!empty($validated['partner_type']) && empty($validated['type'])) {
@@ -27,7 +30,28 @@ class PartnerService
             unset($validated['partner_type']);
         }
 
-        return $this->partnerRepository->all($validated);
+        $partners = $this->partnerRepository->all($validated);
+
+        if (($validated['with'] ?? null) === 'stats') {
+            return [
+                'partners' => $partners,
+                'stats' => $this->stats(),
+            ];
+        }
+
+        return $partners;
+    }
+
+    private function stats(): array
+    {
+        return [
+            'total_partners' => Partner::query()->count(),
+            'active_partners' => Partner::query()->where('status', 'active')->count(),
+            'prospect_partners' => Partner::query()->where('status', 'prospect')->count(),
+            'pending_opportunities' => PartnerOpportunity::query()->where('status', 'pending')->count(),
+            'converted_deals' => PartnerOpportunity::query()->where('status', 'won')->count(),
+            'total_materials' => PartnerResource::query()->count(),
+        ];
     }
 
     public function createPartner(array $data): Partner

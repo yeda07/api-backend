@@ -180,11 +180,16 @@ class CreditService
 
     private function formatRules(CreditRule $rule): array
     {
-        return [
+        $rules = [
             'max_days' => (int) $rule->max_days,
             'max_amount' => (float) $rule->max_amount,
             'auto_block' => (bool) $rule->auto_block,
         ];
+
+        return array_merge($rules, [
+            'rules' => [],
+            'defaults' => $rules,
+        ]);
     }
 
     public function formatException(CreditProfile $profile): array

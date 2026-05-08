@@ -21,6 +21,65 @@ class PlatformInitService
         'settings' => ['label' => 'Configuracion', 'permissions' => ['settings.manage', 'users.manage', 'custom-fields.manage']],
     ];
 
+    private const MODULE_ITEMS = [
+        'dashboard' => [
+            ['key' => 'dashboard', 'label' => 'Dashboard', 'permissions' => ['dashboard.read']],
+        ],
+        'inventory' => [
+            ['key' => 'products', 'label' => 'Productos', 'permissions' => ['inventory.read', 'products.read']],
+            ['key' => 'warehouses', 'label' => 'Bodegas', 'permissions' => ['inventory.read', 'inventory.manage']],
+            ['key' => 'stock', 'label' => 'Stock', 'permissions' => ['inventory.read', 'inventory.reserve', 'inventory.manage']],
+        ],
+        'sales' => [
+            ['key' => 'pipeline', 'label' => 'Pipeline', 'permissions' => ['opportunities.read', 'opportunities.manage']],
+            ['key' => 'finance-dashboard', 'label' => 'Dashboard Financiero', 'permissions' => ['finance.read']],
+            ['key' => 'quotations', 'label' => 'Cotizaciones', 'permissions' => ['quotations.read', 'quotations.create', 'quotations.update']],
+            ['key' => 'invoices', 'label' => 'Facturas', 'permissions' => ['finance.read', 'finance.manage']],
+            ['key' => 'credit-rules', 'label' => 'Reglas de Credito', 'permissions' => ['finance.manage']],
+            ['key' => 'multi-currency', 'label' => 'Multimoneda', 'permissions' => ['finance.read', 'finance.manage']],
+        ],
+        'reports' => [
+            ['key' => 'inventory-report', 'label' => 'Reporte Inventario', 'permissions' => ['reports.read', 'inventory.report']],
+            ['key' => 'sales-report', 'label' => 'Reporte Ventas', 'permissions' => ['reports.read']],
+        ],
+        'incentives' => [
+            ['key' => 'plans', 'label' => 'Planes', 'permissions' => ['commissions.read', 'commissions.manage']],
+            ['key' => 'assignment', 'label' => 'Asignacion', 'permissions' => ['commissions.manage']],
+            ['key' => 'dashboard', 'label' => 'Dashboard', 'permissions' => ['commissions.read']],
+            ['key' => 'simulator', 'label' => 'Simulador', 'permissions' => ['commissions.read']],
+            ['key' => 'history', 'label' => 'Historial', 'permissions' => ['commissions.read']],
+        ],
+        'projects' => [
+            ['key' => 'projects', 'label' => 'Proyectos', 'permissions' => ['projects.read', 'projects.manage']],
+        ],
+        'settings' => [
+            ['key' => 'users', 'label' => 'Usuarios', 'permissions' => ['users.manage']],
+            ['key' => 'roles', 'label' => 'Roles', 'permissions' => ['users.manage']],
+            ['key' => 'teams', 'label' => 'Equipos', 'permissions' => ['teams.read', 'teams.manage']],
+            ['key' => 'custom-fields', 'label' => 'Custom Fields', 'permissions' => ['custom-fields.manage']],
+            ['key' => 'localization', 'label' => 'Localizacion', 'permissions' => ['settings.manage']],
+            ['key' => 'tags', 'label' => 'Tags', 'permissions' => ['tags.manage']],
+        ],
+        'crm' => [
+            ['key' => 'contacts', 'label' => 'Directorio', 'permissions' => ['accounts.read', 'contacts.read', 'crm-entities.read']],
+            ['key' => 'segments', 'label' => 'Segmentacion', 'permissions' => ['segments.read', 'segments.manage']],
+            ['key' => 'schedule', 'label' => 'Agenda', 'permissions' => ['activities.read']],
+        ],
+        'partners' => [
+            ['key' => 'partners', 'label' => 'Partners', 'permissions' => ['partners.read', 'partners.manage']],
+            ['key' => 'opportunities', 'label' => 'Oportunidades', 'permissions' => ['partners.opportunities.read', 'partners.opportunities.manage']],
+            ['key' => 'portal', 'label' => 'Portal', 'permissions' => ['partners.resources.read', 'partners.resources.manage']],
+        ],
+        'intelligence' => [
+            ['key' => 'battlecards', 'label' => 'Battlecards', 'permissions' => ['competitive-intelligence.read', 'competitive-intelligence.manage']],
+            ['key' => 'lost-reasons', 'label' => 'Razones de Perdida', 'permissions' => ['competitive-intelligence.read', 'competitive-intelligence.report']],
+        ],
+        'automation' => [
+            ['key' => 'rules', 'label' => 'Reglas', 'permissions' => ['automation.read', 'automation.create', 'automation.update', 'automation.delete']],
+            ['key' => 'assignment', 'label' => 'Asignacion', 'permissions' => ['automation.read', 'automation.create', 'automation.update', 'automation.delete']],
+        ],
+    ];
+
     public function init(User $user): array
     {
         $user->loadMissing(['tenant.plan', 'tenant.currency', 'roles', 'permissions']);
@@ -33,6 +92,7 @@ class PlatformInitService
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $role,
+                'is_platform_admin' => (bool) $user->is_platform_admin,
                 'avatar_url' => null,
             ],
             'tenant' => [
@@ -79,6 +139,30 @@ class PlatformInitService
                     'label' => $module['label'],
                     'enabled' => !empty($actions),
                     'permissions' => $actions,
+                    'items' => $this->moduleItems($key, $effectivePermissionKeys),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function moduleItems(string $moduleKey, array $effectivePermissionKeys): array
+    {
+        return collect(self::MODULE_ITEMS[$moduleKey] ?? [])
+            ->map(function (array $item) use ($effectivePermissionKeys) {
+                $matchedPermissions = collect($item['permissions'])
+                    ->filter(fn (string $permission) => in_array($permission, $effectivePermissionKeys, true))
+                    ->values();
+
+                return [
+                    'key' => $item['key'],
+                    'label' => $item['label'],
+                    'enabled' => $matchedPermissions->isNotEmpty(),
+                    'permissions' => $matchedPermissions
+                        ->map(fn (string $permission) => str($permission)->afterLast('.')->toString())
+                        ->unique()
+                        ->values()
+                        ->all(),
                 ];
             })
             ->values()

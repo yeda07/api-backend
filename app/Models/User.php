@@ -43,6 +43,8 @@ class User extends Authenticatable
     protected $appends = [
         'tenant_uid',
         'manager_uid',
+        'role_uid',
+        'role_name',
         'is_active',
         'status',
     ];
@@ -89,6 +91,16 @@ class User extends Authenticatable
     public function getManagerUidAttribute()
     {
         return $this->manager?->uid;
+    }
+
+    public function getRoleUidAttribute()
+    {
+        return $this->roles->first()?->uid;
+    }
+
+    public function getRoleNameAttribute()
+    {
+        return $this->roles->first()?->name;
     }
 
     public function getIsActiveAttribute(): bool

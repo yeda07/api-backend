@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tag;
 use App\Support\ApiIndex;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TagService
@@ -19,6 +20,7 @@ class TagService
 
     public function create(array $data): Tag
     {
+        $data['key'] = $data['key'] ?? Str::slug($data['name']);
         $this->ensureUniqueKey($data['key']);
 
         return Tag::query()->create([
@@ -33,6 +35,7 @@ class TagService
     public function update(string $uid, array $data): Tag
     {
         $tag = $this->findTag($uid);
+        $data['key'] = $data['key'] ?? (isset($data['name']) ? Str::slug($data['name']) : $tag->key);
 
         if (isset($data['key']) && $data['key'] !== $tag->key) {
             $this->ensureUniqueKey($data['key'], $tag->getKey());

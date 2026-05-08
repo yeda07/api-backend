@@ -29,6 +29,17 @@ class Tag extends Model
         'entity_types' => 'array',
     ];
 
+    public function getEntityTypesAttribute($value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $decoded = is_array($value) ? $value : json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
     public function accounts()
     {
         return $this->morphedByMany(Account::class, 'taggable')->withTimestamps();

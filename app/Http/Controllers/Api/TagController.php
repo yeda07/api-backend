@@ -23,7 +23,7 @@ class TagController extends Controller
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'key' => 'required|string|max:100',
+                'key' => 'sometimes|nullable|string|max:100',
                 'color' => 'required|string|max:20',
                 'category' => 'nullable|string|max:100',
                 'entity_types' => 'nullable|array',
@@ -43,7 +43,7 @@ class TagController extends Controller
         try {
             $validated = $request->validate([
                 'name' => 'sometimes|string|max:255',
-                'key' => 'sometimes|string|max:100',
+                'key' => 'sometimes|nullable|string|max:100',
                 'color' => 'sometimes|string|max:20',
                 'category' => 'sometimes|string|max:100',
                 'entity_types' => 'nullable|array',

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\User;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -54,9 +55,10 @@ class OpportunityService
         $validated = Validator::make($filters, [
             'stage_uid' => 'nullable|uuid',
             'owner_user_uid' => 'nullable|uuid',
+            'search' => 'nullable|string|max:255',
         ])->validate();
 
-        return Opportunity::query()
+        $query = Opportunity::query()
             ->with(['stage', 'owner', 'opportunityable'])
             ->when(!empty($validated['stage_uid']), function ($query) use ($validated) {
                 $stageId = OpportunityStage::query()->where('uid', $validated['stage_uid'])->value('id');
@@ -66,8 +68,10 @@ class OpportunityService
                 $ownerId = User::query()->where('uid', $validated['owner_user_uid'])->value('id');
                 $query->where('owner_user_id', $ownerId ?: 0);
             })
-            ->orderByDesc('created_at')
-            ->get();
+            ->when(!empty($validated['search']), fn ($query) => $this->applyOpportunitySearch($query, $validated['search']))
+            ->orderByDesc('created_at');
+
+        return ApiIndex::paginateOrGet($query, $filters, 'opportunities_page');
     }
 
     public function createOpportunity(array $data): Opportunity
@@ -148,10 +152,20 @@ class OpportunityService
         Opportunity::query()->where('uid', $uid)->firstOrFail()->delete();
     }
 
-    public function board(): array
+    public function board(array $filters = []): array
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
         $stages = OpportunityStage::query()->orderBy('position')->get();
-        $opportunities = Opportunity::query()->with(['stage', 'owner', 'opportunityable'])->get()->groupBy('stage_id');
+        $opportunityQuery = Opportunity::query()->with(['stage', 'owner', 'opportunityable']);
+
+        if (!empty($validated['search'])) {
+            $this->applyOpportunitySearch($opportunityQuery, $validated['search']);
+        }
+
+        $opportunities = $opportunityQuery->get()->groupBy('stage_id');
 
         return [
             'stages' => $stages->map(function (OpportunityStage $stage) use ($opportunities) {
@@ -167,6 +181,15 @@ class OpportunityService
                 ];
             })->values(),
         ];
+    }
+
+    private function applyOpportunitySearch($query, string $search): void
+    {
+        $query->where(function ($builder) use ($search) {
+            $builder
+                ->where('title', 'like', '%' . $search . '%')
+                ->orWhere('description', 'like', '%' . $search . '%');
+        });
     }
 
     public function summary(): array
