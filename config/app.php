@@ -47,6 +47,7 @@ return [
         Illuminate\Pagination\PaginationServiceProvider::class,
         Illuminate\Pipeline\PipelineServiceProvider::class,
         Illuminate\Queue\QueueServiceProvider::class,
+        Illuminate\Redis\RedisServiceProvider::class,
         Illuminate\Session\SessionServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
         Illuminate\Filesystem\FilesystemServiceProvider::class,

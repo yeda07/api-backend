@@ -14,7 +14,6 @@ services:
         condition: service_healthy
     volumes:
       - app_storage:/var/www/html/storage
-      - app_cache:/var/www/html/bootstrap/cache
     networks:
       - app-internal
       - traefik-proxy
@@ -32,7 +31,6 @@ services:
         condition: service_healthy
     volumes:
       - app_storage:/var/www/html/storage
-      - app_cache:/var/www/html/bootstrap/cache
     networks:
       - app-internal
 
@@ -49,7 +47,6 @@ services:
         condition: service_healthy
     volumes:
       - app_storage:/var/www/html/storage
-      - app_cache:/var/www/html/bootstrap/cache
     networks:
       - app-internal
 
@@ -99,7 +96,6 @@ services:
 
 volumes:
   app_storage:
-  app_cache:
   postgres_data:
   redis_data:
 
