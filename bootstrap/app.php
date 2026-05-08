@@ -34,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.token' => \App\Http\Middleware\EnsureTenantTokenAccess::class,
             'full.access' => \App\Http\Middleware\EnsureFullAccessToken::class,
             'platform.admin' => \App\Http\Middleware\EnsurePlatformAdminAccess::class,
+            'docs.auth' => \App\Http\Middleware\ProtectApiDocs::class,
         ]);
     })
 
