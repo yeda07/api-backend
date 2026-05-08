@@ -1,7 +1,7 @@
-FROM php:8.4-cli
+FROM php:8.4-fpm
 
 RUN apt-get update && apt-get install -y \
-    git unzip libpq-dev \
+    git nginx supervisor unzip libpq-dev \
     && docker-php-ext-install pdo pdo_pgsql \
     && pecl install redis \
     && docker-php-ext-enable redis \
@@ -9,14 +9,18 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-WORKDIR /app
+WORKDIR /var/www/html
 
 COPY composer.json composer.lock ./
 COPY . .
 
 RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-RUN chmod +x /app/docker/render-start.sh
+RUN mkdir -p /run/nginx /var/log/supervisor \
+    && cp docker/nginx.conf /etc/nginx/sites-available/default \
+    && cp docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf \
+    && chmod +x docker/start.sh \
+    && chown -R www-data:www-data storage bootstrap/cache
 
-EXPOSE 10000
+EXPOSE 8080
 
-CMD ["sh", "/app/docker/render-start.sh"]
+CMD ["sh", "docker/start.sh"]

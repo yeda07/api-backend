@@ -18,7 +18,11 @@ class PlatformSuperadminSeeder extends Seeder
         }
 
         $name = env('SUPERADMIN_NAME', 'Platform Superadmin');
-        $password = env('SUPERADMIN_PASSWORD', 'secret123');
+        $password = env('SUPERADMIN_PASSWORD');
+
+        if (!$password || strlen($password) < 12) {
+            throw new \RuntimeException('SUPERADMIN_PASSWORD es obligatorio y debe tener al menos 12 caracteres.');
+        }
 
         $user = User::withoutGlobalScopes()->updateOrCreate(
             ['email' => $email],

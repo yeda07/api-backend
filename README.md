@@ -426,7 +426,7 @@ Payload:
 ```json
 {
   "email": "admin@empresa.com",
-  "password": "secret123"
+  "password": "********"
 }
 ```
 
@@ -767,7 +767,7 @@ Payload:
 {
   "name": "Ana Gomez",
   "email": "ana@empresa.com",
-  "password": "secret123"
+  "password": "********"
 }
 ```
 
@@ -4115,19 +4115,44 @@ Notas:
 - en testing/local se puede aislar el root documental
 - la nota anterior de `filesystems.default` queda superada por `DOCUMENTS_DISK`
 
-### Render
+### VPS vende-mas.com.co
 
-Configuracion recomendada para Render:
+El despliegue productivo actual esta preparado para servidor propio, no Render.
+
+Servidor objetivo:
+
+- dominio: `http://vende-mas.com.co`
+- IP: `167.88.44.82`
+
+Stack incluido:
+
+- `app`: Laravel con Nginx + PHP-FPM
+- `queue`: worker Redis
+- `scheduler`: scheduler de Laravel
+- `postgres`: PostgreSQL interno
+- `redis`: Redis interno
+
+Configuracion recomendada:
 
 ```env
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://tu-servicio.onrender.com
+APP_URL=http://vende-mas.com.co
 DB_CONNECTION=pgsql
-DATABASE_URL=...
-SESSION_DRIVER=file
-MAIL_MAILER=log
+DB_HOST=postgres
+DB_PORT=5432
+DB_DATABASE=vende_mas
+DB_USERNAME=vende_mas
+DB_PASSWORD=CAMBIAR_PASSWORD_FUERTE
+REDIS_HOST=redis
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+DASHBOARD_CACHE_STORE=redis
+SANCTUM_STATEFUL_DOMAINS=vende-mas.com.co,www.vende-mas.com.co,167.88.44.82
+CORS_ALLOWED_ORIGINS=http://vende-mas.com.co,http://www.vende-mas.com.co,http://167.88.44.82
 ```
+
+Guia completa: `docs/despliegue-vps-vende-mas.md`.
 
 ### SMTP Brevo para pruebas de correo
 
@@ -4153,8 +4178,8 @@ Notas:
 Checklist:
 
 - health check en `/up`
-- PostgreSQL conectado por `DATABASE_URL`
-- Redis conectado por `REDIS_URL`
+- PostgreSQL conectado por `DB_HOST=postgres`
+- Redis conectado por `REDIS_HOST=redis`
 - migraciones con `php artisan migrate --force`
 
 ## Verificacion local

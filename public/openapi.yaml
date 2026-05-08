@@ -6694,7 +6694,7 @@ components:
         password:
           type: string
           format: password
-          example: secret123
+          example: '********'
     AccountRequest:
       type: object
       required: [name]
@@ -6758,7 +6758,7 @@ components:
         password:
           type: string
           format: password
-          example: secret123
+          example: '********'
         is_active:
           type: boolean
           description: Activa o desactiva el usuario desde Settings.
