@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Mantienes lo que ya tienes
         $middleware->redirectGuestsTo(fn (Request $request) => null);
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
 
         // registrar alias del middleware SaaS
         $middleware->alias([

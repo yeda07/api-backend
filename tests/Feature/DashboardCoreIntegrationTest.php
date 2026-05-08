@@ -140,7 +140,7 @@ class DashboardCoreIntegrationTest extends TestCase
             ->assertJsonPath('data.monthly_sales.11.goal', null);
     }
 
-    public function test_activities_can_return_tenant_scope_without_pagination(): void
+    public function test_activities_without_pagination_still_respects_row_level_security(): void
     {
         $tenant = Tenant::query()->create([
             'name' => 'Acme Corporation',
@@ -166,7 +166,7 @@ class DashboardCoreIntegrationTest extends TestCase
 
         $this->getJson('/api/activities?per_page=10&paginate=false')
             ->assertOk()
-            ->assertJsonPath('data.0.uid', $activity->uid)
+            ->assertJsonCount(0, 'data')
             ->assertJsonPath('meta', null);
 
         $this->getJson('/api/activities?per_page=10')

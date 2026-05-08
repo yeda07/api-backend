@@ -25,10 +25,6 @@ class ActivityService
 
         $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
 
-        if (($filters['scope'] ?? null) === 'tenant' || $withoutPagination) {
-            $query->withoutGlobalScope('row_level_security');
-        }
-
         if ($withoutPagination) {
             $limit = min(max((int) ($filters['per_page'] ?? 25), 1), 100);
 

@@ -34,5 +34,11 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute($limit)->by($identifier);
         });
+
+        RateLimiter::for('login', function (Request $request) {
+            $email = strtolower((string) $request->input('email', 'anonymous'));
+
+            return Limit::perMinute(5)->by($email . '|' . $request->ip());
+        });
     }
 }

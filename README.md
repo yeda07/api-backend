@@ -1927,7 +1927,12 @@ Query params:
 - `per_page`
 - `page`
 - `paginate=false` para retornar array sin metadata de paginacion; si se envia `per_page`, se usa como limite
-- `scope=tenant` para retornar actividades del tenant ignorando Row-Level Security; sigue respetando `TenantScope`
+
+Notas de seguridad:
+
+- el listado siempre respeta Row-Level Security del usuario autenticado
+- `paginate=false` solo cambia el formato de respuesta; no amplia visibilidad de actividades
+- no existe bypass por query param para leer actividades de otros usuarios
 
 Success:
 

@@ -116,17 +116,17 @@ class AuthController extends Controller
             'email' => 'required|email',
         ]);
 
-        $status = Password::sendResetLink([
-            'email' => $validated['email'],
-        ]);
-
-        if ($status !== Password::RESET_LINK_SENT) {
-            return $this->errorResponse('No fue posible iniciar la recuperacion de contraseña', 422, [
-                'email' => [__($status)],
-            ]);
+        try {
+            if (app()->bound('auth.password')) {
+                Password::sendResetLink([
+                    'email' => $validated['email'],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            report($e);
         }
 
-        return $this->successResponse(null, 200, 'Enlace de recuperacion enviado');
+        return $this->successResponse(null, 200, 'Si el correo existe, enviaremos un enlace de recuperacion');
     }
 
     public function resetPassword(Request $request)
@@ -136,6 +136,12 @@ class AuthController extends Controller
             'token' => 'required|string',
             'password' => 'required|string|min:8|confirmed',
         ]);
+
+        if (!app()->bound('auth.password')) {
+            return $this->errorResponse('No fue posible restablecer la contraseña', 422, [
+                'token' => ['El servicio de recuperacion no esta disponible'],
+            ]);
+        }
 
         $status = Password::reset(
             $validated,
