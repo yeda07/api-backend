@@ -286,9 +286,8 @@ class AdminTenantController extends Controller
             $resetEmailSent = true;
 
             try {
-                Password::sendResetLink([
-                    'email' => $user->email,
-                ]);
+                $token = Password::broker()->createToken($user);
+                $user->sendPasswordResetNotification($token);
             } catch (\Throwable $e) {
                 $resetEmailSent = false;
 

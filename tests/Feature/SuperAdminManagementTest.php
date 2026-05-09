@@ -8,7 +8,9 @@ use App\Models\Plan;
 use App\Models\SystemLog;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -245,6 +247,29 @@ class SuperAdminManagementTest extends TestCase
             'tenant_id' => $tenant->getKey(),
             'email' => 'nuevo-admin@acme.com',
         ]);
+    }
+
+    public function test_tenant_user_creation_sends_password_reset_notification(): void
+    {
+        app()->forgetInstance('auth.password');
+        Notification::fake();
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $tenant = $this->tenantWithPlan();
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/users', [
+            'name' => 'Nuevo Owner',
+            'email' => 'nuevo-owner@acme.com',
+            'role' => 'owner',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.reset_email_sent', true);
+
+        $user = User::withoutGlobalScopes()
+            ->where('email', 'nuevo-owner@acme.com')
+            ->firstOrFail();
+
+        Notification::assertSentTo($user, ResetPassword::class);
     }
 
     public function test_superadmin_can_read_any_tenant_user_access(): void
