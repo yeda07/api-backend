@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AdminAlertRule;
 use App\Models\Invoice;
+use App\Models\OpportunityStage;
 use App\Models\Permission;
 use App\Models\Plan;
 use App\Models\Role;
@@ -507,6 +508,40 @@ class SuperAdminManagementTest extends TestCase
         $this->assertContains('activities.read', $ownerPermissions);
         $this->assertNotContains('admin.dashboard.read', $ownerPermissions);
         $this->assertNotContains('plans.manage', $ownerPermissions);
+    }
+
+    public function test_superadmin_tenant_creation_provisions_pipeline_base_stages(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $plan = Plan::query()->create([
+            'name' => 'Plan Pipeline',
+            'price' => 149,
+            'status' => 'ACTIVO',
+        ]);
+
+        $response = $this->postJson('/api/admin/tenants', [
+            'nombre' => 'Pipeline Corp',
+            'dominio' => 'pipeline.vende-mas.com.co',
+            'pais' => 'Colombia',
+            'email_contacto' => 'pipeline@example.test',
+            'plan_uid' => $plan->uid,
+            'estado' => 'ACTIVO',
+        ]);
+
+        $response->assertCreated();
+
+        $tenant = Tenant::query()
+            ->where('uid', $response->json('data.uid'))
+            ->firstOrFail();
+
+        $stages = OpportunityStage::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->orderBy('position')
+            ->pluck('name')
+            ->all();
+
+        $this->assertSame(['Leads', 'Contactado', 'Negociación', 'Cerrador'], $stages);
     }
 
     public function test_tenant_user_creation_provisions_and_assigns_owner_role(): void

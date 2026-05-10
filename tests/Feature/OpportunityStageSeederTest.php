@@ -28,7 +28,7 @@ class OpportunityStageSeederTest extends TestCase
             ->pluck('name')
             ->all();
 
-        $this->assertSame(['Leads', 'Contactado', 'Negociacion', 'Cerrador'], $stages);
+        $this->assertSame(['Leads', 'Contactado', 'Negociación', 'Cerrador'], $stages);
 
         $this->seed(OpportunityStageSeeder::class);
 

@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\OpportunityStageProvisioner;
 use App\Services\PlanPermissionService;
 use App\Services\TenantRoleProvisioner;
 use App\Support\ApiIndex;
@@ -88,7 +89,11 @@ class AdminTenantController extends Controller
         );
     }
 
-    public function store(Request $request, TenantRoleProvisioner $roleProvisioner)
+    public function store(
+        Request $request,
+        TenantRoleProvisioner $roleProvisioner,
+        OpportunityStageProvisioner $stageProvisioner
+    )
     {
         try {
             $validated = $request->validate([
@@ -113,7 +118,7 @@ class AdminTenantController extends Controller
                 ]);
             }
 
-            $tenant = DB::transaction(function () use ($validated, $plan, $roleProvisioner) {
+            $tenant = DB::transaction(function () use ($validated, $plan, $roleProvisioner, $stageProvisioner) {
                 $tenant = Tenant::query()->create([
                     'name' => $validated['nombre'],
                     'domain' => $validated['dominio'],
@@ -129,6 +134,7 @@ class AdminTenantController extends Controller
                 ]);
 
                 $roleProvisioner->provision($tenant);
+                $stageProvisioner->provision($tenant);
 
                 return $tenant;
             });
