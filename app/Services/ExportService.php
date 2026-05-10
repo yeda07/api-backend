@@ -6,8 +6,6 @@ use App\Support\SimplePdf;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use RuntimeException;
-use ZipArchive;
 
 class ExportService
 {
@@ -87,39 +85,19 @@ class ExportService
 
     private function xlsx(Collection $rows): string
     {
-        if (! class_exists(ZipArchive::class)) {
-            throw new RuntimeException('ZipArchive extension is required to generate XLSX exports.');
-        }
-
         $headers = $rows->isNotEmpty() ? array_keys($rows->first()) : ['message'];
         $dataRows = $rows->isEmpty() ? collect([['message' => 'Sin datos']]) : $rows;
-        $cachePath = storage_path('framework/cache');
 
-        if (! is_dir($cachePath)) {
-            mkdir($cachePath, 0775, true);
-        }
-
-        $path = tempnam($cachePath, 'export-xlsx-');
-        $zip = new ZipArchive;
-
-        if ($path === false || $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new RuntimeException('Unable to create XLSX export.');
-        }
-
-        $zip->addFromString('[Content_Types].xml', $this->xlsxContentTypes());
-        $zip->addFromString('_rels/.rels', $this->xlsxRootRels());
-        $zip->addFromString('docProps/app.xml', $this->xlsxAppProps());
-        $zip->addFromString('docProps/core.xml', $this->xlsxCoreProps());
-        $zip->addFromString('xl/workbook.xml', $this->xlsxWorkbook());
-        $zip->addFromString('xl/_rels/workbook.xml.rels', $this->xlsxWorkbookRels());
-        $zip->addFromString('xl/styles.xml', $this->xlsxStyles());
-        $zip->addFromString('xl/worksheets/sheet1.xml', $this->xlsxWorksheet($headers, $dataRows));
-        $zip->close();
-
-        $content = file_get_contents($path);
-        unlink($path);
-
-        return $content ?: '';
+        return $this->zip([
+            '[Content_Types].xml' => $this->xlsxContentTypes(),
+            '_rels/.rels' => $this->xlsxRootRels(),
+            'docProps/app.xml' => $this->xlsxAppProps(),
+            'docProps/core.xml' => $this->xlsxCoreProps(),
+            'xl/workbook.xml' => $this->xlsxWorkbook(),
+            'xl/_rels/workbook.xml.rels' => $this->xlsxWorkbookRels(),
+            'xl/styles.xml' => $this->xlsxStyles(),
+            'xl/worksheets/sheet1.xml' => $this->xlsxWorksheet($headers, $dataRows),
+        ]);
     }
 
     private function xlsxWorksheet(array $headers, Collection $rows): string
@@ -265,6 +243,47 @@ class ExportService
             .'<dcterms:created xsi:type="dcterms:W3CDTF">'.$created.'</dcterms:created>'
             .'<dcterms:modified xsi:type="dcterms:W3CDTF">'.$created.'</dcterms:modified>'
             .'</cp:coreProperties>';
+    }
+
+    private function zip(array $files): string
+    {
+        $data = '';
+        $centralDirectory = '';
+        $fileCount = 0;
+
+        foreach ($files as $name => $content) {
+            $name = str_replace('\\', '/', (string) $name);
+            $content = (string) $content;
+            $offset = strlen($data);
+            $crc = (int) sprintf('%u', crc32($content));
+            $size = strlen($content);
+            [$time, $date] = $this->zipDosDateTime();
+
+            $data .= pack('VvvvvvVVVvv', 0x04034B50, 20, 0, 0, $time, $date, $crc, $size, $size, strlen($name), 0)
+                .$name
+                .$content;
+
+            $centralDirectory .= pack('VvvvvvvVVVvvvvvVV', 0x02014B50, 20, 20, 0, 0, $time, $date, $crc, $size, $size, strlen($name), 0, 0, 0, 0, 0, $offset)
+                .$name;
+
+            $fileCount++;
+        }
+
+        $centralDirectoryOffset = strlen($data);
+        $centralDirectorySize = strlen($centralDirectory);
+
+        return $data
+            .$centralDirectory
+            .pack('VvvvvVVv', 0x06054B50, 0, 0, $fileCount, $fileCount, $centralDirectorySize, $centralDirectoryOffset, 0);
+    }
+
+    private function zipDosDateTime(): array
+    {
+        $now = getdate();
+        $time = (($now['hours'] & 0x1F) << 11) | (($now['minutes'] & 0x3F) << 5) | ((int) ($now['seconds'] / 2) & 0x1F);
+        $date = ((($now['year'] - 1980) & 0x7F) << 9) | (($now['mon'] & 0x0F) << 5) | ($now['mday'] & 0x1F);
+
+        return [$time, $date];
     }
 
     private function pdfLines(Collection $rows, array $options): array

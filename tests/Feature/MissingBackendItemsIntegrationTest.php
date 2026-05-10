@@ -126,7 +126,12 @@ class MissingBackendItemsIntegrationTest extends TestCase
     {
         $this->authenticateWithPermissions(['inventory.read']);
 
-        $response = $this->postJson('/api/inventory/products/export', ['format' => 'excel']);
+        $response = $this->postJson('/api/inventory/products/export', [
+            'format' => 'excel',
+            'filters' => [
+                'search' => '',
+            ],
+        ]);
 
         $response->assertOk();
         $this->assertStringContainsString('.xlsx', $response->headers->get('Content-Disposition'));
