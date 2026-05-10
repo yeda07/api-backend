@@ -122,6 +122,19 @@ class MissingBackendItemsIntegrationTest extends TestCase
         unlink($path);
     }
 
+    public function test_inventory_products_pdf_export_uses_the_shared_pdf_template(): void
+    {
+        $this->authenticateWithPermissions(['inventory.read']);
+
+        $response = $this->postJson('/api/inventory/products/export', ['format' => 'pdf']);
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-1.4', $response->getContent());
+        $this->assertStringContainsString('/BaseFont /Helvetica-Bold', $response->getContent());
+        $this->assertStringContainsString('Exportacion / Reporte', $response->getContent());
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
