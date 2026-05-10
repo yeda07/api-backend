@@ -6,6 +6,7 @@ use App\Models\AdminAlertRule;
 use App\Models\Invoice;
 use App\Models\Permission;
 use App\Models\Plan;
+use App\Models\Role;
 use App\Models\SystemLog;
 use App\Models\Tenant;
 use App\Models\User;
@@ -457,6 +458,97 @@ class SuperAdminManagementTest extends TestCase
         Notification::assertSentTo($user, ResetPassword::class);
     }
 
+    public function test_superadmin_tenant_creation_provisions_default_roles(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $this->permission('dashboard.read', 'dashboard');
+        $this->permission('activities.read', 'activities');
+        $this->permission('admin.dashboard.read', 'admin');
+        $this->permission('plans.manage', 'plans');
+
+        $plan = Plan::query()->create([
+            'name' => 'Plan Empresa',
+            'price' => 199,
+            'status' => 'ACTIVO',
+        ]);
+
+        $response = $this->postJson('/api/admin/tenants', [
+            'nombre' => 'TT corporation',
+            'dominio' => 'ttcorpo.vende-mas.com.co',
+            'pais' => 'Colombia',
+            'email_contacto' => 'ttinfo@yopmail.com',
+            'plan_uid' => $plan->uid,
+            'estado' => 'ACTIVO',
+        ]);
+
+        $response->assertCreated();
+
+        $tenant = Tenant::query()
+            ->where('uid', $response->json('data.uid'))
+            ->firstOrFail();
+
+        foreach (['owner', 'manager', 'seller'] as $roleKey) {
+            $this->assertDatabaseHas('roles', [
+                'tenant_id' => $tenant->getKey(),
+                'key' => $roleKey,
+                'is_system' => true,
+            ]);
+        }
+
+        $owner = Role::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->where('key', 'owner')
+            ->firstOrFail();
+
+        $ownerPermissions = $owner->permissions()->pluck('key')->all();
+
+        $this->assertContains('dashboard.read', $ownerPermissions);
+        $this->assertContains('activities.read', $ownerPermissions);
+        $this->assertNotContains('admin.dashboard.read', $ownerPermissions);
+        $this->assertNotContains('plans.manage', $ownerPermissions);
+    }
+
+    public function test_tenant_user_creation_provisions_and_assigns_owner_role(): void
+    {
+        app()->forgetInstance('auth.password');
+        Notification::fake();
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $this->permission('dashboard.read', 'dashboard');
+
+        $tenant = $this->tenantWithPlan();
+
+        Role::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->delete();
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/users', [
+            'name' => 'Admin TT',
+            'email' => 'ttadmin2026@yopmail.com',
+            'role' => 'owner',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.roles.0', 'owner')
+            ->assertJsonPath('data.reset_email_sent', true);
+
+        $user = User::withoutGlobalScopes()
+            ->where('email', 'ttadmin2026@yopmail.com')
+            ->firstOrFail();
+
+        $owner = Role::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->where('key', 'owner')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('role_user', [
+            'role_id' => $owner->getKey(),
+            'user_id' => $user->getKey(),
+        ]);
+
+        $this->assertContains('dashboard.read', $owner->permissions()->pluck('key')->all());
+    }
+
     public function test_superadmin_can_read_any_tenant_user_access(): void
     {
         $this->authenticateSuperadmin(['users.manage']);
@@ -510,14 +602,7 @@ class SuperAdminManagementTest extends TestCase
     private function authenticateSuperadmin(array $permissionKeys): User
     {
         foreach ($permissionKeys as $key) {
-            Permission::query()->firstOrCreate(
-                ['key' => $key],
-                [
-                    'module' => str_contains($key, '.') ? explode('.', $key)[0] : 'admin',
-                    'action' => $key,
-                    'description' => $key,
-                ]
-            );
+            $this->permission($key, str_contains($key, '.') ? explode('.', $key)[0] : 'admin');
         }
 
         $admin = User::withoutGlobalScopes()->create([
@@ -536,6 +621,18 @@ class SuperAdminManagementTest extends TestCase
         Sanctum::actingAs($admin, ['access:full', 'platform:admin']);
 
         return $admin;
+    }
+
+    private function permission(string $key, string $module): Permission
+    {
+        return Permission::query()->firstOrCreate(
+            ['key' => $key],
+            [
+                'module' => $module,
+                'action' => $key,
+                'description' => $key,
+            ]
+        );
     }
 
     private function tenantWithPlan(): Tenant

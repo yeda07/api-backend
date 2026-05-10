@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PlanPermissionService;
+use App\Services\TenantRoleProvisioner;
 use App\Support\ApiIndex;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
@@ -87,7 +88,7 @@ class AdminTenantController extends Controller
         );
     }
 
-    public function store(Request $request)
+    public function store(Request $request, TenantRoleProvisioner $roleProvisioner)
     {
         try {
             $validated = $request->validate([
@@ -112,19 +113,25 @@ class AdminTenantController extends Controller
                 ]);
             }
 
-            $tenant = Tenant::query()->create([
-                'name' => $validated['nombre'],
-                'domain' => $validated['dominio'],
-                'country' => $validated['pais'] ?? null,
-                'contact_email' => $validated['email_contacto'] ?? null,
-                'plan_id' => $plan?->getKey(),
-                'status' => $validated['estado'],
-                'mrr' => $validated['mrr'] ?? (float) ($plan?->price ?? 0),
-                'storage_used_gb' => $validated['almacenamiento_usado_gb'] ?? 0,
-                'storage_limit_gb' => $validated['limite_almacenamiento_gb'] ?? data_get($plan?->features, 'storage_gb'),
-                'is_active' => in_array($validated['estado'], ['ACTIVO', 'TRIAL'], true),
-                'expires_at' => $validated['estado'] === 'VENCIDO' ? now() : null,
-            ]);
+            $tenant = DB::transaction(function () use ($validated, $plan, $roleProvisioner) {
+                $tenant = Tenant::query()->create([
+                    'name' => $validated['nombre'],
+                    'domain' => $validated['dominio'],
+                    'country' => $validated['pais'] ?? null,
+                    'contact_email' => $validated['email_contacto'] ?? null,
+                    'plan_id' => $plan?->getKey(),
+                    'status' => $validated['estado'],
+                    'mrr' => $validated['mrr'] ?? (float) ($plan?->price ?? 0),
+                    'storage_used_gb' => $validated['almacenamiento_usado_gb'] ?? 0,
+                    'storage_limit_gb' => $validated['limite_almacenamiento_gb'] ?? data_get($plan?->features, 'storage_gb'),
+                    'is_active' => in_array($validated['estado'], ['ACTIVO', 'TRIAL'], true),
+                    'expires_at' => $validated['estado'] === 'VENCIDO' ? now() : null,
+                ]);
+
+                $roleProvisioner->provision($tenant);
+
+                return $tenant;
+            });
 
             return $this->successResponse($this->serializeTenant($tenant->fresh('plan')), 201, 'Tenant creado');
         } catch (ValidationException $e) {
@@ -275,7 +282,7 @@ class AdminTenantController extends Controller
         return $this->successResponse($this->serializeTenant($tenant->fresh('plan')), 200, 'Tenant restaurado');
     }
 
-    public function createUser(Request $request, string $uid)
+    public function createUser(Request $request, string $uid, TenantRoleProvisioner $roleProvisioner)
     {
         try {
             $tenant = Tenant::query()->where('uid', $uid)->first();
@@ -290,7 +297,9 @@ class AdminTenantController extends Controller
                 'role' => 'nullable|string|in:owner,manager,seller',
             ]);
 
-            $user = DB::transaction(function () use ($tenant, $validated) {
+            $user = DB::transaction(function () use ($tenant, $validated, $roleProvisioner) {
+                $roleProvisioner->provision($tenant);
+
                 $user = User::withoutGlobalScopes()->create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
