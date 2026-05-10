@@ -163,6 +163,57 @@ class PlatformGeneralIntegrationTest extends TestCase
             ->assertJsonFragment(['name' => 'Licencia Base', 'key' => 'LIC-BASE']);
     }
 
+    public function test_rbac_roles_can_filter_permissions_by_active_plan_modules(): void
+    {
+        $inventoryPermission = Permission::query()->create([
+            'key' => 'inventory.read',
+            'module' => 'inventory',
+            'action' => 'read',
+            'description' => 'inventory.read',
+        ]);
+        $salesPermission = Permission::query()->create([
+            'key' => 'opportunities.read',
+            'module' => 'opportunities',
+            'action' => 'read',
+            'description' => 'opportunities.read',
+        ]);
+        Permission::query()->create([
+            'key' => 'users.manage',
+            'module' => 'users',
+            'action' => 'manage',
+            'description' => 'users.manage',
+        ]);
+
+        $plan = Plan::query()->create([
+            'name' => 'Inventory Only',
+            'price' => 49,
+            'status' => 'active',
+            'features' => [
+                'modules' => ['inventario'],
+            ],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant RBAC',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $role = Role::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Operador',
+            'key' => 'operator',
+        ]);
+        $role->permissions()->sync([$inventoryPermission->getKey(), $salesPermission->getKey()]);
+
+        $user = $this->tenantUser($tenant, ['users.manage']);
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $this->getJson('/api/rbac/roles?only_active_modules=true')
+            ->assertOk()
+            ->assertJsonPath('data.0.permissions.0.key', 'inventory.read')
+            ->assertJsonMissing(['key' => 'opportunities.read']);
+    }
+
     private function tenantUser(Tenant $tenant, array $permissionKeys): User
     {
         foreach ($permissionKeys as $key) {

@@ -88,6 +88,76 @@ class InventoryBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.summary.total_value', 60000);
     }
 
+    public function test_inventory_filters_search_and_active_status_for_frontend(): void
+    {
+        $user = $this->authenticateWithPermissions(['inventory.read']);
+
+        $central = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Central',
+            'code' => 'BCN01',
+            'is_active' => true,
+        ]);
+        Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Norte',
+            'code' => 'NRT02',
+            'is_active' => true,
+        ]);
+
+        $shirt = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-CAM-001',
+            'name' => 'Camiseta Basica XL',
+            'is_active' => true,
+        ]);
+        $cap = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-GOR-002',
+            'name' => 'Gorra Promocional',
+            'is_active' => false,
+        ]);
+
+        InventoryMovement::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $cap->getKey(),
+            'to_warehouse_id' => $central->getKey(),
+            'performed_by_user_id' => $user->getKey(),
+            'type' => 'adjustment_in',
+            'quantity' => 10,
+            'reference_uid' => 'REF-GORRA-10',
+        ]);
+        InventoryMovement::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $shirt->getKey(),
+            'to_warehouse_id' => $central->getKey(),
+            'performed_by_user_id' => $user->getKey(),
+            'type' => 'adjustment_in',
+            'quantity' => 5,
+            'reference_uid' => 'REF-CAMISETA-5',
+        ]);
+
+        $this->getJson('/api/inventory/master?search=gorra')
+            ->assertOk()
+            ->assertJsonPath('data.summary.products', 1)
+            ->assertJsonPath('data.data.0.sku', 'SKU-GOR-002');
+
+        $this->getJson('/api/inventory/master?is_active=false')
+            ->assertOk()
+            ->assertJsonPath('data.summary.products', 1)
+            ->assertJsonPath('data.data.0.name', 'Gorra Promocional');
+
+        $this->getJson('/api/inventory/warehouses?search=NRT')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.code', 'NRT02');
+
+        $this->getJson('/api/inventory/movements?search=gorra')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.reference_uid', 'REF-GORRA-10');
+    }
+
     public function test_bulk_adjust_and_movements_summary_match_inventory_document(): void
     {
         $user = $this->authenticateWithPermissions(['inventory.read', 'inventory.manage']);
