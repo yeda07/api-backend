@@ -27,6 +27,11 @@ class CustomFieldController extends Controller
         }
     }
 
+    public function modules()
+    {
+        return $this->successResponse($this->service->modules());
+    }
+
     public function store(Request $request)
     {
         try {

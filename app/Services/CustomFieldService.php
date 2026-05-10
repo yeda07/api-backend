@@ -11,6 +11,25 @@ use Illuminate\Validation\ValidationException;
 
 class CustomFieldService
 {
+    private const SUPPORTED_MODULES = [
+        'contacts' => 'Contactos',
+        'companies' => 'Empresas',
+        'opportunities' => 'Oportunidades',
+        'products' => 'Productos',
+    ];
+
+    public function modules(): array
+    {
+        return collect(self::SUPPORTED_MODULES)
+            ->filter(fn (string $label, string $value) => crm_entity_model_class($this->normalizeEntityType($value)) !== null)
+            ->map(fn (string $label, string $value) => [
+                'value' => $value,
+                'label' => $label,
+            ])
+            ->values()
+            ->all();
+    }
+
     public function listFields(array $filters = [])
     {
         $validated = Validator::make($filters, [
@@ -115,11 +134,7 @@ class CustomFieldService
 
     private function resolveEntityType(string $entityType): string
     {
-        $entityType = match ($entityType) {
-            'companies', 'company' => 'accounts',
-            'opportunities', 'opportunity', 'products', 'product' => 'crm_entities',
-            default => $entityType,
-        };
+        $entityType = $this->normalizeEntityType($entityType);
 
         $resolvedType = crm_entity_model_class($entityType);
 
@@ -130,6 +145,15 @@ class CustomFieldService
         }
 
         return $resolvedType;
+    }
+
+    private function normalizeEntityType(string $entityType): string
+    {
+        return match ($entityType) {
+            'companies', 'company' => 'accounts',
+            'opportunities', 'opportunity', 'products', 'product' => 'crm_entities',
+            default => $entityType,
+        };
     }
 
     private function findField(string $uid): CustomField

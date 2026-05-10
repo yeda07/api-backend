@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Currency;
 use App\Services\PlatformInitService;
+use DateTimeZone;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +23,31 @@ class SettingsController extends Controller
         return $this->successResponse(array_merge([
             'tenant_uid' => $tenant?->uid,
         ], $this->platformInitService->localization($user)));
+    }
+
+    public function localizationOptions()
+    {
+        return $this->successResponse([
+            'timezones' => $this->timezoneOptions(),
+            'currencies' => Currency::query()
+                ->orderBy('code')
+                ->get()
+                ->map(fn (Currency $currency) => [
+                    'code' => $currency->code,
+                    'label' => $currency->name,
+                    'symbol' => $currency->symbol,
+                ])
+                ->values()
+                ->all(),
+            'date_formats' => ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'],
+            'locales' => [
+                ['value' => 'es-CO', 'label' => 'Español (Colombia)'],
+                ['value' => 'es-PE', 'label' => 'Español (Perú)'],
+                ['value' => 'es-MX', 'label' => 'Español (México)'],
+                ['value' => 'es-AR', 'label' => 'Español (Argentina)'],
+                ['value' => 'en-US', 'label' => 'Inglés (Estados Unidos)'],
+            ],
+        ]);
     }
 
     public function updateLocalization(Request $request)
@@ -68,5 +94,23 @@ class SettingsController extends Controller
         } catch (\Throwable $e) {
             return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
         }
+    }
+
+    private function timezoneOptions(): array
+    {
+        $preferred = [
+            'America/Bogota',
+            'America/Lima',
+            'America/Mexico_City',
+            'America/Argentina/Buenos_Aires',
+            'America/Santiago',
+            'America/New_York',
+            'UTC',
+        ];
+
+        return collect(array_merge($preferred, DateTimeZone::listIdentifiers()))
+            ->unique()
+            ->values()
+            ->all();
     }
 }

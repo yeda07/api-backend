@@ -496,6 +496,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::get('/dashboard/core', [DashboardController::class, 'core'])->middleware('permission:dashboard.read');
 
     Route::prefix('custom-fields')->group(function () {
+        Route::get('/modules', [CustomFieldController::class, 'modules'])->middleware('permission:custom-fields.manage');
         Route::get('/', [CustomFieldController::class, 'index'])->middleware('permission:custom-fields.manage');
         Route::post('/', [CustomFieldController::class, 'store'])->middleware('permission:custom-fields.manage');
         Route::put('/{uid}', [CustomFieldController::class, 'update'])->middleware('permission:custom-fields.manage');
@@ -505,6 +506,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('settings')->group(function () {
         Route::get('/localization', [SettingsController::class, 'localization']);
+        Route::get('/localization/options', [SettingsController::class, 'localizationOptions']);
         Route::put('/localization', [SettingsController::class, 'updateLocalization'])->middleware('permission:settings.manage');
     });
 

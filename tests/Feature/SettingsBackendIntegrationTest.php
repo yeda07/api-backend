@@ -290,6 +290,48 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.date_format', 'YYYY-MM-DD');
     }
 
+    public function test_custom_field_modules_endpoint_returns_supported_frontend_slugs(): void
+    {
+        $this->authenticateWithPermissions(['custom-fields.manage']);
+
+        $this->getJson('/api/custom-fields/modules')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'contacts')
+            ->assertJsonPath('data.0.label', 'Contactos')
+            ->assertJsonPath('data.1.value', 'companies')
+            ->assertJsonPath('data.1.label', 'Empresas')
+            ->assertJsonPath('data.2.value', 'opportunities')
+            ->assertJsonPath('data.2.label', 'Oportunidades')
+            ->assertJsonPath('data.3.value', 'products')
+            ->assertJsonPath('data.3.label', 'Productos');
+    }
+
+    public function test_localization_options_endpoint_returns_selector_options_from_backend(): void
+    {
+        $this->authenticateWithPermissions([]);
+        Currency::query()->create([
+            'code' => 'COP',
+            'name' => 'Peso colombiano',
+            'symbol' => '$',
+        ]);
+        Currency::query()->create([
+            'code' => 'USD',
+            'name' => 'US Dollar',
+            'symbol' => 'US$',
+        ]);
+
+        $this->getJson('/api/settings/localization/options')
+            ->assertOk()
+            ->assertJsonPath('data.timezones.0', 'America/Bogota')
+            ->assertJsonPath('data.currencies.0.code', 'COP')
+            ->assertJsonPath('data.currencies.0.label', 'Peso colombiano')
+            ->assertJsonPath('data.currencies.0.symbol', '$')
+            ->assertJsonPath('data.currencies.1.code', 'USD')
+            ->assertJsonPath('data.date_formats', ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'])
+            ->assertJsonPath('data.locales.0.value', 'es-CO')
+            ->assertJsonPath('data.locales.0.label', 'Español (Colombia)');
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
