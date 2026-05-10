@@ -145,6 +145,7 @@ class TenantOptionService
             ->when(Schema::hasColumn('products', 'status'), fn ($query) => $query->where('status', 'active'))
             ->orderBy('name')
             ->get()
+            ->toBase()
             ->map(fn (Product $product) => [
                 'uid' => $product->uid,
                 'name' => $product->name,
@@ -162,6 +163,7 @@ class TenantOptionService
             ->when(Schema::hasColumn('inventory_products', 'is_active'), fn ($query) => $query->where('is_active', true))
             ->orderBy('name')
             ->get()
+            ->toBase()
             ->map(fn (InventoryProduct $product) => [
                 'uid' => $product->uid,
                 'name' => $product->name,
