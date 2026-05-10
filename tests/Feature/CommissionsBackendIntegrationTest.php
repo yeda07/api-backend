@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
+use App\Models\CommissionAssignment;
 use App\Models\CommissionEntry;
 use App\Models\CommissionPlan;
+use App\Models\CommissionRun;
+use App\Models\CommissionTarget;
 use App\Models\Permission;
+use App\Models\Quotation;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -160,6 +165,104 @@ class CommissionsBackendIntegrationTest extends TestCase
         $this->getJson('/api/commissions/entries')
             ->assertOk()
             ->assertJsonPath('data.0.frontend_status', 'pending');
+    }
+
+    public function test_commissions_dashboard_matches_frontend_contract(): void
+    {
+        $user = $this->authenticateWithPermissions(['commissions.read', 'commissions.manage']);
+        $seller = User::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Vendedora Dashboard',
+            'email' => 'seller-dashboard+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+        $period = now()->format('Y-m');
+        $periodStart = now()->startOfMonth()->toDateString();
+        $periodEnd = now()->endOfMonth()->toDateString();
+
+        $plan = CommissionPlan::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Plan Dashboard',
+            'type' => 'sale',
+            'base_percent' => 5,
+            'tiers_json' => [
+                ['threshold' => 50000, 'percent' => 7],
+                ['threshold' => 100000, 'percent' => 10],
+            ],
+            'active' => true,
+        ]);
+
+        CommissionAssignment::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $seller->getKey(),
+            'commission_plan_id' => $plan->getKey(),
+            'starts_at' => $periodStart,
+            'active' => true,
+        ]);
+
+        CommissionTarget::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $seller->getKey(),
+            'period' => $period,
+            'target_amount' => 120000,
+        ]);
+
+        $account = Account::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $seller->getKey(),
+            'name' => 'Cliente Dashboard',
+            'document' => 'COM-DASH-'.uniqid(),
+        ]);
+
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $seller->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-DASH-'.uniqid(),
+            'title' => 'Venta dashboard',
+            'status' => 'approved',
+        ]);
+
+        CommissionEntry::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $seller->getKey(),
+            'quotation_id' => $quotation->getKey(),
+            'base_amount' => 75000,
+            'rate_percent' => 7,
+            'commission_amount' => 5250,
+            'status' => 'earned',
+            'earned_at' => now()->toDateString(),
+        ]);
+
+        CommissionRun::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $seller->getKey(),
+            'commission_plan_id' => $plan->getKey(),
+            'period_start' => $periodStart,
+            'period_end' => $periodEnd,
+            'sales_amount' => 75000,
+            'commission_amount' => 3000,
+            'status' => 'approved',
+        ]);
+
+        $this->getJson('/api/commissions/dashboard/'.$seller->uid)
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['kpis', 'tiers', 'recentSales']])
+            ->assertJsonPath('data.kpis.monthly_target', 120000)
+            ->assertJsonPath('data.kpis.sales_achieved', 75000)
+            ->assertJsonPath('data.kpis.projected_commission', 5250)
+            ->assertJsonPath('data.kpis.liquidated_commission', 3000)
+            ->assertJsonPath('data.tiers.0.name', 'Tramo 1')
+            ->assertJsonPath('data.tiers.0.status', 'COMPLETED')
+            ->assertJsonPath('data.tiers.0.completed', 100)
+            ->assertJsonPath('data.tiers.1.status', 'IN_PROGRESS')
+            ->assertJsonPath('data.tiers.1.completed', 50)
+            ->assertJsonPath('data.recentSales.0.client', 'Cliente Dashboard')
+            ->assertJsonPath('data.recentSales.0.amount', 75000)
+            ->assertJsonPath('data.recentSales.0.commission_generated', 5250)
+            ->assertJsonMissingPath('data.monthly_target')
+            ->assertJsonMissingPath('data.recent_entries');
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User

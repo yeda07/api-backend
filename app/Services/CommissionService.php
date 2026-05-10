@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Support\ApiIndex;
 use App\Support\SimplePdf;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -417,20 +418,28 @@ class CommissionService
         $targetAmount = round((float) ($target?->target_amount ?? 0), 2);
 
         return [
-            'user_uid' => $user->uid,
-            'period' => $period,
-            'monthly_target' => $targetAmount,
-            'sales_achieved' => $salesAchieved,
-            'projected_commission' => $projected,
-            'liquidated_commission' => $liquidated,
-            'progress_percent' => $targetAmount > 0 ? round(min(100, ($salesAchieved / $targetAmount) * 100), 2) : 0,
-            'active_assignment' => $this->resolveActiveAssignment($user->getKey(), now())?->load('commissionPlan.roles'),
-            'recent_entries' => CommissionEntry::query()
-                ->with(['rule.product', 'quotation', 'financialRecord'])
+            'kpis' => [
+                'monthly_target' => $targetAmount,
+                'sales_achieved' => $salesAchieved,
+                'projected_commission' => $projected,
+                'liquidated_commission' => $liquidated,
+            ],
+            'tiers' => $this->buildTierProgress($user->getKey(), $salesAchieved),
+            'recentSales' => CommissionEntry::query()
+                ->with(['quotation.quoteable'])
                 ->where('user_id', $user->getKey())
                 ->latest('earned_at')
                 ->limit(10)
-                ->get(),
+                ->get()
+                ->map(fn (CommissionEntry $entry) => [
+                    'uid' => $entry->uid,
+                    'date' => $entry->earned_at,
+                    'client' => $this->commissionEntryClientName($entry),
+                    'amount' => round((float) $entry->base_amount, 2),
+                    'commission_generated' => round((float) $entry->commission_amount, 2),
+                ])
+                ->values()
+                ->all(),
         ];
     }
 
@@ -1071,6 +1080,69 @@ class CommissionService
     private function resolveTargetForPeriod(int $userId, string $period): ?CommissionTarget
     {
         return CommissionTarget::query()->where('user_id', $userId)->where('period', $period)->first();
+    }
+
+    private function buildTierProgress(int $userId, float $salesAchieved): array
+    {
+        $assignment = $this->resolveActiveAssignment($userId, now());
+        $tiers = collect($assignment?->commissionPlan?->tiers_json ?? [])
+            ->sortBy('threshold')
+            ->values();
+
+        $previousThreshold = 0.0;
+
+        return $tiers
+            ->map(function (array $tier, int $index) use ($salesAchieved, &$previousThreshold) {
+                $threshold = round((float) ($tier['threshold'] ?? 0), 2);
+                $percent = round((float) ($tier['percent'] ?? $tier['percentage'] ?? 0), 2);
+                $rangeSize = max(0.01, $threshold - $previousThreshold);
+                $coveredInRange = min(max(0, $salesAchieved - $previousThreshold), $rangeSize);
+                $completedPct = round(min(100, ($coveredInRange / $rangeSize) * 100), 2);
+                $status = match (true) {
+                    $salesAchieved >= $threshold => 'COMPLETED',
+                    $salesAchieved > $previousThreshold => 'IN_PROGRESS',
+                    default => 'PENDING',
+                };
+                $row = [
+                    'uid' => (string) ($tier['uid'] ?? 'tier-'.($index + 1)),
+                    'name' => 'Tramo '.($index + 1),
+                    'range_text' => $this->moneyRange($previousThreshold, $threshold),
+                    'percent' => $percent,
+                    'completed' => $completedPct,
+                    'status' => $status,
+                    'amount_achieved' => round(min($salesAchieved, $threshold), 2),
+                    'amount_target' => $threshold,
+                ];
+
+                $previousThreshold = $threshold;
+
+                return $row;
+            })
+            ->all();
+    }
+
+    private function moneyRange(float $from, float $to): string
+    {
+        return '$'.number_format($from, 0, ',', '.').' - $'.number_format($to, 0, ',', '.');
+    }
+
+    private function commissionEntryClientName(CommissionEntry $entry): string
+    {
+        $quotation = $entry->quotation
+            ?? ($entry->quotation_id ? Quotation::withoutGlobalScopes()->whereKey($entry->quotation_id)->first() : null);
+        $quoteable = $quotation?->quoteable;
+        $quoteableClass = $quotation?->quoteable_type;
+
+        if (! $quoteable && $quoteableClass && $quotation?->quoteable_id && is_subclass_of($quoteableClass, Model::class)) {
+            $quoteable = $quoteableClass::withoutGlobalScopes()->whereKey($quotation->quoteable_id)->first();
+        }
+
+        return $quotation?->client_name
+            ?? $quoteable?->display_name
+            ?? $quoteable?->name
+            ?? $quotation?->title
+            ?? $quotation?->quote_number
+            ?? '—';
     }
 
     private function calculateForUser(int $userId, float $salesAmount, float $marginAmount, Carbon $date): array
