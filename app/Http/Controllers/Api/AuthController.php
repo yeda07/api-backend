@@ -9,6 +9,7 @@ use App\Services\TwoFactorService;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -118,11 +119,29 @@ class AuthController extends Controller
 
         try {
             if (app()->bound('auth.password')) {
-                Password::sendResetLink([
+                $status = Password::sendResetLink([
+                    'email' => $validated['email'],
+                ]);
+
+                Log::info('Password reset link requested', [
+                    'email' => $validated['email'],
+                    'status' => $status,
+                    'mailer' => config('mail.default'),
+                    'from' => config('mail.from.address'),
+                ]);
+            } else {
+                Log::warning('Password reset service is not bound', [
                     'email' => $validated['email'],
                 ]);
             }
         } catch (\Throwable $e) {
+            Log::warning('Password reset email could not be sent', [
+                'email' => $validated['email'],
+                'mailer' => config('mail.default'),
+                'from' => config('mail.from.address'),
+                'error' => $e->getMessage(),
+            ]);
+
             report($e);
         }
 
