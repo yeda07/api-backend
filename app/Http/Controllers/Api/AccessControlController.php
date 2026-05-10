@@ -18,9 +18,13 @@ class AccessControlController extends Controller
     {
     }
 
-    public function roles()
+    public function roles(Request $request)
     {
-        return $this->successResponse($this->accessControlService->getRoles());
+        try {
+            return $this->successResponse($this->accessControlService->getRoles($request->query()));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
     }
 
     public function storeRole(Request $request)

@@ -62,8 +62,17 @@ class InventoryService
 
     public function listProducts(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+            'is_active' => 'nullable|string|in:true,false,1,0',
+        ])->validate();
+
         return ApiIndex::paginateOrGet(
-            InventoryProduct::query()->with(['category', 'stocks.warehouse'])->orderBy('name'),
+            InventoryProduct::query()
+                ->with(['category', 'stocks.warehouse'])
+                ->when(!empty($validated['search']), fn ($query) => $this->applyProductSearch($query, $validated['search']))
+                ->when(array_key_exists('is_active', $validated), fn ($query) => $query->where('is_active', filter_var($validated['is_active'], FILTER_VALIDATE_BOOLEAN)))
+                ->orderBy('name'),
             $filters,
             'inventory_products_page'
         );
@@ -209,8 +218,20 @@ class InventoryService
 
     public function listWarehouses(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
         $warehouses = Warehouse::query()
             ->with(['stocks.product'])
+            ->when(!empty($validated['search']), function ($query) use ($validated) {
+                $search = '%' . mb_strtolower($validated['search']) . '%';
+
+                $query->where(function ($builder) use ($search) {
+                    $builder->whereRaw('LOWER(name) LIKE ?', [$search])
+                        ->orWhereRaw('LOWER(code) LIKE ?', [$search]);
+                });
+            })
             ->orderBy('name')
             ->get();
 
@@ -269,6 +290,8 @@ class InventoryService
             'category_uid' => 'nullable|uuid',
             'warehouse_uid' => 'nullable|uuid',
             'stock_state' => 'nullable|string|in:normal,low,out',
+            'search' => 'nullable|string|max:255',
+            'is_active' => 'nullable|string|in:true,false,1,0',
         ])->validate();
 
         $warehouse = !empty($validated['warehouse_uid'])
@@ -277,6 +300,8 @@ class InventoryService
 
         $products = InventoryProduct::query()
             ->with(['category', 'stocks.warehouse'])
+            ->when(!empty($validated['search']), fn ($query) => $this->applyProductSearch($query, $validated['search']))
+            ->when(array_key_exists('is_active', $validated), fn ($query) => $query->where('is_active', filter_var($validated['is_active'], FILTER_VALIDATE_BOOLEAN)))
             ->when(!empty($validated['category_uid']), function ($query) use ($validated) {
                 $query->where('category_id', $this->resolveCategoryId($validated['category_uid']) ?: 0);
             })
@@ -293,6 +318,10 @@ class InventoryService
                 'category_uid' => $validated['category_uid'] ?? null,
                 'warehouse_uid' => $validated['warehouse_uid'] ?? null,
                 'stock_state' => $validated['stock_state'] ?? null,
+                'search' => $validated['search'] ?? null,
+                'is_active' => array_key_exists('is_active', $validated)
+                    ? filter_var($validated['is_active'], FILTER_VALIDATE_BOOLEAN)
+                    : null,
             ],
             'data' => $rows,
             'summary' => [
@@ -687,6 +716,7 @@ class InventoryService
             'reference_type' => 'nullable|string|max:255',
             'reference_uid' => 'nullable|string|max:255',
             'type' => 'nullable|string|max:255',
+            'search' => 'nullable|string|max:255',
         ])->validate();
 
         $productId = !empty($validated['product_uid']) ? $this->getProductByUid($validated['product_uid'])->getKey() : null;
@@ -704,6 +734,20 @@ class InventoryService
             ->when(!empty($validated['reference_type']), fn ($query) => $query->where('reference_type', $validated['reference_type']))
             ->when(!empty($validated['reference_uid']), fn ($query) => $query->where('reference_uid', $validated['reference_uid']))
             ->when(!empty($validated['type']), fn ($query) => $query->where('type', $validated['type']))
+            ->when(!empty($validated['search']), function ($query) use ($validated) {
+                $search = '%' . mb_strtolower($validated['search']) . '%';
+
+                $query->where(function ($builder) use ($search) {
+                    $builder
+                        ->whereHas('product', function ($productQuery) use ($search) {
+                            $productQuery
+                                ->whereRaw('LOWER(name) LIKE ?', [$search])
+                                ->orWhereRaw('LOWER(sku) LIKE ?', [$search]);
+                        })
+                        ->orWhereRaw('LOWER(reference_uid) LIKE ?', [$search])
+                        ->orWhereRaw('LOWER(comment) LIKE ?', [$search]);
+                });
+            })
             ->latest();
 
         return ApiIndex::paginateOrGet($query, $filters, 'inventory_movements_page');
@@ -989,6 +1033,17 @@ class InventoryService
             'reference_uid' => $payload['reference_uid'] ?? null,
             'meta' => $payload['meta'] ?? null,
         ])->fresh(['product', 'fromWarehouse', 'toWarehouse', 'performedBy']);
+    }
+
+    private function applyProductSearch($query, string $search)
+    {
+        $term = '%' . mb_strtolower($search) . '%';
+
+        return $query->where(function ($builder) use ($term) {
+            $builder
+                ->whereRaw('LOWER(name) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(sku) LIKE ?', [$term]);
+        });
     }
 
     private function reservationPreview(InventoryStock $stock, int $requestedQuantity): array

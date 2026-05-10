@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class AccessControlService
@@ -14,14 +15,33 @@ class AccessControlService
     {
     }
 
-    public function getRoles()
+    public function getRoles(array $filters = [])
     {
-        return Role::query()
+        $validated = Validator::make($filters, [
+            'only_active_modules' => 'nullable|string|in:true,false,1,0',
+        ])->validate();
+
+        $roles = Role::query()
             ->with('permissions')
             ->withCount('users')
             ->withCount('users as total_usuarios')
             ->orderBy('name')
             ->get();
+
+        if (($validated['only_active_modules'] ?? null) && filter_var($validated['only_active_modules'], FILTER_VALIDATE_BOOLEAN)) {
+            $tenant = auth()->user()?->tenant;
+
+            if ($tenant) {
+                $roles->each(function (Role $role) use ($tenant) {
+                    $role->setRelation(
+                        'permissions',
+                        $this->planPermissionService->filterPermissionsForTenant($role->permissions, $tenant)
+                    );
+                });
+            }
+        }
+
+        return $roles;
     }
 
     public function getPermissions()
