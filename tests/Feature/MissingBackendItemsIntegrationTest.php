@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\DocumentType;
 use App\Models\InventoryCategory;
+use App\Models\InventoryProduct;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\Permission;
@@ -145,15 +146,34 @@ class MissingBackendItemsIntegrationTest extends TestCase
 
     public function test_inventory_products_pdf_export_uses_the_shared_pdf_template(): void
     {
-        $this->authenticateWithPermissions(['inventory.read']);
+        $user = $this->authenticateWithPermissions(['inventory.read']);
 
-        $response = $this->postJson('/api/inventory/products/export', ['format' => 'pdf']);
+        InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-PDF-1',
+            'name' => 'Producto PDF',
+            'cost_price' => 1200,
+            'reorder_point' => 5,
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/inventory/products/export', [
+            'format' => 'pdf',
+            'filters' => [
+                'search' => null,
+                'warehouse_uid' => '',
+            ],
+        ]);
 
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-1.4', $response->getContent());
         $this->assertStringContainsString('/BaseFont /Helvetica-Bold', $response->getContent());
         $this->assertStringContainsString('Exportacion / Reporte', $response->getContent());
+        $this->assertStringContainsString('SKU-PDF-1', $response->getContent());
+        $this->assertStringContainsString('Producto PDF', $response->getContent());
+        $this->assertStringNotContainsString('Search', $response->getContent());
+        $this->assertStringNotContainsString('null', $response->getContent());
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User

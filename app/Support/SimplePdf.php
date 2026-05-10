@@ -52,6 +52,106 @@ class SimplePdf
         return self::build($pages);
     }
 
+    public static function tableReport(string $title, array $rows, array $options = []): string
+    {
+        $rows = array_values(array_map(fn ($row) => is_array($row) ? $row : ['value' => (string) $row], $rows));
+        $columns = self::tableColumns($rows);
+        $pages = [];
+        $content = self::pageHeader($title, 1);
+        $y = self::BODY_TOP;
+
+        foreach (self::summaryLines($options) as $line) {
+            $content .= self::text(self::MARGIN_X, $y, $line, 9.5, 'F2', '0.17 0.20 0.25');
+            $y -= self::LINE_HEIGHT;
+        }
+
+        $y -= 12;
+        $content .= self::tableHeader($columns, $y);
+        $y -= 24;
+
+        if ($rows === []) {
+            $content .= self::tableRow($columns, ['message' => 'Sin datos'], $y, false);
+        }
+
+        foreach ($rows as $index => $row) {
+            if ($y < self::BODY_BOTTOM + 22) {
+                $pages[] = $content.self::pageFooter(count($pages) + 1);
+                $content = self::pageHeader($title, count($pages) + 1);
+                $y = self::BODY_TOP;
+                $content .= self::tableHeader($columns, $y);
+                $y -= 24;
+            }
+
+            $content .= self::tableRow($columns, $row, $y, $index % 2 === 1);
+            $y -= 22;
+        }
+
+        $pages[] = $content.self::pageFooter(count($pages) + 1);
+
+        return self::build($pages);
+    }
+
+    private static function summaryLines(array $options): array
+    {
+        $lines = [
+            'Generado: '.date('Y-m-d H:i:s'),
+            'Filas: '.(int) ($options['total_rows'] ?? 0),
+        ];
+
+        $filters = array_filter((array) ($options['filters'] ?? []), fn ($value) => $value !== null && $value !== '' && $value !== []);
+
+        if ($filters !== []) {
+            $lines[] = 'Filtros: '.implode(' | ', array_map(
+                fn ($key, $value) => self::label((string) $key).': '.self::display($value),
+                array_keys($filters),
+                $filters
+            ));
+        }
+
+        return $lines;
+    }
+
+    private static function tableColumns(array $rows): array
+    {
+        $columns = $rows !== [] ? array_keys($rows[0]) : ['message'];
+        $visible = array_slice($columns, 0, 8);
+        $width = (int) floor((self::PAGE_WIDTH - (self::MARGIN_X * 2)) / max(1, count($visible)));
+
+        return array_map(fn ($key) => [
+            'key' => $key,
+            'label' => self::label((string) $key),
+            'width' => $width,
+        ], $visible);
+    }
+
+    private static function tableHeader(array $columns, int $y): string
+    {
+        $content = "q\n0.10 0.17 0.26 rg\n".self::MARGIN_X.' '.($y - 6).' '.(self::PAGE_WIDTH - (self::MARGIN_X * 2))." 22 re f\nQ\n";
+        $x = self::MARGIN_X + 6;
+
+        foreach ($columns as $column) {
+            $content .= self::text($x, $y, self::shorten($column['label'], self::charsForWidth($column['width'], 8)), 8, 'F1', '1 1 1');
+            $x += $column['width'];
+        }
+
+        return $content;
+    }
+
+    private static function tableRow(array $columns, array $row, int $y, bool $alternate): string
+    {
+        $fill = $alternate ? '0.96 0.98 1' : '1 1 1';
+        $content = "q\n{$fill} rg\n0.82 0.88 0.94 RG\n".self::MARGIN_X.' '.($y - 7).' '.(self::PAGE_WIDTH - (self::MARGIN_X * 2))." 22 re B\nQ\n";
+        $x = self::MARGIN_X + 6;
+
+        foreach ($columns as $column) {
+            $value = self::display($row[$column['key']] ?? '');
+            $content .= self::text($x, $y, self::shorten($value, self::charsForWidth($column['width'], 7.5)), 7.5, 'F2', '0.17 0.20 0.25');
+            $x += $column['width'];
+        }
+
+        return $content;
+    }
+
     private static function bodyLines(array $lines): array
     {
         $body = [
@@ -92,6 +192,33 @@ class SimplePdf
     private static function text(int $x, int $y, string $value, float $size, string $font, string $color): string
     {
         return "BT\n{$color} rg\n/{$font} {$size} Tf\n{$x} {$y} Td\n(".self::escape($value).") Tj\nET\n";
+    }
+
+    private static function label(string $key): string
+    {
+        return ucwords(str_replace('_', ' ', $key));
+    }
+
+    private static function display(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Si' : 'No';
+        }
+
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE) ?: '';
+        }
+
+        return (string) $value;
+    }
+
+    private static function charsForWidth(int $width, float $fontSize): int
+    {
+        return max(6, (int) floor($width / max(4, $fontSize * 0.52)));
     }
 
     private static function wrap(string $value): array

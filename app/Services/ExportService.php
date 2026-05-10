@@ -23,7 +23,10 @@ class ExportService
 
         if ($format === 'pdf') {
             return response(
-                SimplePdf::document($title, $this->pdfLines($rows, $options)),
+                SimplePdf::tableReport($title, $rows->all(), [
+                    'filters' => $this->activeFilters((array) ($options['filters'] ?? [])),
+                    'total_rows' => $rows->count(),
+                ]),
                 200,
                 [
                     'Content-Type' => 'application/pdf',
@@ -268,7 +271,7 @@ class ExportService
     {
         $lines = [
             'Generado: '.now()->toDateTimeString(),
-            'Filtros: '.json_encode($options['filters'] ?? [], JSON_UNESCAPED_UNICODE),
+            'Filtros: '.json_encode($this->activeFilters((array) ($options['filters'] ?? [])), JSON_UNESCAPED_UNICODE),
             'Filas: '.$rows->count(),
             '',
         ];
@@ -280,6 +283,13 @@ class ExportService
         }
 
         return $lines;
+    }
+
+    private function activeFilters(array $filters): array
+    {
+        return collect($filters)
+            ->filter(fn ($value) => $value !== null && $value !== '' && $value !== [])
+            ->all();
     }
 
     private function normalizeRow(mixed $row): array
