@@ -23,8 +23,18 @@ class InventoryService
 
     public function listCategories(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
         return ApiIndex::paginateOrGet(
-            InventoryCategory::query()->orderBy('name'),
+            InventoryCategory::query()
+                ->when(!empty($validated['search']), function ($query) use ($validated) {
+                    $search = '%'.mb_strtolower($validated['search']).'%';
+
+                    $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+                })
+                ->orderBy('name'),
             $filters,
             'inventory_categories_page'
         );

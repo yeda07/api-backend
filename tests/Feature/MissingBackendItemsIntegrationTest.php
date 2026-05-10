@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DocumentType;
+use App\Models\InventoryCategory;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\Permission;
@@ -74,6 +75,26 @@ class MissingBackendItemsIntegrationTest extends TestCase
             ->assertJsonPath('message', 'Tipo de documento eliminado');
 
         $this->assertDatabaseMissing('document_types', ['id' => $documentType->getKey()]);
+    }
+
+    public function test_inventory_categories_can_be_filtered_by_search(): void
+    {
+        $this->authenticateWithPermissions(['inventory.read']);
+
+        InventoryCategory::query()->create([
+            'name' => 'Electronicos',
+            'key' => 'electronicos',
+        ]);
+
+        InventoryCategory::query()->create([
+            'name' => 'Papeleria',
+            'key' => 'papeleria',
+        ]);
+
+        $this->getJson('/api/inventory/categories?search=elect')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Electronicos');
     }
 
     public function test_requested_export_endpoints_return_downloads(): void
