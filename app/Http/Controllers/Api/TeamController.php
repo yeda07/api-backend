@@ -13,9 +13,9 @@ class TeamController extends Controller
     {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        return $this->successResponse($this->teamService->list());
+        return $this->successResponse($this->teamService->list($request->query()));
     }
 
     public function show(string $uid)

@@ -98,6 +98,24 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('message', 'Team deleted');
     }
 
+    public function test_teams_index_filters_by_search(): void
+    {
+        $this->authenticateWithPermissions(['teams.read', 'teams.manage']);
+
+        $this->postJson('/api/teams', [
+            'name' => 'Equipo Norte',
+        ])->assertCreated();
+
+        $this->postJson('/api/teams', [
+            'name' => 'Soporte Sur',
+        ])->assertCreated();
+
+        $this->getJson('/api/teams?search=norte')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Equipo Norte');
+    }
+
     public function test_custom_fields_and_localization_accept_settings_frontend_aliases(): void
     {
         $this->authenticateWithPermissions(['custom-fields.manage', 'settings.manage']);

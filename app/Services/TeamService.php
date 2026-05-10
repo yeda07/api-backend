@@ -10,9 +10,19 @@ use Illuminate\Validation\ValidationException;
 
 class TeamService
 {
-    public function list()
+    public function list(array $filters = [])
     {
-        return Team::query()->with(['manager', 'members'])->orderBy('name')->get();
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
+        return Team::query()
+            ->with(['manager', 'members'])
+            ->when(!empty($validated['search']), function ($query) use ($validated) {
+                $query->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($validated['search']) . '%']);
+            })
+            ->orderBy('name')
+            ->get();
     }
 
     public function get(string $uid): Team
