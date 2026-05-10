@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminAlertRule;
 use App\Models\Invoice;
 use App\Models\Permission;
 use App\Models\Plan;
@@ -187,11 +188,182 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonPath('data.0.name', 'Juan Perez')
             ->assertJsonPath('data.0.email', 'juan@acme.com')
             ->assertJsonPath('data.0.rol', 'owner')
-            ->assertJsonPath('data.0.ultimo_acceso', '2025-03-20T08:00:00.000000Z')
+            ->assertJsonPath('data.0.ultimo_acceso', \Illuminate\Support\Carbon::parse('2025-03-20 08:00:00')->toISOString())
             ->assertJsonPath('data.0.estado', 'Activo')
             ->assertJsonPath('meta.pagination.current_page', 1)
             ->assertJsonPath('meta.pagination.per_page', 25)
             ->assertJsonPath('meta.pagination.total', 1);
+    }
+
+    public function test_superadmin_can_filter_lock_and_unlock_tenant_users(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $tenant = $this->tenantWithPlan();
+        $ownerRole = \App\Models\Role::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Owner',
+            'key' => 'owner',
+            'is_system' => true,
+        ]);
+        $managerRole = \App\Models\Role::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Manager',
+            'key' => 'manager',
+            'is_system' => true,
+        ]);
+
+        $owner = User::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Owner User',
+            'email' => 'owner@acme.com',
+            'password' => bcrypt('secret123'),
+        ]);
+        $owner->roles()->attach($ownerRole->getKey());
+
+        $manager = User::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Manager User',
+            'email' => 'manager@acme.com',
+            'password' => bcrypt('secret123'),
+        ]);
+        $manager->roles()->attach($managerRole->getKey());
+
+        $this->getJson('/api/admin/tenants/' . $tenant->uid . '/users?role=owner')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $owner->uid);
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/users/' . $owner->uid . '/lock')
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'Inactivo');
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/users/' . $owner->uid . '/unlock')
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'Activo');
+    }
+
+    public function test_superadmin_can_archive_restore_and_read_tenant_expires_at(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $tenant = $this->tenantWithPlan();
+        $tenant->update([
+            'status' => 'TRIAL',
+            'expires_at' => now()->addDays(14),
+        ]);
+
+        $this->getJson('/api/admin/tenants/' . $tenant->uid)
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'TRIAL')
+            ->assertJsonStructure(['data' => ['expires_at']]);
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/archive')
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'ARCHIVADO');
+
+        $this->postJson('/api/admin/tenants/' . $tenant->uid . '/restore')
+            ->assertOk()
+            ->assertJsonPath('data.estado', 'ACTIVO');
+    }
+
+    public function test_superadmin_billing_accepts_search_and_plan_filters(): void
+    {
+        $this->authenticateSuperadmin(['admin.billing.manage']);
+
+        $tenant = $this->tenantWithPlan();
+        $otherPlan = Plan::query()->create([
+            'name' => 'Plan Starter',
+            'price' => 49,
+            'status' => 'ACTIVO',
+        ]);
+        $otherTenant = Tenant::query()->create([
+            'name' => 'Other Corp',
+            'domain' => 'other.test',
+            'status' => 'ACTIVO',
+            'plan_id' => $otherPlan->getKey(),
+            'is_active' => true,
+        ]);
+
+        foreach ([$tenant, $otherTenant] as $index => $invoiceTenant) {
+            Invoice::withoutGlobalScopes()->create([
+                'tenant_id' => $invoiceTenant->getKey(),
+                'invoiceable_type' => Tenant::class,
+                'invoiceable_id' => $invoiceTenant->getKey(),
+                'invoice_number' => 'INV-FILTER-' . $index,
+                'status' => 'issued',
+                'currency' => 'USD',
+                'subtotal' => 100,
+                'total' => 100,
+                'outstanding_total' => 100,
+                'issued_at' => now()->toDateString(),
+                'due_date' => now()->addDays(10)->toDateString(),
+            ]);
+        }
+
+        $this->getJson('/api/admin/billing?search=Acme&plan_uid=' . $tenant->plan->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.tenant_uid', $tenant->uid);
+    }
+
+    public function test_superadmin_can_delete_alert_and_filter_permissions_by_plan(): void
+    {
+        $this->authenticateSuperadmin(['admin.alerts.manage', 'admin.tenants.manage']);
+
+        $alert = AdminAlertRule::query()->create([
+            'name' => 'Errores altos',
+            'condition_text' => 'errores > 10 en 24h',
+            'channels' => ['EMAIL'],
+            'is_active' => true,
+        ]);
+
+        $this->deleteJson('/api/admin/telemetry/alerts/' . $alert->uid)
+            ->assertOk();
+
+        $this->assertDatabaseMissing('admin_alert_rules', [
+            'uid' => $alert->uid,
+        ]);
+
+        Permission::query()->firstOrCreate([
+            'key' => 'inventory.read',
+        ], [
+            'module' => 'inventory',
+            'action' => 'read',
+            'description' => 'Ver inventario',
+        ]);
+        Permission::query()->firstOrCreate([
+            'key' => 'projects.read',
+        ], [
+            'module' => 'projects',
+            'action' => 'read',
+            'description' => 'Ver proyectos',
+        ]);
+
+        $tenant = $this->tenantWithPlan();
+        $tenant->plan->update([
+            'features' => [
+                'modules' => ['Inventario'],
+            ],
+        ]);
+
+        $response = $this->getJson('/api/admin/tenants/' . $tenant->uid . '/permissions?only_active_modules=true')
+            ->assertOk();
+
+        $keys = collect($response->json('data'))->pluck('key');
+        $this->assertTrue($keys->contains('inventory.read'));
+        $this->assertFalse($keys->contains('projects.read'));
+    }
+
+    public function test_superadmin_dashboard_accepts_period_filter(): void
+    {
+        $this->authenticateSuperadmin(['admin.dashboard.read']);
+
+        $this->tenantWithPlan();
+
+        $this->getJson('/api/admin/dashboard?period=30d')
+            ->assertOk()
+            ->assertJsonPath('data.period', '30d');
     }
 
     public function test_superadmin_can_paginate_tenant_users_for_drawer(): void

@@ -9,13 +9,25 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Validator;
 
 class AdminDashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $validated = Validator::make($request->query(), [
+            'period' => 'nullable|string|in:7d,30d,90d,12m',
+            'recent_page' => 'nullable|integer|min:1',
+            'recent_per_page' => 'nullable|integer|min:1|max:50',
+        ])->validate();
+
+        $period = $validated['period'] ?? null;
+        $periodStart = $this->periodStart($period);
         $tenants = Tenant::query()->with('plan')->get();
-        $mrrTotal = round((float) $tenants->sum(fn (Tenant $tenant) => $tenant->mrr ?? $tenant->plan?->price ?? 0), 2);
+        $periodTenants = $periodStart
+            ? $tenants->filter(fn (Tenant $tenant) => $tenant->created_at && $tenant->created_at->gte($periodStart))
+            : $tenants;
+        $mrrTotal = round((float) $periodTenants->sum(fn (Tenant $tenant) => $tenant->mrr ?? $tenant->plan?->price ?? 0), 2);
         $recentPage = max((int) $request->integer('recent_page', 1), 1);
         $recentPerPage = min(max((int) $request->integer('recent_per_page', 10), 1), 50);
 
@@ -53,18 +65,25 @@ class AdminDashboardController extends Controller
             ->map(fn (Tenant $tenant) => $this->serializeTenantSummary($tenant));
 
         return $this->successResponse([
+            'period' => $period,
             'mrr_total' => $mrrTotal,
             'mrr_growth_percent' => $growth,
             'mrr_history' => $months,
-            'tenants_activos' => $tenants->where('status', 'ACTIVO')->count(),
-            'tenants_trial' => $tenants->where('status', 'TRIAL')->count(),
-            'tenants_en_riesgo_count' => $tenants->whereIn('status', ['VENCIDO', 'SUSPENDIDO'])->count(),
-            'facturas_vencidas' => Invoice::withoutGlobalScopes()->where('status', 'overdue')->count(),
+            'tenants_activos' => $periodTenants->where('status', 'ACTIVO')->count(),
+            'tenants_trial' => $periodTenants->where('status', 'TRIAL')->count(),
+            'tenants_en_riesgo_count' => $periodTenants->whereIn('status', ['VENCIDO', 'SUSPENDIDO'])->count(),
+            'facturas_vencidas' => Invoice::withoutGlobalScopes()
+                ->where('status', 'overdue')
+                ->when($periodStart, fn ($query) => $query->where('created_at', '>=', $periodStart))
+                ->count(),
             'errores_criticos_24h' => SystemLog::withoutGlobalScopes()
                 ->whereIn('level', ['error', 'critical'])
                 ->where('created_at', '>=', now()->subDay())
                 ->count(),
-            'usuarios_totales' => User::withoutGlobalScopes()->whereNotNull('tenant_id')->count(),
+            'usuarios_totales' => User::withoutGlobalScopes()
+                ->whereNotNull('tenant_id')
+                ->when($periodStart, fn ($query) => $query->where('created_at', '>=', $periodStart))
+                ->count(),
             'tenants_en_riesgo' => $tenantsAtRisk,
             'requieren_atencion' => $tenantsAtRisk,
             'tenants_recientes' => $recentItems,
@@ -75,6 +94,17 @@ class AdminDashboardController extends Controller
                 'last_page' => (int) ceil(max($recentTotal, 1) / $recentPerPage),
             ],
         ]);
+    }
+
+    private function periodStart(?string $period): ?Carbon
+    {
+        return match ($period) {
+            '7d' => now()->subDays(7),
+            '30d' => now()->subDays(30),
+            '90d' => now()->subDays(90),
+            '12m' => now()->subMonths(12),
+            default => null,
+        };
     }
 
     private function serializeTenantSummary(Tenant $tenant): array

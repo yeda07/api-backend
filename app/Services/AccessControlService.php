@@ -10,6 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class AccessControlService
 {
+    public function __construct(private readonly PlanPermissionService $planPermissionService)
+    {
+    }
+
     public function getRoles()
     {
         return Role::query()
@@ -54,6 +58,7 @@ class AccessControlService
     public function createRole(array $data): Role
     {
         $this->ensureRoleKeyIsAvailable($data['key']);
+        $permissionIds = $this->permissionIdsFromUids($data['permission_uids'] ?? []);
 
         $role = Role::query()->create([
             'name' => $data['name'],
@@ -62,7 +67,7 @@ class AccessControlService
             'is_system' => false,
         ]);
 
-        $role->permissions()->sync($this->permissionIdsFromUids($data['permission_uids'] ?? []));
+        $role->permissions()->sync($permissionIds);
 
         return $role->fresh('permissions');
     }
@@ -81,6 +86,10 @@ class AccessControlService
             $this->ensureRoleKeyIsAvailable($data['key'], $role->getKey());
         }
 
+        $permissionIds = array_key_exists('permission_uids', $data)
+            ? $this->permissionIdsFromUids($data['permission_uids'])
+            : null;
+
         $role->update([
             'name' => $data['name'] ?? $role->name,
             'key' => $data['key'] ?? $role->key,
@@ -88,7 +97,7 @@ class AccessControlService
         ]);
 
         if (array_key_exists('permission_uids', $data)) {
-            $role->permissions()->sync($this->permissionIdsFromUids($data['permission_uids']));
+            $role->permissions()->sync($permissionIds);
         }
 
         return $role->fresh('permissions');
@@ -121,6 +130,7 @@ class AccessControlService
     {
         $user = $this->findUser($userUid);
         $permission = $this->findPermission($permissionUid);
+        $this->ensurePermissionAllowedForUserTenant(collect([$permission]), $user);
 
         $user->givePermissionTo($permission);
 
@@ -198,7 +208,29 @@ class AccessControlService
             ]);
         }
 
+        $this->ensurePermissionAllowedForCurrentTenant($permissions);
+
         return $permissions->pluck('id')->all();
+    }
+
+    private function ensurePermissionAllowedForCurrentTenant($permissions): void
+    {
+        $user = auth()->user();
+
+        if (!$user || $this->platformAdminIsActing() || !$user->tenant) {
+            return;
+        }
+
+        $this->planPermissionService->assertPermissionsAllowedForTenant($permissions, $user->tenant);
+    }
+
+    private function ensurePermissionAllowedForUserTenant($permissions, User $targetUser): void
+    {
+        if ($this->platformAdminIsActing() || !$targetUser->tenant) {
+            return;
+        }
+
+        $this->planPermissionService->assertPermissionsAllowedForTenant($permissions, $targetUser->tenant);
     }
 
     private function ensureRoleKeyIsAvailable(string $key, ?int $ignoreRoleId = null): void

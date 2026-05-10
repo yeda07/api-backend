@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FinancialRecord;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Plan;
 use App\Models\Tenant;
 use App\Support\ApiIndex;
 use Illuminate\Http\Request;
@@ -38,6 +39,9 @@ class AdminBillingController extends Controller
     {
         $validated = Validator::make($request->query(), [
             'tenant_uid' => 'nullable|uuid',
+            'search' => 'nullable|string|max:255',
+            'plan_uid' => 'nullable|uuid',
+            'plan_nombre' => 'nullable|string|max:255',
             'estado' => 'nullable|string|in:PAGADA,PENDIENTE,VENCIDA,CANCELADA',
             'from' => 'nullable|date',
             'to' => 'nullable|date',
@@ -51,6 +55,8 @@ class AdminBillingController extends Controller
             $tenantId = Tenant::query()->where('uid', $validated['tenant_uid'])->value('id');
             $query->where('tenant_id', $tenantId);
         }
+
+        $this->applyTenantFilters($query, $validated);
 
         if (!empty($validated['estado'])) {
             $query->where('status', $this->toInvoiceStatus($validated['estado']));
@@ -80,6 +86,9 @@ class AdminBillingController extends Controller
     {
         $validated = Validator::make($request->query(), [
             'tenant_uid' => 'nullable|uuid',
+            'search' => 'nullable|string|max:255',
+            'plan_uid' => 'nullable|uuid',
+            'plan_nombre' => 'nullable|string|max:255',
             'estado' => 'nullable|string|in:PAGADA,PENDIENTE,VENCIDA,CANCELADA',
             'from' => 'nullable|date',
             'to' => 'nullable|date',
@@ -193,6 +202,8 @@ class AdminBillingController extends Controller
             $query->where('tenant_id', $tenantId);
         }
 
+        $this->applyTenantFilters($query, $validated);
+
         if (!empty($validated['estado'])) {
             $query->where('status', $this->toInvoiceStatus($validated['estado']));
         }
@@ -206,6 +217,35 @@ class AdminBillingController extends Controller
         }
 
         return $query;
+    }
+
+    private function applyTenantFilters($query, array $validated): void
+    {
+        if (!empty($validated['search'])) {
+            $search = $validated['search'];
+            $query->whereHas('tenant', function ($tenantQuery) use ($search) {
+                $tenantQuery
+                    ->withoutGlobalScopes()
+                    ->where(function ($builder) use ($search) {
+                        $builder
+                            ->where('name', 'like', '%' . $search . '%')
+                            ->orWhere('domain', 'like', '%' . $search . '%')
+                            ->orWhere('contact_email', 'like', '%' . $search . '%');
+                    });
+            });
+        }
+
+        if (!empty($validated['plan_uid'])) {
+            $planId = Plan::query()->where('uid', $validated['plan_uid'])->value('id');
+            $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->withoutGlobalScopes()->where('plan_id', $planId));
+        }
+
+        if (!empty($validated['plan_nombre'])) {
+            $planName = $validated['plan_nombre'];
+            $query->whereHas('tenant.plan', function ($planQuery) use ($planName) {
+                $planQuery->where('name', 'like', '%' . $planName . '%');
+            });
+        }
     }
 
     private function toCsv(array $rows): string

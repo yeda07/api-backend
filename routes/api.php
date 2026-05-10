@@ -542,8 +542,13 @@ Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('ad
         Route::put('/{uid}', [AdminTenantController::class, 'update'])->middleware('permission:admin.tenants.manage');
         Route::post('/{uid}/suspend', [AdminTenantController::class, 'suspend'])->middleware('permission:admin.tenants.manage');
         Route::post('/{uid}/activate', [AdminTenantController::class, 'activate'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/archive', [AdminTenantController::class, 'archive'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/restore', [AdminTenantController::class, 'restore'])->middleware('permission:admin.tenants.manage');
+        Route::get('/{uid}/permissions', [AdminTenantController::class, 'permissions'])->middleware('permission:admin.tenants.manage');
         Route::get('/{uid}/users', [AdminTenantController::class, 'users'])->middleware('permission:admin.tenants.manage');
         Route::post('/{uid}/users', [AdminTenantController::class, 'createUser'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/users/{userUid}/lock', [AdminTenantController::class, 'lockUser'])->middleware('permission:admin.tenants.manage');
+        Route::post('/{uid}/users/{userUid}/unlock', [AdminTenantController::class, 'unlockUser'])->middleware('permission:admin.tenants.manage');
     });
 
     Route::prefix('billing')->group(function () {
@@ -563,5 +568,6 @@ Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('ad
         Route::post('/alerts', [AdminTelemetryController::class, 'storeAlert'])->middleware('permission:admin.alerts.manage');
         Route::put('/alerts/{uid}', [AdminTelemetryController::class, 'updateAlert'])->middleware('permission:admin.alerts.manage');
         Route::post('/alerts/{uid}/toggle', [AdminTelemetryController::class, 'toggleAlert'])->middleware('permission:admin.alerts.manage');
+        Route::delete('/alerts/{uid}', [AdminTelemetryController::class, 'destroyAlert'])->middleware('permission:admin.alerts.manage');
     });
 });

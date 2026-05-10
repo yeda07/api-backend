@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Permission;
 use App\Models\Plan;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PlanPermissionService;
 use App\Support\ApiIndex;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
@@ -25,7 +27,7 @@ class AdminTenantController extends Controller
         $validated = Validator::make($request->query(), [
             'search' => 'nullable|string|max:255',
             'plan_uid' => 'nullable|uuid',
-            'estado' => 'nullable|string|in:ACTIVO,TRIAL,VENCIDO,SUSPENDIDO,INACTIVO',
+            'estado' => 'nullable|string|in:ACTIVO,TRIAL,VENCIDO,SUSPENDIDO,INACTIVO,ARCHIVADO',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
             'sort_by' => 'nullable|string|in:nombre,mrr,totalUsuarios,creadoEn,ultimoAcceso',
@@ -94,7 +96,7 @@ class AdminTenantController extends Controller
                 'pais' => 'nullable|string|max:120',
                 'email_contacto' => 'nullable|email|max:255',
                 'plan_uid' => 'nullable|uuid',
-                'estado' => 'required|string|in:ACTIVO,TRIAL,VENCIDO,SUSPENDIDO,INACTIVO',
+                'estado' => 'required|string|in:ACTIVO,TRIAL,VENCIDO,SUSPENDIDO,INACTIVO,ARCHIVADO',
                 'mrr' => 'nullable|numeric|min:0',
                 'almacenamiento_usado_gb' => 'nullable|numeric|min:0',
                 'limite_almacenamiento_gb' => 'nullable|numeric|min:0',
@@ -167,7 +169,7 @@ class AdminTenantController extends Controller
                 'pais' => 'sometimes|nullable|string|max:120',
                 'email_contacto' => 'sometimes|nullable|email|max:255',
                 'plan_uid' => 'sometimes|nullable|uuid',
-                'estado' => 'sometimes|string|in:ACTIVO,TRIAL,VENCIDO,SUSPENDIDO,INACTIVO',
+                'estado' => 'sometimes|string|in:ACTIVO,TRIAL,VENCIDO,SUSPENDIDO,INACTIVO,ARCHIVADO',
                 'mrr' => 'sometimes|numeric|min:0',
                 'almacenamiento_usado_gb' => 'sometimes|numeric|min:0',
                 'limite_almacenamiento_gb' => 'sometimes|nullable|numeric|min:0',
@@ -238,6 +240,39 @@ class AdminTenantController extends Controller
         ]);
 
         return $this->successResponse($this->serializeTenant($tenant->fresh('plan')), 200, 'Tenant activado');
+    }
+
+    public function archive(string $uid)
+    {
+        $tenant = Tenant::query()->where('uid', $uid)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant no encontrado', 404);
+        }
+
+        $tenant->update([
+            'status' => 'ARCHIVADO',
+            'is_active' => false,
+        ]);
+
+        return $this->successResponse($this->serializeTenant($tenant->fresh('plan')), 200, 'Tenant archivado');
+    }
+
+    public function restore(string $uid)
+    {
+        $tenant = Tenant::query()->where('uid', $uid)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant no encontrado', 404);
+        }
+
+        $tenant->update([
+            'status' => 'ACTIVO',
+            'is_active' => true,
+            'expires_at' => null,
+        ]);
+
+        return $this->successResponse($this->serializeTenant($tenant->fresh('plan')), 200, 'Tenant restaurado');
     }
 
     public function createUser(Request $request, string $uid)
@@ -317,6 +352,7 @@ class AdminTenantController extends Controller
     public function users(Request $request, string $uid)
     {
         $validated = Validator::make($request->query(), [
+            'role' => 'nullable|string|in:owner,manager,seller',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
         ])->validate();
@@ -330,6 +366,14 @@ class AdminTenantController extends Controller
         $users = User::withoutGlobalScopes()
             ->with(['roles' => fn ($query) => $query->withoutGlobalScopes()])
             ->where('tenant_id', $tenant->getKey())
+            ->when(!empty($validated['role']), function ($query) use ($validated, $tenant) {
+                $query->whereHas('roles', function ($roleQuery) use ($validated, $tenant) {
+                    $roleQuery
+                        ->withoutGlobalScopes()
+                        ->where('tenant_id', $tenant->getKey())
+                        ->where('key', $validated['role']);
+                });
+            })
             ->orderBy('name')
             ->paginate(
                 ApiIndex::perPage($validated),
@@ -345,6 +389,77 @@ class AdminTenantController extends Controller
         );
 
         return $this->successResponse($users);
+    }
+
+    public function lockUser(string $uid, string $userUid)
+    {
+        $tenant = Tenant::query()->where('uid', $uid)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant no encontrado', 404);
+        }
+
+        $user = $this->findTenantUser($tenant, $userUid);
+
+        if (!$user) {
+            return $this->errorResponse('Usuario no encontrado', 404);
+        }
+
+        $user->tokens()->delete();
+        $user->update([
+            'locked_until' => now()->addYears(100),
+        ]);
+
+        return $this->successResponse($this->serializeTenantUser($user->fresh(['roles'])), 200, 'Usuario bloqueado');
+    }
+
+    public function unlockUser(string $uid, string $userUid)
+    {
+        $tenant = Tenant::query()->where('uid', $uid)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant no encontrado', 404);
+        }
+
+        $user = $this->findTenantUser($tenant, $userUid);
+
+        if (!$user) {
+            return $this->errorResponse('Usuario no encontrado', 404);
+        }
+
+        $user->update([
+            'locked_until' => null,
+            'failed_login_attempts' => 0,
+        ]);
+
+        return $this->successResponse($this->serializeTenantUser($user->fresh(['roles'])), 200, 'Usuario desbloqueado');
+    }
+
+    public function permissions(Request $request, string $uid, PlanPermissionService $planPermissionService)
+    {
+        $validated = Validator::make($request->query(), [
+            'only_active_modules' => 'nullable|string|in:true,false,1,0',
+        ])->validate();
+
+        $tenant = Tenant::query()->with('plan')->where('uid', $uid)->first();
+
+        if (!$tenant) {
+            return $this->errorResponse('Tenant no encontrado', 404);
+        }
+
+        $permissions = Permission::query()
+            ->where('module', '!=', 'admin')
+            ->orderBy('module')
+            ->orderBy('action')
+            ->get();
+
+        $onlyActiveModules = in_array(strtolower((string) ($validated['only_active_modules'] ?? 'false')), ['true', '1'], true);
+
+        if ($onlyActiveModules) {
+            $permissions = $planPermissionService->filterPermissionsForTenant($permissions, $tenant);
+        }
+
+        return $this->successResponse($permissions);
     }
 
     private function serializeTenant(Tenant $tenant): array
@@ -365,6 +480,7 @@ class AdminTenantController extends Controller
             'plan_nombre' => $tenant->plan?->name,
             'mrr' => (float) $tenant->mrr,
             'estado' => $tenant->status,
+            'expires_at' => optional($tenant->expires_at)?->toISOString(),
             'total_usuarios' => (int) $totalUsers,
             'limite_usuarios' => $tenant->plan?->max_users,
             'almacenamiento_usado_gb' => (float) $tenant->storage_used_gb,
@@ -386,5 +502,15 @@ class AdminTenantController extends Controller
             'ultimo_acceso' => $user->last_login_at?->toISOString(),
             'estado' => $user->isLocked() ? 'Inactivo' : 'Activo',
         ];
+    }
+
+    private function findTenantUser(Tenant $tenant, string $userUid): ?User
+    {
+        return User::withoutGlobalScopes()
+            ->with(['roles' => fn ($query) => $query->withoutGlobalScopes()])
+            ->where('tenant_id', $tenant->getKey())
+            ->where('uid', $userUid)
+            ->where('is_platform_admin', false)
+            ->first();
     }
 }

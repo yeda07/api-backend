@@ -225,6 +225,19 @@ class AdminTelemetryController extends Controller
         return $this->successResponse($this->serializeAlert($rule->fresh()), 200, 'Estado de alerta actualizado');
     }
 
+    public function destroyAlert(string $uid)
+    {
+        $rule = AdminAlertRule::query()->where('uid', $uid)->first();
+
+        if (!$rule) {
+            return $this->errorResponse('Alerta no encontrada', 404);
+        }
+
+        $rule->delete();
+
+        return $this->successResponse(null, 200, 'Alerta eliminada');
+    }
+
     public function evaluateAlerts(AdminAlertEvaluatorService $evaluator)
     {
         return $this->successResponse($evaluator->evaluateActiveRules());
