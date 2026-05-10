@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\ApiIndex;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -22,23 +24,30 @@ class AccessControlService
             'search' => 'nullable|string|max:255',
         ])->validate();
 
-        $roles = Role::query()
-            ->with('permissions')
-            ->withCount('users')
-            ->withCount('users as total_usuarios')
-            ->when(!empty($validated['search']), function ($query) use ($validated) {
-                $search = '%' . mb_strtolower($validated['search']) . '%';
+        $roles = ApiIndex::paginateOrGet(
+            Role::query()
+                ->with('permissions')
+                ->withCount('users')
+                ->withCount('users as total_usuarios')
+                ->when(!empty($validated['search']), function ($query) use ($validated) {
+                    $search = '%' . mb_strtolower($validated['search']) . '%';
 
-                $query->whereRaw('LOWER(name) LIKE ?', [$search]);
-            })
-            ->orderBy('name')
-            ->get();
+                    $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+                })
+                ->orderBy('name'),
+            $filters,
+            'roles_page'
+        );
 
         if (($validated['only_active_modules'] ?? null) && filter_var($validated['only_active_modules'], FILTER_VALIDATE_BOOLEAN)) {
             $tenant = auth()->user()?->tenant;
 
             if ($tenant) {
-                $roles->each(function (Role $role) use ($tenant) {
+                $collection = $roles instanceof LengthAwarePaginator
+                    ? $roles->getCollection()
+                    : $roles;
+
+                $collection->each(function (Role $role) use ($tenant) {
                     $role->setRelation(
                         'permissions',
                         $this->planPermissionService->filterPermissionsForTenant($role->permissions, $tenant)

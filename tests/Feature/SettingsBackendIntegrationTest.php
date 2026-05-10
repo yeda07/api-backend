@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
-use App\Models\CustomField;
 use App\Models\Currency;
+use App\Models\CustomField;
 use App\Models\DocumentType;
 use App\Models\Permission;
 use App\Models\Role;
@@ -38,7 +38,7 @@ class SettingsBackendIntegrationTest extends TestCase
 
         $uid = $response->json('data.uid');
 
-        $this->putJson('/api/tags/' . $uid, [
+        $this->putJson('/api/tags/'.$uid, [
             'color' => 'blue',
             'entity_types' => ['DEAL'],
         ])
@@ -127,26 +127,50 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.name', 'Administrador Comercial');
     }
 
+    public function test_roles_index_supports_pagination_meta(): void
+    {
+        $user = $this->authenticateWithPermissions(['users.manage']);
+
+        Role::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Administrador Comercial',
+            'key' => 'admin-comercial',
+        ]);
+
+        Role::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Soporte Operativo',
+            'key' => 'soporte-operativo',
+        ]);
+
+        $this->getJson('/api/rbac/roles?page=1&per_page=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 1)
+            ->assertJsonPath('meta.pagination.total', 2);
+    }
+
     public function test_teams_member_endpoints_and_delete_guard_match_settings_contract(): void
     {
         $owner = $this->authenticateWithPermissions(['teams.read', 'teams.manage']);
         $leader = User::query()->create([
             'tenant_id' => $owner->tenant_id,
             'name' => 'Carlos Mendoza',
-            'email' => 'leader-settings+' . uniqid() . '@example.test',
+            'email' => 'leader-settings+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
         $member = User::query()->create([
             'tenant_id' => $owner->tenant_id,
             'name' => 'Laura Rios',
-            'email' => 'member-settings+' . uniqid() . '@example.test',
+            'email' => 'member-settings+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
         Account::query()->create([
             'tenant_id' => $owner->tenant_id,
             'owner_user_id' => $member->getKey(),
             'name' => 'Cliente Asignado',
-            'document' => 'SET-' . uniqid(),
+            'document' => 'SET-'.uniqid(),
         ]);
 
         $team = $this->postJson('/api/teams', [
@@ -161,7 +185,7 @@ class SettingsBackendIntegrationTest extends TestCase
 
         $uid = $team->json('data.uid');
 
-        $this->postJson('/api/teams/' . $uid . '/members', [
+        $this->postJson('/api/teams/'.$uid.'/members', [
             'user_uid' => $member->uid,
         ])
             ->assertOk()
@@ -170,14 +194,14 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.members.0.user_name', 'Laura Rios')
             ->assertJsonPath('data.members.0.assigned_clients', 1);
 
-        $this->deleteJson('/api/teams/' . $uid)
+        $this->deleteJson('/api/teams/'.$uid)
             ->assertUnprocessable();
 
-        $this->deleteJson('/api/teams/' . $uid . '/members/' . $member->uid)
+        $this->deleteJson('/api/teams/'.$uid.'/members/'.$member->uid)
             ->assertOk()
             ->assertJsonPath('message', 'Member removed');
 
-        $this->deleteJson('/api/teams/' . $uid)
+        $this->deleteJson('/api/teams/'.$uid)
             ->assertOk()
             ->assertJsonPath('message', 'Team deleted');
     }
@@ -198,6 +222,26 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.name', 'Equipo Norte');
+    }
+
+    public function test_teams_index_supports_pagination_meta(): void
+    {
+        $this->authenticateWithPermissions(['teams.read', 'teams.manage']);
+
+        $this->postJson('/api/teams', [
+            'name' => 'Equipo Norte',
+        ])->assertCreated();
+
+        $this->postJson('/api/teams', [
+            'name' => 'Soporte Sur',
+        ])->assertCreated();
+
+        $this->getJson('/api/teams?page=1&per_page=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.per_page', 1)
+            ->assertJsonPath('meta.pagination.total', 2);
     }
 
     public function test_custom_fields_and_localization_accept_settings_frontend_aliases(): void
@@ -224,7 +268,7 @@ class SettingsBackendIntegrationTest extends TestCase
 
         $uid = $field->json('data.uid');
 
-        $this->putJson('/api/custom-fields/' . $uid, [
+        $this->putJson('/api/custom-fields/'.$uid, [
             'label' => 'Codigo actualizado',
             'required' => true,
         ])
@@ -268,14 +312,14 @@ class SettingsBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Settings Owner',
-            'email' => 'settings-owner+' . uniqid() . '@example.test',
+            'email' => 'settings-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
         $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
         $user->permissions()->sync($permissionIds);
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

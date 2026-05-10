@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Team;
 use App\Models\User;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -16,13 +17,16 @@ class TeamService
             'search' => 'nullable|string|max:255',
         ])->validate();
 
-        return Team::query()
-            ->with(['manager', 'members'])
-            ->when(!empty($validated['search']), function ($query) use ($validated) {
-                $query->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($validated['search']) . '%']);
-            })
-            ->orderBy('name')
-            ->get();
+        return ApiIndex::paginateOrGet(
+            Team::query()
+                ->with(['manager', 'members'])
+                ->when(!empty($validated['search']), function ($query) use ($validated) {
+                    $query->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($validated['search']) . '%']);
+                })
+                ->orderBy('name'),
+            $filters,
+            'teams_page'
+        );
     }
 
     public function get(string $uid): Team
