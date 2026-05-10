@@ -6,7 +6,9 @@ use App\Models\Activity;
 use App\Models\Permission;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -76,6 +78,31 @@ class ApiTestingSuiteSecurityHardeningTest extends TestCase
         $missing->assertOk();
         $existing->assertOk();
         $this->assertSame($missing->json('message'), $existing->json('message'));
+    }
+
+    public function test_forgot_password_email_uses_frontend_reset_url(): void
+    {
+        Notification::fake();
+        config(['app.url' => 'https://vende-mas.com.co']);
+
+        $user = User::query()->create([
+            'name' => 'Reset User',
+            'email' => 'reset-user@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        $this->postJson('/api/forgot-password', [
+            'email' => $user->email,
+        ])->assertOk();
+
+        Notification::assertSentTo($user, ResetPassword::class, function (ResetPassword $notification) use ($user) {
+            $mail = $notification->toMail($user)->toArray();
+            $actionUrl = $mail['actionUrl'] ?? '';
+
+            return str_starts_with($actionUrl, 'https://vende-mas.com.co/auth/reset-password?')
+                && str_contains($actionUrl, 'token=')
+                && str_contains($actionUrl, 'email=reset-user%40example.test');
+        });
     }
 
     public function test_security_headers_are_present_on_api_responses(): void

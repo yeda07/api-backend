@@ -9,6 +9,15 @@ use Illuminate\Validation\ValidationException;
 
 class PlanController extends Controller
 {
+    private const PLAN_MODULES = [
+        ['key' => 'ventas', 'label' => 'Ventas'],
+        ['key' => 'inventario', 'label' => 'Inventario'],
+        ['key' => 'rh', 'label' => 'RH / Comisiones'],
+        ['key' => 'reportes', 'label' => 'Reportes'],
+        ['key' => 'multi-currency', 'label' => 'Multi-currency'],
+        ['key' => 'api-publica', 'label' => 'API Publica'],
+    ];
+
     public function index()
     {
         return $this->successResponse(
@@ -21,6 +30,11 @@ class PlanController extends Controller
                 ->map(fn (Plan $plan) => $this->serializePlan($plan))
                 ->values()
         );
+    }
+
+    public function modules()
+    {
+        return $this->successResponse(self::PLAN_MODULES);
     }
 
     public function store(Request $request)

@@ -47,6 +47,19 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonPath('data.features.support', 'Email + Chat');
     }
 
+    public function test_superadmin_can_list_plan_modules_catalog(): void
+    {
+        $this->authenticateSuperadmin(['plans.manage']);
+
+        $this->getJson('/api/admin/plan-modules')
+            ->assertOk()
+            ->assertJsonPath('data.0.key', 'ventas')
+            ->assertJsonPath('data.0.label', 'Ventas')
+            ->assertJsonPath('data.2.key', 'rh')
+            ->assertJsonPath('data.4.key', 'multi-currency')
+            ->assertJsonPath('data.5.key', 'api-publica');
+    }
+
     public function test_plan_delete_deactivates_when_tenants_are_attached(): void
     {
         $this->authenticateSuperadmin(['plans.manage']);

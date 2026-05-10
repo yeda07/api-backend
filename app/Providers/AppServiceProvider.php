@@ -24,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         ResetPassword::createUrlUsing(function (object $notifiable, string $token): string {
-            $baseUrl = rtrim((string) env('PASSWORD_RESET_URL', rtrim((string) config('app.url'), '/') . '/reset-password'), '/');
+            $baseUrl = rtrim((string) env('PASSWORD_RESET_URL', rtrim((string) config('app.url'), '/') . '/auth/reset-password'), '/');
 
             return $baseUrl . '?' . http_build_query([
                 'token' => $token,

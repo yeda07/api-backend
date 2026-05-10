@@ -534,6 +534,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
 Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->middleware('permission:admin.dashboard.read');
+    Route::get('/plan-modules', [PlanController::class, 'modules'])->middleware('permission:plans.manage');
 
     Route::prefix('tenants')->group(function () {
         Route::get('/', [AdminTenantController::class, 'index'])->middleware('permission:admin.tenants.manage');
