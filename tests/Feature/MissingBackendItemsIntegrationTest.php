@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use ZipArchive;
 
 class MissingBackendItemsIntegrationTest extends TestCase
 {
@@ -68,7 +69,7 @@ class MissingBackendItemsIntegrationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->deleteJson('/api/document-types/' . $documentType->uid)
+        $this->deleteJson('/api/document-types/'.$documentType->uid)
             ->assertOk()
             ->assertJsonPath('message', 'Tipo de documento eliminado');
 
@@ -99,6 +100,28 @@ class MissingBackendItemsIntegrationTest extends TestCase
         }
     }
 
+    public function test_inventory_products_excel_export_is_a_valid_xlsx_file(): void
+    {
+        $this->authenticateWithPermissions(['inventory.read']);
+
+        $response = $this->postJson('/api/inventory/products/export', ['format' => 'excel']);
+
+        $response->assertOk();
+        $this->assertStringContainsString('.xlsx', $response->headers->get('Content-Disposition'));
+        $this->assertSame('PK', substr($response->getContent(), 0, 2));
+
+        $path = tempnam(storage_path('framework/testing'), 'products-export-');
+        file_put_contents($path, $response->getContent());
+
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($path));
+        $this->assertNotFalse($zip->locateName('[Content_Types].xml'));
+        $this->assertNotFalse($zip->locateName('xl/workbook.xml'));
+        $this->assertNotFalse($zip->locateName('xl/worksheets/sheet1.xml'));
+        $zip->close();
+        unlink($path);
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
@@ -121,7 +144,7 @@ class MissingBackendItemsIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Missing Owner',
-            'email' => 'missing-owner+' . uniqid() . '@example.test',
+            'email' => 'missing-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
@@ -130,7 +153,7 @@ class MissingBackendItemsIntegrationTest extends TestCase
             $user->permissions()->sync($permissionIds);
         }
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }
