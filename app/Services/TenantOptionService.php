@@ -6,6 +6,8 @@ use App\Models\Account;
 use App\Models\CommissionPlan;
 use App\Models\InventoryProduct;
 use App\Models\Product;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class TenantOptionService
@@ -75,25 +77,8 @@ class TenantOptionService
 
     public function opportunityProducts(): array
     {
-        $catalog = Product::query()
-            ->where('status', 'active')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Product $product) => [
-                'uid' => $product->uid,
-                'name' => $product->name,
-                'key' => $product->sku,
-            ]);
-
-        $inventory = InventoryProduct::query()
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get()
-            ->map(fn (InventoryProduct $product) => [
-                'uid' => $product->uid,
-                'name' => $product->name,
-                'key' => $product->sku,
-            ]);
+        $catalog = $this->catalogProductOptions();
+        $inventory = $this->inventoryProductOptions();
 
         return $catalog->merge($inventory)->unique('uid')->values()->all();
     }
@@ -148,6 +133,40 @@ class TenantOptionService
             ])
             ->values()
             ->all();
+    }
+
+    private function catalogProductOptions(): Collection
+    {
+        if (!Schema::hasTable('products')) {
+            return collect();
+        }
+
+        return Product::query()
+            ->when(Schema::hasColumn('products', 'status'), fn ($query) => $query->where('status', 'active'))
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Product $product) => [
+                'uid' => $product->uid,
+                'name' => $product->name,
+                'key' => $product->sku,
+            ]);
+    }
+
+    private function inventoryProductOptions(): Collection
+    {
+        if (!Schema::hasTable('inventory_products')) {
+            return collect();
+        }
+
+        return InventoryProduct::query()
+            ->when(Schema::hasColumn('inventory_products', 'is_active'), fn ($query) => $query->where('is_active', true))
+            ->orderBy('name')
+            ->get()
+            ->map(fn (InventoryProduct $product) => [
+                'uid' => $product->uid,
+                'name' => $product->name,
+                'key' => $product->sku,
+            ]);
     }
 
     private function stableUid(string $key): string
