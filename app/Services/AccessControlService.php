@@ -19,12 +19,18 @@ class AccessControlService
     {
         $validated = Validator::make($filters, [
             'only_active_modules' => 'nullable|string|in:true,false,1,0',
+            'search' => 'nullable|string|max:255',
         ])->validate();
 
         $roles = Role::query()
             ->with('permissions')
             ->withCount('users')
             ->withCount('users as total_usuarios')
+            ->when(!empty($validated['search']), function ($query) use ($validated) {
+                $search = '%' . mb_strtolower($validated['search']) . '%';
+
+                $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+            })
             ->orderBy('name')
             ->get();
 

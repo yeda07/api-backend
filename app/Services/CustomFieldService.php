@@ -13,14 +13,25 @@ class CustomFieldService
 {
     public function listFields(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'entity_type' => 'nullable|string',
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
         $tenantId = auth()->user()->tenant_id;
         $query = CustomField::query()
             ->where('tenant_id', $tenantId)
             ->orderBy('entity_type')
             ->orderBy('name');
 
-        if (!empty($filters['entity_type'])) {
-            $query->where('entity_type', $this->resolveEntityType($filters['entity_type']));
+        if (!empty($validated['entity_type'])) {
+            $query->where('entity_type', $this->resolveEntityType($validated['entity_type']));
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+
+            $query->whereRaw('LOWER(name) LIKE ?', [$search]);
         }
 
         return ApiIndex::paginateOrGet($query, $filters, 'custom_fields_page');

@@ -3,8 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\CustomField;
 use App\Models\Currency;
+use App\Models\DocumentType;
 use App\Models\Permission;
+use App\Models\Role;
+use App\Models\Tag;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,6 +45,86 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.color', '#2563eb')
             ->assertJsonPath('data.entity_types.0', 'DEAL');
+    }
+
+    public function test_settings_endpoints_accept_search_query(): void
+    {
+        $user = $this->authenticateWithPermissions([
+            'tags.manage',
+            'documents.read',
+            'custom-fields.manage',
+            'users.manage',
+        ]);
+
+        Tag::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cliente VIP',
+            'key' => 'cliente-vip',
+            'color' => '#16a34a',
+        ]);
+        Tag::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Prospecto Frio',
+            'key' => 'prospecto-frio',
+            'color' => '#2563eb',
+        ]);
+
+        DocumentType::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Contrato Marco',
+            'is_active' => true,
+        ]);
+        DocumentType::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Factura Cliente',
+            'is_active' => true,
+        ]);
+
+        CustomField::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'entity_type' => Account::class,
+            'name' => 'Codigo de Licitacion',
+            'key' => 'codigo_licitacion',
+            'type' => 'text',
+        ]);
+        CustomField::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'entity_type' => Account::class,
+            'name' => 'Region Comercial',
+            'key' => 'region_comercial',
+            'type' => 'text',
+        ]);
+
+        Role::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Administrador Comercial',
+            'key' => 'admin-comercial',
+        ]);
+        Role::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Soporte Operativo',
+            'key' => 'soporte-operativo',
+        ]);
+
+        $this->getJson('/api/tags?search=vip')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Cliente VIP');
+
+        $this->getJson('/api/document-types?search=contrato')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Contrato Marco');
+
+        $this->getJson('/api/custom-fields?search=licitacion')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.label', 'Codigo de Licitacion');
+
+        $this->getJson('/api/rbac/roles?search=comercial')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Administrador Comercial');
     }
 
     public function test_teams_member_endpoints_and_delete_guard_match_settings_contract(): void

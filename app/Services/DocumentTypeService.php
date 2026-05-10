@@ -19,7 +19,11 @@ class DocumentTypeService
 
     public function getTypes(array $filters = [])
     {
-        return $this->documentTypeRepository->all($filters);
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
+        return $this->documentTypeRepository->all([...$filters, ...$validated]);
     }
 
     public function createType(array $data): DocumentType

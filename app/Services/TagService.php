@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Tag;
 use App\Support\ApiIndex;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -11,8 +12,19 @@ class TagService
 {
     public function getAll(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
         return ApiIndex::paginateOrGet(
-            Tag::query()->orderBy('category')->orderBy('name'),
+            Tag::query()
+                ->when(!empty($validated['search']), function ($query) use ($validated) {
+                    $search = '%' . mb_strtolower($validated['search']) . '%';
+
+                    $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+                })
+                ->orderBy('category')
+                ->orderBy('name'),
             $filters,
             'tags_page'
         );

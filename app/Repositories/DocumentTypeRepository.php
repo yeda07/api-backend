@@ -14,7 +14,14 @@ class DocumentTypeRepository
 
     public function all(array $filters = [])
     {
-        return ApiIndex::paginateOrGet($this->query(), $filters, 'document_types_page');
+        $query = $this->query()
+            ->when(!empty($filters['search']), function ($query) use ($filters) {
+                $search = '%' . mb_strtolower($filters['search']) . '%';
+
+                $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+            });
+
+        return ApiIndex::paginateOrGet($query, $filters, 'document_types_page');
     }
 
     public function activeRequired()
