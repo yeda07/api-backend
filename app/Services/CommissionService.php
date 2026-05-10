@@ -426,7 +426,7 @@ class CommissionService
             ],
             'tiers' => $this->buildTierProgress($user->getKey(), $salesAchieved),
             'recentSales' => CommissionEntry::query()
-                ->with(['quotation.quoteable'])
+                ->with(['quotation'])
                 ->where('user_id', $user->getKey())
                 ->latest('earned_at')
                 ->limit(10)
@@ -434,7 +434,7 @@ class CommissionService
                 ->map(fn (CommissionEntry $entry) => [
                     'uid' => $entry->uid,
                     'date' => $entry->earned_at,
-                    'client' => $this->commissionEntryClientName($entry),
+                    'client' => $entry->quotation?->client_name ?? $this->commissionEntryClientName($entry),
                     'amount' => round((float) $entry->base_amount, 2),
                     'commission_generated' => round((float) $entry->commission_amount, 2),
                 ])
@@ -711,6 +711,7 @@ class CommissionService
             'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:sale,margin,target'],
             'base_percent' => [$partial ? 'sometimes' : 'required', 'numeric', 'min:0', 'max:100'],
             'tiers_json' => 'sometimes|array',
+            'tiers_json.*.uid' => 'sometimes|string|max:255',
             'tiers_json.*.threshold' => 'required_with:tiers_json|numeric|min:0',
             'tiers_json.*.percent' => 'required_without:tiers_json.*.percentage|numeric|min:0|max:100',
             'tiers_json.*.percentage' => 'required_without:tiers_json.*.percent|numeric|min:0|max:100',
@@ -730,6 +731,7 @@ class CommissionService
         if (!empty($validated['tiers_json'])) {
             $validated['tiers_json'] = collect($validated['tiers_json'])
                 ->map(fn (array $tier) => [
+                    'uid' => $tier['uid'] ?? null,
                     'threshold' => $tier['threshold'],
                     'percent' => $tier['percent'] ?? $tier['percentage'],
                 ])
@@ -1085,7 +1087,7 @@ class CommissionService
     private function buildTierProgress(int $userId, float $salesAchieved): array
     {
         $assignment = $this->resolveActiveAssignment($userId, now());
-        $tiers = collect($assignment?->commissionPlan?->tiers_json ?? [])
+        $tiers = collect($assignment?->commissionPlan?->tiers ?? [])
             ->sortBy('threshold')
             ->values();
 
@@ -1098,6 +1100,7 @@ class CommissionService
                 $rangeSize = max(0.01, $threshold - $previousThreshold);
                 $coveredInRange = min(max(0, $salesAchieved - $previousThreshold), $rangeSize);
                 $completedPct = round(min(100, ($coveredInRange / $rangeSize) * 100), 2);
+                $achieved = round(min($salesAchieved, $threshold), 2);
                 $status = match (true) {
                     $salesAchieved >= $threshold => 'COMPLETED',
                     $salesAchieved > $previousThreshold => 'IN_PROGRESS',
@@ -1110,7 +1113,7 @@ class CommissionService
                     'percent' => $percent,
                     'completed' => $completedPct,
                     'status' => $status,
-                    'amount_achieved' => round(min($salesAchieved, $threshold), 2),
+                    'amount_achieved' => $achieved,
                     'amount_target' => $threshold,
                 ];
 

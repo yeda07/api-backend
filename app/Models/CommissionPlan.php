@@ -70,6 +70,7 @@ class CommissionPlan extends Model
     {
         return collect($this->tiers_json ?? [])
             ->map(fn (array $tier) => [
+                'uid' => $tier['uid'] ?? null,
                 'threshold' => (float) ($tier['threshold'] ?? 0),
                 'percentage' => (float) ($tier['percentage'] ?? $tier['percent'] ?? 0),
                 'percent' => (float) ($tier['percent'] ?? $tier['percentage'] ?? 0),

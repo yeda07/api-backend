@@ -44,6 +44,7 @@ class Quotation extends Model
         'created_by_user_uid',
         'price_book_uid',
         'quoteable_uid',
+        'client_name',
         'subtotal',
         'discount_total',
         'total',
@@ -102,6 +103,21 @@ class Quotation extends Model
     {
         return $this->priceBook?->uid
             ?? ($this->price_book_id ? PriceBook::query()->whereKey($this->price_book_id)->value('uid') : null);
+    }
+
+    public function getClientNameAttribute(): ?string
+    {
+        $quoteable = $this->quoteable;
+        $quoteableClass = $this->quoteable_type;
+
+        if (! $quoteable && $quoteableClass && $this->quoteable_id && is_subclass_of($quoteableClass, Model::class)) {
+            $quoteable = $quoteableClass::withoutGlobalScopes()->whereKey($this->quoteable_id)->first();
+        }
+
+        return $quoteable?->display_name
+            ?? $quoteable?->name
+            ?? $this->title
+            ?? $this->quote_number;
     }
 
     public function getSubtotalAttribute(): float
