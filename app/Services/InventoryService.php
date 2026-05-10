@@ -220,10 +220,20 @@ class InventoryService
     {
         $validated = Validator::make($filters, [
             'search' => 'nullable|string|max:255',
+            'has_stock' => 'nullable|string|in:true,false,1,0',
         ])->validate();
 
         $warehouses = Warehouse::query()
             ->with(['stocks.product'])
+            ->when(array_key_exists('has_stock', $validated), function ($query) use ($validated) {
+                $hasStock = filter_var($validated['has_stock'], FILTER_VALIDATE_BOOLEAN);
+
+                if ($hasStock) {
+                    $query->whereHas('stocks', fn ($stockQuery) => $stockQuery->where('physical_stock', '>', 0));
+                } else {
+                    $query->whereDoesntHave('stocks', fn ($stockQuery) => $stockQuery->where('physical_stock', '>', 0));
+                }
+            })
             ->when(!empty($validated['search']), function ($query) use ($validated) {
                 $search = '%' . mb_strtolower($validated['search']) . '%';
 

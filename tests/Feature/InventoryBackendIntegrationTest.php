@@ -158,6 +158,62 @@ class InventoryBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.reference_uid', 'REF-GORRA-10');
     }
 
+    public function test_warehouse_filter_has_stock_returns_only_stocked_warehouses(): void
+    {
+        $user = $this->authenticateWithPermissions(['inventory.read']);
+
+        $stockedWarehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Con Stock',
+            'code' => 'STOCK',
+            'is_active' => true,
+        ]);
+        Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Sin Stock',
+            'code' => 'EMPTY',
+            'is_active' => true,
+        ]);
+        $zeroStockWarehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Stock Cero',
+            'code' => 'ZERO',
+            'is_active' => true,
+        ]);
+
+        $product = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-STOCK',
+            'name' => 'Producto Stock',
+            'is_active' => true,
+        ]);
+
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $stockedWarehouse->getKey(),
+            'physical_stock' => 12,
+            'reserved_stock' => 0,
+        ]);
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $zeroStockWarehouse->getKey(),
+            'physical_stock' => 0,
+            'reserved_stock' => 0,
+        ]);
+
+        $this->getJson('/api/inventory/warehouses?has_stock=true')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.code', 'STOCK');
+
+        $this->getJson('/api/inventory/warehouses?has_stock=false')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonMissing(['code' => 'STOCK']);
+    }
+
     public function test_bulk_adjust_and_movements_summary_match_inventory_document(): void
     {
         $user = $this->authenticateWithPermissions(['inventory.read', 'inventory.manage']);
