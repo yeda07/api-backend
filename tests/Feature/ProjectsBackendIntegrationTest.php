@@ -59,6 +59,7 @@ class ProjectsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.name', 'Implementacion CRM - TechMex')
             ->assertJsonPath('data.status', 'in_progress')
             ->assertJsonPath('data.priority', 'high')
+            ->assertJsonPath('data.manager_uid', $assignee->uid)
             ->assertJsonPath('data.client_uid', $account->uid)
             ->assertJsonPath('data.client_name', 'TechMex Solutions')
             ->assertJsonPath('data.assigned_to_uid', $assignee->uid)
@@ -71,6 +72,7 @@ class ProjectsBackendIntegrationTest extends TestCase
         $this->getJson('/api/projects/' . $uid)
             ->assertOk()
             ->assertJsonPath('data.client_name', 'TechMex Solutions')
+            ->assertJsonPath('data.manager_uid', $assignee->uid)
             ->assertJsonPath('data.assigned_to_name', 'Carlos Valencia');
 
         $this->putJson('/api/projects/' . $uid, [
@@ -113,6 +115,8 @@ class ProjectsBackendIntegrationTest extends TestCase
         $milestone->assertCreated()
             ->assertJsonPath('data.title', 'Kickoff meeting')
             ->assertJsonPath('data.name', 'Kickoff meeting')
+            ->assertJsonPath('data.assigned_to_uid', $member->uid)
+            ->assertJsonPath('data.assigned_to_name', 'Laura Mendez')
             ->assertJsonPath('data.status', 'completed');
 
         $this->putJson('/api/milestones/' . $milestone->json('data.uid'), [
@@ -142,6 +146,19 @@ class ProjectsBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.user_name', 'Laura Mendez')
             ->assertJsonPath('data.0.role', 'developer');
+
+        $this->getJson('/api/projects/' . $projectUid . '/assignments')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $assignment->json('data.uid'))
+            ->assertJsonPath('data.0.user_name', 'Laura Mendez');
+
+        $this->deleteJson('/api/projects/' . $projectUid . '/assignments/' . $assignment->json('data.uid'))
+            ->assertOk()
+            ->assertJsonPath('message', 'Recurso eliminado');
+
+        $this->getJson('/api/projects/' . $projectUid . '/assignments')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
 
         $this->getJson('/api/projects/' . $projectUid . '/progress')
             ->assertOk()

@@ -65,11 +65,30 @@ class AssignmentService
         $this->projectAssignmentRepository->delete($assignment);
     }
 
-    public function getProjectTeam(string $projectUid)
+    public function removeProjectAssignment(string $projectUid, string $assignmentUid): void
+    {
+        $project = Project::query()->where('uid', $projectUid)->firstOrFail();
+        $assignment = $this->projectAssignmentRepository->findByUid($assignmentUid);
+
+        if ((int) $assignment->project_id !== (int) $project->getKey()) {
+            throw ValidationException::withMessages([
+                'assignment_uid' => ['El recurso no pertenece a este proyecto'],
+            ]);
+        }
+
+        $this->projectAssignmentRepository->delete($assignment);
+    }
+
+    public function getProjectAssignments(string $projectUid)
     {
         $project = Project::query()->where('uid', $projectUid)->firstOrFail();
 
         return $this->projectAssignmentRepository->forProject($project->getKey());
+    }
+
+    public function getProjectTeam(string $projectUid)
+    {
+        return $this->getProjectAssignments($projectUid);
     }
 
     private function validate(array $data): array

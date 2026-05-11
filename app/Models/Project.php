@@ -41,6 +41,7 @@ class Project extends Model
         'client_name',
         'opportunity_uid',
         'priority',
+        'manager_uid',
         'assigned_to_uid',
         'assigned_to_name',
         'estimated_hours',
@@ -121,6 +122,11 @@ class Project extends Model
         return $this->assignedUser?->uid
             ?? ($this->assigned_user_id ? User::query()->whereKey($this->assigned_user_id)->value('uid') : null)
             ?? $this->assignments()->with('user')->first()?->user?->uid;
+    }
+
+    public function getManagerUidAttribute(): ?string
+    {
+        return $this->assigned_to_uid;
     }
 
     public function getAssignedToNameAttribute(): ?string

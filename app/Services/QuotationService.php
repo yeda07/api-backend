@@ -534,7 +534,12 @@ class QuotationService
         if (Str::isUuid($identifier)) {
             return $query->where(function ($builder) use ($identifier) {
                 $builder->where('uid', $identifier)
-                    ->orWhere('quote_number', $identifier);
+                    ->orWhere('quote_number', $identifier)
+                    ->orWhere(function ($opportunityQuery) use ($identifier) {
+                        $opportunityQuery
+                            ->where('quoteable_type', Opportunity::class)
+                            ->whereIn('quoteable_id', Opportunity::query()->where('uid', $identifier)->select('id'));
+                    });
             });
         }
 

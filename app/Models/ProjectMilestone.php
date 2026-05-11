@@ -34,6 +34,7 @@ class ProjectMilestone extends Model
         'project_uid',
         'title',
         'assigned_to_uid',
+        'assigned_to_name',
     ];
 
     protected $casts = [
@@ -70,5 +71,11 @@ class ProjectMilestone extends Model
     {
         return $this->assignedUser?->uid
             ?? ($this->assigned_user_id ? User::query()->whereKey($this->assigned_user_id)->value('uid') : null);
+    }
+
+    public function getAssignedToNameAttribute(): ?string
+    {
+        return $this->assignedUser?->name
+            ?? ($this->assigned_user_id ? User::query()->whereKey($this->assigned_user_id)->value('name') : null);
     }
 }

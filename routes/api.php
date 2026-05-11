@@ -478,7 +478,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/{uid}', [ProjectController::class, 'show'])->middleware('permission:projects.read');
         Route::put('/{uid}', [ProjectController::class, 'update'])->middleware('permission:projects.manage');
         Route::post('/{uid}/milestones', [ProjectController::class, 'storeMilestone'])->middleware('permission:projects.manage');
+        Route::get('/{uid}/assignments', [ProjectController::class, 'assignments'])->middleware('permission:projects.read');
         Route::post('/{uid}/assignments', [ProjectController::class, 'storeAssignment'])->middleware('permission:projects.manage');
+        Route::delete('/{uid}/assignments/{assignmentUid}', [ProjectController::class, 'destroyAssignment'])->middleware('permission:projects.manage');
         Route::get('/{uid}/team', [ProjectController::class, 'team'])->middleware('permission:projects.read');
         Route::get('/{uid}/progress', [ProjectController::class, 'progress'])->middleware('permission:projects.read');
     });

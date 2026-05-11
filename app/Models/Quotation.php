@@ -44,6 +44,7 @@ class Quotation extends Model
         'created_by_user_uid',
         'price_book_uid',
         'quoteable_uid',
+        'opportunity_uid',
         'client_name',
         'subtotal',
         'discount_total',
@@ -97,6 +98,16 @@ class Quotation extends Model
     public function getQuoteableUidAttribute()
     {
         return $this->quoteable?->uid;
+    }
+
+    public function getOpportunityUidAttribute(): ?string
+    {
+        if ($this->quoteable_type !== Opportunity::class) {
+            return null;
+        }
+
+        return $this->quoteable?->uid
+            ?? ($this->quoteable_id ? Opportunity::query()->whereKey($this->quoteable_id)->value('uid') : null);
     }
 
     public function getPriceBookUidAttribute()

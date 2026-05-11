@@ -248,6 +248,38 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.quote_number', 'COT-' . $year . '-002');
     }
 
+    public function test_quotation_show_accepts_opportunity_uid_when_quote_belongs_to_opportunity(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.read']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Nuevo',
+            'key' => 'new',
+            'position' => 1,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Oportunidad con cotizacion',
+            'amount' => 12000,
+        ]);
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Opportunity::class,
+            'quoteable_id' => $opportunity->getKey(),
+            'quote_number' => 'Q-OPP-' . uniqid(),
+            'title' => 'Cotizacion desde oportunidad',
+            'status' => 'draft',
+        ]);
+
+        $this->getJson('/api/quotations/' . $opportunity->uid)
+            ->assertOk()
+            ->assertJsonPath('data.uid', $quotation->uid)
+            ->assertJsonPath('data.opportunity_uid', $opportunity->uid);
+    }
+
     public function test_opportunity_board_supports_origin_and_product_filters(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read']);

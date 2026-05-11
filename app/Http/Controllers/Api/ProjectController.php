@@ -53,6 +53,20 @@ class ProjectController extends Controller
         return $this->wrap(fn () => $this->assignmentService->assignUser($uid, $request->all()), 'Recurso asignado', 201);
     }
 
+    public function assignments(string $uid)
+    {
+        return $this->successResponse($this->assignmentService->getProjectAssignments($uid));
+    }
+
+    public function destroyAssignment(string $uid, string $assignmentUid)
+    {
+        return $this->wrap(function () use ($uid, $assignmentUid) {
+            $this->assignmentService->removeProjectAssignment($uid, $assignmentUid);
+
+            return null;
+        }, 'Recurso eliminado');
+    }
+
     public function resourceRoles()
     {
         return $this->successResponse($this->assignmentService->roles());
