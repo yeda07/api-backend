@@ -14,6 +14,19 @@ class ProjectsBackendIntegrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_project_resource_roles_endpoint_returns_backend_options(): void
+    {
+        $this->authenticateWithPermissions(['projects.read']);
+
+        $this->getJson('/api/projects/resource-roles')
+            ->assertOk()
+            ->assertJsonPath('data.0.key', 'consultant')
+            ->assertJsonPath('data.0.value', 'consultant')
+            ->assertJsonPath('data.0.label', 'Consultor')
+            ->assertJsonPath('data.2.key', 'manager')
+            ->assertJsonPath('data.3.key', 'developer');
+    }
+
     public function test_projects_accept_frontend_contract_fields(): void
     {
         $user = $this->authenticateWithPermissions(['projects.read', 'projects.manage']);
@@ -161,14 +174,14 @@ class ProjectsBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Projects Owner',
-            'email' => 'projects-owner+' . uniqid() . '@example.test',
+            'email' => 'projects-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
         $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
         $user->permissions()->sync($permissionIds);
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

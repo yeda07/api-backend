@@ -469,6 +469,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('projects')->group(function () {
+        Route::get('/resource-roles', [ProjectController::class, 'resourceRoles'])->middleware('permission:projects.read');
         Route::get('/', [ProjectController::class, 'index'])->middleware('permission:projects.read');
         Route::post('/', [ProjectController::class, 'store'])->middleware('permission:projects.manage');
         Route::get('/{uid}', [ProjectController::class, 'show'])->middleware('permission:projects.read');

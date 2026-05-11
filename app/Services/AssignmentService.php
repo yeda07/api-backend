@@ -10,8 +10,32 @@ use Illuminate\Validation\ValidationException;
 
 class AssignmentService
 {
+    private const ROLES = [
+        'consultant' => 'Consultor',
+        'tech' => 'Tecnico',
+        'manager' => 'Manager',
+        'developer' => 'Desarrollador',
+        'designer' => 'Disenador',
+        'qa' => 'QA',
+        'analyst' => 'Analista',
+    ];
+
     public function __construct(private readonly ProjectAssignmentRepository $projectAssignmentRepository)
     {
+    }
+
+    public function roles(): array
+    {
+        return collect(self::ROLES)
+            ->map(fn (string $label, string $value) => [
+                'uid' => $this->stableUid($value),
+                'key' => $value,
+                'value' => $value,
+                'name' => $label,
+                'label' => $label,
+            ])
+            ->values()
+            ->all();
     }
 
     public function assignUser(string $projectUid, array $data)
@@ -52,7 +76,7 @@ class AssignmentService
     {
         $validator = Validator::make($data, [
             'user_uid' => 'required|uuid',
-            'role' => 'required|string|in:consultant,tech,manager,developer,designer,qa,analyst',
+            'role' => 'required|string|in:' . implode(',', array_keys(self::ROLES)),
             'hours_allocated' => 'sometimes|numeric|min:0',
         ]);
 
@@ -77,5 +101,16 @@ class AssignmentService
         }
 
         return $user;
+    }
+
+    private function stableUid(string $key): string
+    {
+        $hash = md5('project-resource-role:' . $key);
+
+        return substr($hash, 0, 8)
+            . '-' . substr($hash, 8, 4)
+            . '-' . substr($hash, 12, 4)
+            . '-' . substr($hash, 16, 4)
+            . '-' . substr($hash, 20, 12);
     }
 }

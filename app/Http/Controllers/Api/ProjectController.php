@@ -53,6 +53,11 @@ class ProjectController extends Controller
         return $this->wrap(fn () => $this->assignmentService->assignUser($uid, $request->all()), 'Recurso asignado', 201);
     }
 
+    public function resourceRoles()
+    {
+        return $this->successResponse($this->assignmentService->roles());
+    }
+
     public function team(string $uid)
     {
         return $this->successResponse($this->assignmentService->getProjectTeam($uid));
