@@ -7,6 +7,7 @@ use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\Relation;
 use App\Support\ApiIndex;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class RelationRepository
 {
@@ -53,6 +54,25 @@ class RelationRepository
     {
         $relation = Relation::where('uid', $uid)->firstOrFail();
         return $relation->delete();
+    }
+
+    public function deleteByPair(string $parentUid, string $childUid, ?string $relationType = null): Relation
+    {
+        $relation = Relation::query()
+            ->with(['from', 'to'])
+            ->when($relationType, fn ($query) => $query->where('relation_type', $relationType))
+            ->get()
+            ->first(function (Relation $relation) use ($parentUid, $childUid) {
+                return $relation->from_uid === $parentUid && $relation->to_uid === $childUid;
+            });
+
+        if (!$relation) {
+            throw new ModelNotFoundException('Relacion no encontrada');
+        }
+
+        $relation->delete();
+
+        return $relation;
     }
 
     public function getWithEntities(array $filters = [])

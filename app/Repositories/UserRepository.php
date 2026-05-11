@@ -25,6 +25,15 @@ class UserRepository
             $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('uid', $filters['role_uid']));
         }
 
+        if (!empty($filters['team_uid'])) {
+            $teamUid = $filters['team_uid'];
+            $query->where(function ($builder) use ($teamUid) {
+                $builder
+                    ->whereHas('teams', fn ($teamQuery) => $teamQuery->where('uid', $teamUid))
+                    ->orWhereHas('managedTeams', fn ($teamQuery) => $teamQuery->where('uid', $teamUid));
+            });
+        }
+
         if (!empty($filters['estado'])) {
             if ($filters['estado'] === 'ACTIVO') {
                 $query->where(function ($builder) {

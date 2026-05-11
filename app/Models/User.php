@@ -84,6 +84,16 @@ class User extends Authenticatable
         return $this->hasMany(ProjectAssignment::class);
     }
 
+    public function teams()
+    {
+        return $this->belongsToMany(Team::class)->withTimestamps();
+    }
+
+    public function managedTeams()
+    {
+        return $this->hasMany(Team::class, 'manager_user_id');
+    }
+
     public function getTenantUidAttribute()
     {
         return $this->tenant?->uid;

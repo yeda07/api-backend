@@ -60,6 +60,23 @@ class RelationService
         return $this->repo->delete($uid);
     }
 
+    public function deleteByPair(array $data)
+    {
+        $validated = Validator::make($data, [
+            'parent_uid' => 'required_without:from_uid|uuid',
+            'child_uid' => 'required_without:to_uid|uuid',
+            'from_uid' => 'required_without:parent_uid|uuid',
+            'to_uid' => 'required_without:child_uid|uuid',
+            'relation_type' => 'nullable|string|max:100',
+        ])->validate();
+
+        return $this->repo->deleteByPair(
+            $validated['parent_uid'] ?? $validated['from_uid'],
+            $validated['child_uid'] ?? $validated['to_uid'],
+            $validated['relation_type'] ?? null
+        );
+    }
+
     private function validate(array $data): void
     {
         $validator = Validator::make($data, [

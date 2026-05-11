@@ -134,6 +134,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/with-entities', [RelationController::class, 'indexWithEntities'])->middleware('permission:relations.read');
         Route::get('/hierarchy/{type}/{uid}', [RelationController::class, 'hierarchy'])->middleware('permission:relations.read');
         Route::post('/', [RelationController::class, 'store'])->middleware('permission:relations.create');
+        Route::post('/remove', [RelationController::class, 'destroyByPair'])->middleware('permission:relations.delete');
+        Route::delete('/', [RelationController::class, 'destroyByPair'])->middleware('permission:relations.delete');
         Route::get('/{type}/{uid}', [RelationController::class, 'showByEntity'])->middleware('permission:relations.read');
         Route::delete('/{uid}', [RelationController::class, 'destroy'])->middleware('permission:relations.delete');
     });
