@@ -24,8 +24,10 @@ class PurchaseOrderService
 
     public function index(array $filters = [])
     {
+        $filters = $this->normalizePurchaseOrderFilters($filters);
         $validated = Validator::make($filters, [
-            'status' => 'nullable|string|in:draft,approved,partial_received,received,cancelled,partial_paid,paid,overdue',
+            'search' => 'nullable|string|max:255',
+            'status' => 'nullable|string|in:draft,pending,approved,ordered,partial_received,received,cancelled,partial_paid,paid,overdue',
             'supplier_uid' => 'nullable|uuid',
             'cost_center_uid' => 'nullable|uuid',
             'entity_type' => 'nullable|string',
@@ -35,6 +37,14 @@ class PurchaseOrderService
         ])->validate();
 
         $query = PurchaseOrder::query()->with(['supplier', 'owner', 'costCenter', 'items.product', 'items.warehouse', 'payments', 'receipts.items'])->latest('ordered_at');
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(purchase_number) LIKE ?', [$search])
+                    ->orWhereHas('supplier', fn ($supplierQuery) => $supplierQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+            });
+        }
 
         if (!empty($validated['supplier_uid'])) {
             $query->where('supplier_id', $this->resolveSupplier($validated['supplier_uid'])->getKey());
@@ -400,6 +410,19 @@ class PurchaseOrderService
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.meta' => 'nullable|array',
         ])->validate();
+    }
+
+    private function normalizePurchaseOrderFilters(array $filters): array
+    {
+        if (array_key_exists('status', $filters)) {
+            $filters['status'] = match ($filters['status']) {
+                'pending' => 'draft',
+                'ordered' => 'approved',
+                default => $filters['status'],
+            };
+        }
+
+        return $filters;
     }
 
     private function resolveSupplier(string $uid): Supplier

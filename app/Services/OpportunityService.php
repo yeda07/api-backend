@@ -77,6 +77,25 @@ class OpportunityService
         return ApiIndex::paginateOrGet($query, $filters, 'opportunities_page');
     }
 
+    public function getOpportunity(string $uid): Opportunity
+    {
+        return Opportunity::query()
+            ->with([
+                'stage',
+                'owner',
+                'opportunityable',
+                'project',
+                'lostReasons.competitor',
+                'activities.owner',
+                'activities.assignedUser',
+                'quotations.items.product',
+                'quotations.items.catalogProduct',
+                'quotations.items.warehouse',
+            ])
+            ->where('uid', $uid)
+            ->firstOrFail();
+    }
+
     public function createOpportunity(array $data): Opportunity
     {
         $validated = $this->validateOpportunity($data);

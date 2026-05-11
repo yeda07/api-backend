@@ -27,6 +27,7 @@ class InvoiceService
         $validated = Validator::make($filters, [
             'entity_type' => 'nullable|string',
             'entity_uid' => 'nullable|uuid',
+            'quotation_uid' => 'nullable|uuid',
             'status' => 'nullable|string|in:draft,issued,partial,paid,overdue',
             'search' => 'nullable|string|max:255',
         ])->validate();
@@ -37,6 +38,10 @@ class InvoiceService
             $entity = $this->resolveEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
             $query->where('invoiceable_type', get_class($entity))
                 ->where('invoiceable_id', $entity->getKey());
+        }
+
+        if (!empty($validated['quotation_uid'])) {
+            $query->where('quotation_id', $this->resolveQuotation($validated['quotation_uid'])->getKey());
         }
 
         if (!empty($validated['status'])) {
@@ -271,5 +276,10 @@ class InvoiceService
         }
 
         return $entity;
+    }
+
+    private function resolveQuotation(string $uid): Quotation
+    {
+        return Quotation::query()->where('uid', $uid)->firstOrFail();
     }
 }

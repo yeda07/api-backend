@@ -534,6 +534,18 @@ class CommissionService
         return ApiIndex::paginateOrGet($query, $filters, 'commission_runs_page');
     }
 
+    public function periods(): array
+    {
+        return CommissionRun::query()
+            ->whereNotNull('period_start')
+            ->orderByDesc('period_start')
+            ->pluck('period_start')
+            ->map(fn ($date) => Carbon::parse($date)->format('Y-m'))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function historyPdf(array $filters = []): string
     {
         $period = $filters['period'] ?? now()->format('Y-m');
@@ -957,6 +969,11 @@ class CommissionService
 
     private function simulatePlan(array $data): array
     {
+        if (!array_key_exists('total_sales', $data)
+            && (array_key_exists('accumulated_sales', $data) || array_key_exists('hypothetical_sale', $data))) {
+            $data['total_sales'] = (float) ($data['accumulated_sales'] ?? 0) + (float) ($data['hypothetical_sale'] ?? 0);
+        }
+
         $validated = Validator::make($data, [
             'plan_uid' => 'required|uuid',
             'total_sales' => 'required|numeric|min:0',

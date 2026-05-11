@@ -22,6 +22,7 @@ class PartnerResourceService
     {
         $filters = $this->normalizeResourcePayload($filters);
         $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
             'type' => 'nullable|string|in:sales,training',
             'partner_uid' => 'nullable|uuid',
             'is_active' => 'nullable',

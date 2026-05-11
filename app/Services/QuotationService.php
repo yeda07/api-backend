@@ -8,6 +8,7 @@ use App\Models\InventoryReservation;
 use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CrmEntity;
+use App\Models\Opportunity;
 use App\Models\PriceBook;
 use App\Models\Product;
 use App\Models\Quotation;
@@ -36,6 +37,7 @@ class QuotationService
         $validated = Validator::make($filters, [
             'search' => 'nullable|string|max:255',
             'status' => 'nullable|string|in:draft,sent,approved,rejected,cancelled',
+            'opportunity_uid' => 'nullable|uuid',
         ])->validate();
 
         $query = Quotation::query()
@@ -44,6 +46,12 @@ class QuotationService
 
         if (!empty($validated['status'])) {
             $query->where('status', $validated['status']);
+        }
+
+        if (!empty($validated['opportunity_uid'])) {
+            $opportunity = Opportunity::query()->where('uid', $validated['opportunity_uid'])->firstOrFail();
+            $query->where('quoteable_type', Opportunity::class)
+                ->where('quoteable_id', $opportunity->getKey());
         }
 
         if (!empty($validated['search'])) {

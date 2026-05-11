@@ -22,13 +22,18 @@ class PartnerOpportunityService
     {
         $filters = $this->normalizeOpportunityPayload($filters);
         $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
             'partner_uid' => 'nullable|uuid',
             'account_uid' => 'nullable|uuid',
-            'status' => 'nullable|string|in:open,pending,validated,closed,won,lost',
+            'status' => 'nullable|string|in:open,pending,validated,closed,won,lost,cancelled',
         ])->validate();
 
         if (($validated['status'] ?? null) === 'pending') {
             $validated['status'] = 'open';
+        }
+
+        if (($validated['status'] ?? null) === 'cancelled') {
+            $validated['status'] = 'closed';
         }
 
         return $this->partnerOpportunityRepository->all(array_merge($filters, $validated));

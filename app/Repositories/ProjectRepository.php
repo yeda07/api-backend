@@ -16,6 +16,11 @@ class ProjectRepository
     {
         $query = $this->query()->orderByDesc('created_at');
 
+        if (!empty($filters['search'])) {
+            $search = '%' . mb_strtolower($filters['search']) . '%';
+            $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+        }
+
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }

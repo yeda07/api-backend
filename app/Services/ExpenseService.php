@@ -14,9 +14,22 @@ use Illuminate\Validation\ValidationException;
 
 class ExpenseService
 {
-    public function categories()
+    public function categories(array $filters = [])
     {
-        return ExpenseCategory::query()->orderBy('name')->get();
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ])->validate();
+
+        $query = ExpenseCategory::query()->orderBy('name');
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'expense_categories_page');
     }
 
     public function createCategory(array $data): ExpenseCategory
@@ -53,12 +66,45 @@ class ExpenseService
 
     public function suppliers(array $filters = [])
     {
-        return ApiIndex::paginateOrGet(Supplier::query()->orderBy('name'), $filters, 'expense_suppliers_page');
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ])->validate();
+
+        $query = Supplier::query()->orderBy('name');
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(contact_name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(document) LIKE ?', [$search]);
+            });
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'expense_suppliers_page');
     }
 
-    public function costCenters()
+    public function costCenters(array $filters = [])
     {
-        return CostCenter::query()->orderBy('name')->get();
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ])->validate();
+
+        $query = CostCenter::query()->orderBy('name');
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(key) LIKE ?', [$search]);
+            });
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'expense_cost_centers_page');
     }
 
     public function createSupplier(array $data): Supplier
@@ -136,6 +182,7 @@ class ExpenseService
     public function index(array $filters = [])
     {
         $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
             'category_uid' => 'nullable|uuid',
             'supplier_uid' => 'nullable|uuid',
             'cost_center_uid' => 'nullable|uuid',
@@ -146,6 +193,16 @@ class ExpenseService
         ])->validate();
 
         $query = Expense::query()->with(['category', 'supplier', 'owner', 'expenseable'])->latest('expense_date');
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(title) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(expense_number) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(description) LIKE ?', [$search])
+                    ->orWhereHas('supplier', fn ($supplierQuery) => $supplierQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+            });
+        }
 
         if (!empty($validated['category_uid'])) {
             $query->where('expense_category_id', $this->resolveCategory($validated['category_uid'])->getKey());

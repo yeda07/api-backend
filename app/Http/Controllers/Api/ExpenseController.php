@@ -13,9 +13,9 @@ class ExpenseController extends Controller
     {
     }
 
-    public function categories()
+    public function categories(Request $request)
     {
-        return $this->successResponse($this->expenseService->categories());
+        return $this->successResponse($this->expenseService->categories($request->query()));
     }
 
     public function storeCategory(Request $request)
@@ -41,9 +41,9 @@ class ExpenseController extends Controller
         return $this->successResponse($this->expenseService->suppliers($request->query()));
     }
 
-    public function costCenters()
+    public function costCenters(Request $request)
     {
-        return $this->successResponse($this->expenseService->costCenters());
+        return $this->successResponse($this->expenseService->costCenters($request->query()));
     }
 
     public function storeSupplier(Request $request)

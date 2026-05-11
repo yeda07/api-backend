@@ -25,7 +25,8 @@ class ProjectService
     {
         $filters = $this->normalizeProjectPayload($filters);
         $validated = Validator::make($filters, [
-            'status' => 'nullable|string|in:pending,active,completed,planning,in_progress,on_hold,cancelled',
+            'search' => 'nullable|string|max:255',
+            'status' => 'nullable|string|in:pending,active,completed,planning,in_progress,on_hold,paused,cancelled',
             'account_uid' => 'nullable|uuid',
             'client_uid' => 'nullable|uuid',
             'opportunity_uid' => 'nullable|uuid',
@@ -227,6 +228,7 @@ class ProjectService
             $data['status'] = match ($data['status']) {
                 'planning' => 'pending',
                 'in_progress' => 'active',
+                'paused' => 'on_hold',
                 default => $data['status'],
             };
         }

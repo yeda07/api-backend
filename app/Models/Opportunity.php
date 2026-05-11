@@ -70,6 +70,21 @@ class Opportunity extends Model
         return $this->hasOne(Project::class);
     }
 
+    public function activities()
+    {
+        return $this->morphMany(Activity::class, 'activityable');
+    }
+
+    public function quotations()
+    {
+        return $this->morphMany(Quotation::class, 'quoteable');
+    }
+
+    public function lostReasons()
+    {
+        return $this->hasMany(LostReason::class);
+    }
+
     public function getOwnerUserUidAttribute()
     {
         return $this->owner?->uid

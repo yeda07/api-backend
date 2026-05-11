@@ -81,6 +81,7 @@ class CompetitiveIntelligenceService
     public function battlecards(array $filters = [])
     {
         $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
             'competitor_uid' => 'nullable|uuid',
             'is_active' => 'nullable|boolean',
         ])->validate();
@@ -89,6 +90,14 @@ class CompetitiveIntelligenceService
 
         if (!empty($validated['competitor_uid'])) {
             $query->where('competitor_id', $this->findCompetitor($validated['competitor_uid'])->getKey());
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(title) LIKE ?', [$search])
+                    ->orWhereHas('competitor', fn ($competitorQuery) => $competitorQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+            });
         }
 
         if (array_key_exists('is_active', $validated)) {
@@ -158,6 +167,7 @@ class CompetitiveIntelligenceService
     public function lostReasons(array $filters = [])
     {
         $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
             'competitor_uid' => 'nullable|uuid',
             'opportunity_uid' => 'nullable|uuid',
             'entity_type' => 'nullable|string',
@@ -169,6 +179,15 @@ class CompetitiveIntelligenceService
 
         if (!empty($validated['competitor_uid'])) {
             $query->where('competitor_id', $this->findCompetitor($validated['competitor_uid'])->getKey());
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(summary) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(details) LIKE ?', [$search])
+                    ->orWhereHas('competitor', fn ($competitorQuery) => $competitorQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+            });
         }
 
         if (!empty($validated['opportunity_uid'])) {

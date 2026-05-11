@@ -19,6 +19,15 @@ class PartnerOpportunityRepository
                 ->when(!empty($filters['partner_uid']), function ($query) use ($filters) {
                     $query->whereHas('partner', fn ($builder) => $builder->where('uid', $filters['partner_uid']));
                 })
+                ->when(!empty($filters['search']), function ($query) use ($filters) {
+                    $search = '%' . mb_strtolower($filters['search']) . '%';
+                    $query->where(function ($searchQuery) use ($search) {
+                        $searchQuery->whereRaw('LOWER(title) LIKE ?', [$search])
+                            ->orWhereRaw('LOWER(description) LIKE ?', [$search])
+                            ->orWhereHas('partner', fn ($builder) => $builder->whereRaw('LOWER(name) LIKE ?', [$search]))
+                            ->orWhereHas('account', fn ($builder) => $builder->whereRaw('LOWER(name) LIKE ?', [$search]));
+                    });
+                })
                 ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
                 ->when(!empty($filters['account_uid']), function ($query) use ($filters) {
                     $query->whereHas('account', fn ($builder) => $builder->where('uid', $filters['account_uid']));

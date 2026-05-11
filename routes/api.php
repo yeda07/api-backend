@@ -349,6 +349,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/dashboard/{userUid}', [CommissionController::class, 'dashboard'])->middleware('permission:commissions.read');
         Route::post('/simulate', [CommissionController::class, 'simulate'])->middleware('permission:commissions.read');
         Route::get('/history/pdf', [CommissionController::class, 'historyPdf'])->middleware('permission:commissions.read');
+        Route::get('/periods', [CommissionController::class, 'periods'])->middleware('permission:commissions.read');
         Route::get('/runs', [CommissionController::class, 'runs'])->middleware('permission:commissions.read');
         Route::post('/runs', [CommissionController::class, 'storeRun'])->middleware('permission:commissions.manage');
         Route::post('/runs/{uid}/approve', [CommissionController::class, 'approveRun'])->middleware('permission:commissions.manage');
@@ -374,6 +375,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/lost-reasons/report', [CompetitiveIntelligenceController::class, 'lostReasonsReport'])->middleware('permission:competitive-intelligence.report');
     });
 
+    Route::get('/battlecards', [CompetitiveIntelligenceController::class, 'battlecards'])->middleware('permission:competitive-intelligence.read');
+    Route::get('/lost-reasons', [CompetitiveIntelligenceController::class, 'lostReasons'])->middleware('permission:competitive-intelligence.read');
+
     Route::prefix('expenses')->group(function () {
         Route::get('/categories', [ExpenseController::class, 'categories'])->middleware('permission:expenses.read');
         Route::post('/categories', [ExpenseController::class, 'storeCategory'])->middleware('permission:expenses.manage');
@@ -396,11 +400,14 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('purchases')->group(function () {
+        Route::get('/', [PurchaseOrderController::class, 'index'])->middleware('permission:purchases.read');
+        Route::post('/', [PurchaseOrderController::class, 'store'])->middleware('permission:purchases.manage');
         Route::get('/payables', [PurchaseOrderController::class, 'payables'])->middleware('permission:purchases.read');
         Route::get('/orders', [PurchaseOrderController::class, 'index'])->middleware('permission:purchases.read');
         Route::post('/orders', [PurchaseOrderController::class, 'store'])->middleware('permission:purchases.manage');
         Route::get('/orders/{uid}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchases.read');
         Route::get('/orders/{uid}/receipts', [PurchaseOrderController::class, 'receipts'])->middleware('permission:purchases.read');
+        Route::put('/{uid}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchases.manage');
         Route::put('/orders/{uid}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchases.manage');
         Route::post('/orders/{uid}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchases.manage');
         Route::post('/orders/{uid}/receive-partial', [PurchaseOrderController::class, 'receivePartial'])->middleware('permission:purchases.manage');
@@ -417,6 +424,11 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/summary', [OpportunityController::class, 'summary'])->middleware('permission:opportunities.read');
         Route::get('/', [OpportunityController::class, 'index'])->middleware('permission:opportunities.read');
         Route::post('/', [OpportunityController::class, 'store'])->middleware('permission:opportunities.manage');
+        Route::get('/{uid}', [OpportunityController::class, 'show'])->middleware('permission:opportunities.read');
+        Route::get('/{uid}/activities', [OpportunityController::class, 'activities'])->middleware('permission:activities.read');
+        Route::post('/{uid}/activities', [OpportunityController::class, 'storeActivity'])->middleware('permission:activities.create');
+        Route::put('/{uid}/activities/{activityUid}', [OpportunityController::class, 'updateActivity'])->middleware('permission:activities.update');
+        Route::delete('/{uid}/activities/{activityUid}', [OpportunityController::class, 'destroyActivity'])->middleware('permission:activities.delete');
         Route::put('/{uid}', [OpportunityController::class, 'update'])->middleware('permission:opportunities.manage');
         Route::delete('/{uid}', [OpportunityController::class, 'destroy'])->middleware('permission:opportunities.manage');
     });
@@ -425,6 +437,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/', [PartnerController::class, 'index'])->middleware('permission:partners.read');
         Route::post('/', [PartnerController::class, 'store'])->middleware('permission:partners.manage');
         Route::put('/{uid}', [PartnerController::class, 'update'])->middleware('permission:partners.manage');
+        Route::get('/materials', [PartnerResourceController::class, 'index'])->middleware('permission:partners.resources.read');
 
         Route::prefix('opportunities')->group(function () {
             Route::get('/', [PartnerController::class, 'opportunities'])->middleware('permission:partners.opportunities.read');
@@ -477,6 +490,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/customer/{type}/{uid}/summary', [FinancialOperationsController::class, 'customerSummary'])->middleware('permission:finance.read');
         Route::get('/dashboard', [FinancialOperationsController::class, 'dashboard'])->middleware('permission:finance.read');
     });
+
+    Route::get('/invoices', [FinancialOperationsController::class, 'invoices'])->middleware('permission:finance.read');
 
     Route::prefix('currency')->group(function () {
         Route::get('/rates', [CurrencyController::class, 'rates'])->middleware('permission:finance.read');

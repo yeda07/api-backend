@@ -18,10 +18,55 @@ class ActivityService
     public function getAll(array $filters = [])
     {
         $this->syncOverdueStatuses();
+        $validated = Validator::make($filters, [
+            'entity_type' => 'nullable|string',
+            'entity_uid' => 'nullable|uuid',
+            'type' => 'nullable|string|in:task,call,meeting,email,note,reminder,nota,llamada,reunion,demo,seguimiento',
+            'status' => 'nullable|string|in:pending,in_progress,completed,cancelled,overdue',
+            'search' => 'nullable|string|max:255',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'paginate' => 'sometimes',
+        ])->validate();
 
         $query = Activity::query()
             ->with(['owner', 'assignedUser', 'activityable'])
             ->latest('scheduled_at');
+
+        if (!empty($validated['entity_type']) || !empty($validated['entity_uid'])) {
+            if (empty($validated['entity_type']) || empty($validated['entity_uid'])) {
+                throw ValidationException::withMessages([
+                    'entity_uid' => ['Debes enviar entity_type y entity_uid juntos'],
+                ]);
+            }
+
+            $entity = find_entity_by_uid($validated['entity_type'], $validated['entity_uid']);
+
+            if (!$entity) {
+                throw ValidationException::withMessages([
+                    'entity_uid' => ['La entidad no existe o no es visible'],
+                ]);
+            }
+
+            $query->where('activityable_type', get_class($entity))
+                ->where('activityable_id', $entity->getKey());
+        }
+
+        if (!empty($validated['type'])) {
+            $query->where('type', $this->normalizeActivityType($validated['type']));
+        }
+
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(title) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(description) LIKE ?', [$search]);
+            });
+        }
 
         $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
 
@@ -58,6 +103,7 @@ class ActivityService
 
     public function create(array $data): Activity
     {
+        $data = $this->normalizeActivityPayload($data);
         $validated = $this->validate($data);
         $payload = $this->normalizePayload($validated);
 
@@ -67,6 +113,7 @@ class ActivityService
     public function update(string $uid, array $data): Activity
     {
         $activity = $this->getByUid($uid);
+        $data = $this->normalizeActivityPayload($data, true);
         $validated = $this->validate($data, true);
         $previousStatus = $activity->status;
         $payload = $this->normalizePayload($validated, $activity);
@@ -136,6 +183,40 @@ class ActivityService
         }
 
         return $validated;
+    }
+
+    private function normalizeActivityPayload(array $data, bool $partial = false): array
+    {
+        if (array_key_exists('content', $data) && !array_key_exists('description', $data)) {
+            $data['description'] = $data['content'];
+        }
+
+        if (array_key_exists('date', $data) && !array_key_exists('scheduled_at', $data)) {
+            $data['scheduled_at'] = $data['date'];
+        }
+
+        if (array_key_exists('type', $data)) {
+            $data['type'] = $this->normalizeActivityType($data['type']);
+        }
+
+        if (!$partial && empty($data['title']) && !empty($data['description'])) {
+            $data['title'] = str($data['description'])->limit(80, '')->toString();
+        }
+
+        unset($data['content'], $data['date']);
+
+        return $data;
+    }
+
+    private function normalizeActivityType(string $type): string
+    {
+        return match ($type) {
+            'nota' => 'note',
+            'llamada' => 'call',
+            'reunion', 'demo' => 'meeting',
+            'seguimiento' => 'reminder',
+            default => $type,
+        };
     }
 
     private function normalizePayload(array $data, ?Activity $activity = null): array

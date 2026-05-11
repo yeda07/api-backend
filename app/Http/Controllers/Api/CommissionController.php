@@ -159,6 +159,11 @@ class CommissionController extends Controller
         return $this->successResponse($this->commissionService->runs($request->query()));
     }
 
+    public function periods()
+    {
+        return $this->successResponse($this->commissionService->periods());
+    }
+
     public function historyPdf(Request $request)
     {
         return response($this->commissionService->historyPdf($request->query()), 200, [
