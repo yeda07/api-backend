@@ -41,6 +41,7 @@ class Activity extends Model
 
     protected $appends = [
         'owner_user_uid',
+        'owner_user_name',
         'assigned_user_uid',
         'assigned_to_uid',
         'assigned_to_name',
@@ -74,6 +75,11 @@ class Activity extends Model
     public function getOwnerUserUidAttribute()
     {
         return $this->owner?->uid;
+    }
+
+    public function getOwnerUserNameAttribute()
+    {
+        return $this->owner?->name;
     }
 
     public function getAssignedUserUidAttribute()

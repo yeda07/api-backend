@@ -443,11 +443,15 @@ class CommissionService
         $projected = round((float) $entries->sum('commission_amount'), 2);
         $liquidated = round((float) $runs->whereIn('status', ['approved', 'paid'])->sum('commission_amount'), 2);
         $targetAmount = round((float) ($target?->target_amount ?? 0), 2);
+        $progressPercent = $targetAmount > 0
+            ? round(($salesAchieved / $targetAmount) * 100, 2)
+            : 0.0;
 
         return [
             'kpis' => [
                 'monthly_target' => $targetAmount,
                 'sales_achieved' => $salesAchieved,
+                'progress_percent' => $progressPercent,
                 'projected_commission' => $projected,
                 'liquidated_commission' => $liquidated,
             ],
