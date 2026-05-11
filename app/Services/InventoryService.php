@@ -99,6 +99,8 @@ class InventoryService
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
                 'cost_price' => $validated['unit_cost'] ?? $validated['cost_price'] ?? 0,
+                'sale_price' => $validated['sale_price'] ?? null,
+                'discount_percent' => $validated['discount_percent'] ?? 0,
                 'reorder_point' => $validated['reorder_point'] ?? 0,
                 'is_active' => $validated['is_active'] ?? true,
             ]);
@@ -129,6 +131,12 @@ class InventoryService
 
             if (array_key_exists('unit_cost', $validated) || array_key_exists('cost_price', $validated)) {
                 $payload['cost_price'] = $validated['unit_cost'] ?? $validated['cost_price'];
+            }
+
+            foreach (['sale_price', 'discount_percent'] as $field) {
+                if (array_key_exists($field, $validated)) {
+                    $payload[$field] = $validated[$field];
+                }
             }
 
             if ($payload !== []) {
@@ -176,6 +184,8 @@ class InventoryService
                 'name' => $product->name,
                 'category' => $product->category?->name,
                 'cost_price' => (float) $product->cost_price,
+                'sale_price' => (float) $product->sale_price,
+                'discount_percent' => (float) $product->discount_percent,
                 'reorder_point' => (int) $product->reorder_point,
                 'is_active' => (bool) $product->is_active,
                 'physical_stock' => (int) $product->stocks->sum('physical_stock'),
@@ -954,6 +964,8 @@ class InventoryService
             'description' => 'nullable|string',
             'unit_cost' => 'sometimes|numeric|min:0',
             'cost_price' => 'sometimes|numeric|min:0',
+            'sale_price' => 'nullable|numeric|min:0',
+            'discount_percent' => 'sometimes|numeric|min:0|max:100',
             'reorder_point' => 'sometimes|integer|min:0',
             'is_active' => 'sometimes|boolean',
             'warehouse_stocks' => 'sometimes|array',
@@ -1108,6 +1120,8 @@ class InventoryService
             'category_uid' => $product->category?->uid,
             'category_name' => $product->category?->name,
             'unit_cost' => (float) $product->cost_price,
+            'sale_price' => (float) $product->sale_price,
+            'discount_percent' => (float) $product->discount_percent,
             'is_active' => (bool) $product->is_active,
             'warehouse_uid' => $warehouse?->uid,
             'stock_physical_total' => $physical,

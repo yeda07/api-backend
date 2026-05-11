@@ -19,6 +19,8 @@ class InventoryProduct extends Model
         'name',
         'description',
         'cost_price',
+        'sale_price',
+        'discount_percent',
         'reorder_point',
         'is_active',
     ];
@@ -33,6 +35,7 @@ class InventoryProduct extends Model
         'category_uid',
         'category_name',
         'unit_cost',
+        'sale_price',
         'stock_physical_total',
         'stock_reserved_total',
         'stock_available_total',
@@ -43,6 +46,8 @@ class InventoryProduct extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'cost_price' => 'decimal:2',
+        'sale_price' => 'decimal:2',
+        'discount_percent' => 'decimal:2',
     ];
 
     public function category()
@@ -75,6 +80,11 @@ class InventoryProduct extends Model
     public function getUnitCostAttribute(): float
     {
         return round((float) $this->cost_price, 2);
+    }
+
+    public function getSalePriceAttribute($value): float
+    {
+        return round((float) ($value ?? $this->attributes['sale_price'] ?? $this->cost_price ?? 0), 2);
     }
 
     public function getStockPhysicalTotalAttribute(): int

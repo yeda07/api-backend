@@ -311,6 +311,49 @@ class InventoryBackendIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_products_accept_sale_price_and_discount_percent_for_quotations(): void
+    {
+        $this->authenticateWithPermissions(['inventory.read', 'inventory.manage']);
+
+        $response = $this->postJson('/api/inventory/products', [
+            'sku' => 'SKU-PRICE-001',
+            'name' => 'Producto con precio venta',
+            'unit_cost' => 500,
+            'sale_price' => 750,
+            'discount_percent' => 12.5,
+        ]);
+
+        $uid = $response
+            ->assertCreated()
+            ->assertJsonPath('data.unit_cost', 500)
+            ->assertJsonPath('data.sale_price', 750)
+            ->assertJsonPath('data.discount_percent', '12.50')
+            ->json('data.uid');
+
+        $this->putJson('/api/inventory/products/'.$uid, [
+            'sale_price' => 800,
+            'discount_percent' => 5,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.sale_price', 800)
+            ->assertJsonPath('data.discount_percent', '5.00');
+
+        $this->getJson('/api/inventory/products?search=precio venta')
+            ->assertOk()
+            ->assertJsonPath('data.0.sale_price', 800)
+            ->assertJsonPath('data.0.discount_percent', '5.00');
+
+        $fallback = $this->postJson('/api/inventory/products', [
+            'sku' => 'SKU-PRICE-002',
+            'name' => 'Producto fallback',
+            'cost_price' => 333,
+        ]);
+
+        $fallback->assertCreated()
+            ->assertJsonPath('data.sale_price', 333)
+            ->assertJsonPath('data.discount_percent', '0.00');
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
