@@ -442,6 +442,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/', [PartnerController::class, 'store'])->middleware('permission:partners.manage');
         Route::put('/{uid}', [PartnerController::class, 'update'])->middleware('permission:partners.manage');
         Route::get('/materials', [PartnerResourceController::class, 'index'])->middleware('permission:partners.resources.read');
+        Route::post('/materials', [PartnerResourceController::class, 'store'])->middleware('permission:partners.resources.manage');
 
         Route::prefix('opportunities')->group(function () {
             Route::get('/', [PartnerController::class, 'opportunities'])->middleware('permission:partners.opportunities.read');
@@ -478,6 +479,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/records', [FinancialOperationsController::class, 'index'])->middleware('permission:finance.read');
         Route::post('/import', [FinancialOperationsController::class, 'import'])->middleware('permission:finance.manage');
         Route::get('/invoices', [FinancialOperationsController::class, 'invoices'])->middleware('permission:finance.read');
+        Route::get('/invoices/{uid}', [FinancialOperationsController::class, 'showInvoice'])->middleware('permission:finance.read');
         Route::post('/invoices/export', [FinancialOperationsController::class, 'exportInvoices'])->middleware('permission:finance.read');
         Route::post('/invoices', [FinancialOperationsController::class, 'createInvoice'])->middleware('permission:finance.manage');
         Route::get('/payments', [FinancialOperationsController::class, 'payments'])->middleware('permission:finance.read');
@@ -496,6 +498,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::get('/invoices', [FinancialOperationsController::class, 'invoices'])->middleware('permission:finance.read');
+    Route::get('/invoices/{uid}', [FinancialOperationsController::class, 'showInvoice'])->middleware('permission:finance.read');
 
     Route::prefix('currency')->group(function () {
         Route::get('/rates', [CurrencyController::class, 'rates'])->middleware('permission:finance.read');

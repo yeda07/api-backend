@@ -61,6 +61,22 @@ class InvoiceService
         return ApiIndex::paginateOrGet($query, $filters, 'invoices_page');
     }
 
+    public function getByUid(string $uid): Invoice
+    {
+        return Invoice::query()
+            ->with([
+                'quotation.priceBook',
+                'quotation.items.product',
+                'quotation.items.catalogProduct',
+                'quotation.items.warehouse',
+                'quotation.quoteable',
+                'invoiceable',
+                'payments',
+            ])
+            ->where('uid', $uid)
+            ->firstOrFail();
+    }
+
     public function createFromQuotation(array $data): Invoice
     {
         $validated = Validator::make($data, [
