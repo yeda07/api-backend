@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Activity;
 use App\Models\AutomationAssignmentRule;
 use App\Models\AutomationRule;
+use App\Models\CrmEntity;
+use App\Models\Tag;
 use App\Models\User;
 use App\Support\ApiIndex;
 use Illuminate\Support\Facades\Http;
@@ -19,7 +21,7 @@ class AutomationService
 
     private const TRIGGER_SOURCES = 'crm,linkedin,facebook,time';
 
-    private const ACTIONS = 'send_email,update_field,create_task,send_webhook';
+    private const ACTIONS = 'send_email,update_field,create_task,send_webhook,create_lead,assign_owner,create_activity,apply_tag,send_notification';
 
     public function __construct(private readonly ConditionEvaluator $conditionEvaluator) {}
 
@@ -246,6 +248,11 @@ class AutomationService
                 'update_field' => $this->updateField($action['config'] ?? [], $payload),
                 'create_task' => $this->createTask($action['config'] ?? [], $payload),
                 'send_webhook' => $this->sendWebhook($action['config'] ?? [], $payload),
+                'create_lead' => $this->createLead($action['config'] ?? [], $payload),
+                'assign_owner' => $this->assignOwner($action['config'] ?? [], $payload),
+                'create_activity' => $this->createActivity($action['config'] ?? [], $payload),
+                'apply_tag' => $this->applyTag($action['config'] ?? [], $payload),
+                'send_notification' => $this->sendNotification($action['config'] ?? [], $payload),
                 default => ['type' => $action['type'] ?? null, 'success' => false],
             };
         } catch (\Throwable $e) {
@@ -289,7 +296,7 @@ class AutomationService
 
     private function updateField(array $config, array $payload): array
     {
-        $entity = find_entity_by_uid($config['entity_type'] ?? data_get($payload, 'entity_type'), $config['entity_uid'] ?? data_get($payload, 'entity_uid'));
+        $entity = $this->resolveAutomationEntity($config, $payload);
 
         if (! $entity || empty($config['field'])) {
             return ['type' => 'update_field', 'success' => false];
@@ -302,26 +309,132 @@ class AutomationService
 
     private function createTask(array $config, array $payload): array
     {
-        $entity = null;
+        $config['type'] = 'task';
 
-        if (($config['entity_type'] ?? data_get($payload, 'entity_type')) && ($config['entity_uid'] ?? data_get($payload, 'entity_uid'))) {
-            $entity = find_entity_by_uid($config['entity_type'] ?? data_get($payload, 'entity_type'), $config['entity_uid'] ?? data_get($payload, 'entity_uid'));
+        return array_merge(['type' => 'create_task'], collect($this->createActivity($config, $payload))->except('type')->all());
+    }
+
+    private function createLead(array $config, array $payload): array
+    {
+        $leadType = $config['lead_type'] ?? $config['type'] ?? 'B2B';
+        $leadType = in_array($leadType, ['B2B', 'B2C', 'B2G'], true) ? $leadType : 'B2B';
+
+        $profileData = array_merge(
+            [
+                'company_name' => $config['company_name'] ?? data_get($payload, 'company_name') ?? data_get($payload, 'name'),
+                'first_name' => $config['first_name'] ?? data_get($payload, 'first_name'),
+                'last_name' => $config['last_name'] ?? data_get($payload, 'last_name'),
+                'email' => $config['email'] ?? data_get($payload, 'email'),
+                'phone' => $config['phone'] ?? data_get($payload, 'phone'),
+                'source' => $config['source'] ?? data_get($payload, 'source'),
+            ],
+            $config['profile_data'] ?? []
+        );
+
+        $lead = CrmEntity::query()->create([
+            'tenant_id' => auth()->user()?->tenant_id,
+            'owner_user_id' => $this->resolveActionUserId($config, $payload, true) ?? auth()->id(),
+            'type' => $leadType,
+            'profile_data' => collect($profileData)->filter(fn ($value) => $value !== null && $value !== '')->all(),
+        ]);
+
+        return ['type' => 'create_lead', 'success' => true, 'lead_uid' => $lead->uid];
+    }
+
+    private function assignOwner(array $config, array $payload): array
+    {
+        $entity = $this->resolveAutomationEntity($config, $payload);
+
+        if (! $entity || ! in_array('owner_user_id', $entity->getFillable(), true)) {
+            return ['type' => 'assign_owner', 'success' => false, 'message' => 'Entity cannot be assigned'];
         }
 
+        $userId = $this->resolveActionUserId($config, $payload, true);
+
+        if (! $userId) {
+            return ['type' => 'assign_owner', 'success' => false, 'message' => 'No assignment matched'];
+        }
+
+        $entity->update(['owner_user_id' => $userId]);
+
+        return ['type' => 'assign_owner', 'success' => true, 'entity_uid' => $entity->uid];
+    }
+
+    private function createActivity(array $config, array $payload): array
+    {
+        $entity = $this->resolveAutomationEntity($config, $payload);
         $activity = Activity::query()->create([
-            'assigned_user_id' => ! empty($config['assigned_to_uid']) ? $this->resolveUserId($config['assigned_to_uid']) : null,
+            'assigned_user_id' => $this->resolveActionUserId($config, $payload),
             'activityable_type' => $entity ? get_class($entity) : null,
             'activityable_id' => $entity?->getKey(),
             'owner_user_id' => $entity->owner_user_id ?? auth()->id(),
-            'type' => 'task',
-            'title' => $config['title'] ?? 'Automation task',
+            'type' => $config['type'] ?? 'task',
+            'title' => $config['title'] ?? 'Automation activity',
             'description' => $config['description'] ?? null,
-            'status' => 'pending',
+            'status' => $config['status'] ?? 'pending',
             'priority' => $config['priority'] ?? 'medium',
             'scheduled_at' => $config['scheduled_at'] ?? now(),
         ]);
 
-        return ['type' => 'create_task', 'success' => true, 'activity_uid' => $activity->uid];
+        return ['type' => 'create_activity', 'success' => true, 'activity_uid' => $activity->uid];
+    }
+
+    private function applyTag(array $config, array $payload): array
+    {
+        $entity = $this->resolveAutomationEntity($config, $payload);
+        $tag = $this->resolveTag($config);
+
+        if (! $entity) {
+            return ['type' => 'apply_tag', 'success' => false, 'message' => 'Entity not found'];
+        }
+
+        if (! $tag) {
+            return ['type' => 'apply_tag', 'success' => false, 'message' => 'Tag not found'];
+        }
+
+        if (! method_exists($entity, 'tags')) {
+            return ['type' => 'apply_tag', 'success' => false, 'message' => 'Entity does not support tags'];
+        }
+
+        $entity->tags()->syncWithoutDetaching([$tag->getKey()]);
+
+        return ['type' => 'apply_tag', 'success' => true, 'tag_uid' => $tag->uid, 'entity_uid' => $entity->uid];
+    }
+
+    private function sendNotification(array $config, array $payload): array
+    {
+        $entity = $this->resolveAutomationEntity($config, $payload);
+        $assignedUserId = $this->resolveActionUserId($config, $payload, true) ?? auth()->id();
+
+        $activity = Activity::query()->create([
+            'assigned_user_id' => $assignedUserId,
+            'activityable_type' => $entity ? get_class($entity) : null,
+            'activityable_id' => $entity?->getKey(),
+            'owner_user_id' => auth()->id(),
+            'type' => 'note',
+            'title' => $config['title'] ?? 'Automation notification',
+            'description' => $config['message'] ?? $config['description'] ?? null,
+            'status' => 'pending',
+            'priority' => $config['priority'] ?? 'medium',
+            'scheduled_at' => now(),
+        ]);
+
+        return ['type' => 'send_notification', 'success' => true, 'notification_uid' => $activity->uid];
+    }
+
+    private function resolveActionUserId(array $config, array $payload = [], bool $allowAssignmentRule = false): ?int
+    {
+        foreach (['assigned_to_uid', 'owner_uid', 'user_uid', 'to_user_uid'] as $key) {
+            if (! empty($config[$key])) {
+                return $this->resolveUserId($config[$key]);
+            }
+        }
+
+        if ($allowAssignmentRule) {
+            return $this->resolveAssignment($payload)?->assigned_to_user_id;
+        }
+
+        return null;
     }
 
     private function sendWebhook(array $config, array $payload): array
@@ -333,6 +446,51 @@ class AutomationService
         Http::timeout(5)->post($config['url'], ['payload' => $payload, 'config' => $config]);
 
         return ['type' => 'send_webhook', 'success' => true];
+    }
+
+    private function resolveAutomationEntity(array $config, array $payload)
+    {
+        $entityType = $config['entity_type'] ?? data_get($payload, 'entity_type');
+        $entityUid = $config['entity_uid']
+            ?? data_get($payload, 'entity_uid')
+            ?? data_get($payload, 'lead_uid')
+            ?? data_get($payload, 'opportunity_uid');
+
+        if (! $entityType && data_get($payload, 'opportunity_uid')) {
+            $entityType = 'opportunity';
+        }
+
+        if (! $entityType || ! $entityUid) {
+            return null;
+        }
+
+        $modelClass = crm_entity_model_class($entityType);
+
+        if (! $modelClass) {
+            return null;
+        }
+
+        return $modelClass::query()
+            ->withoutGlobalScope('row_level_security')
+            ->where('uid', $entityUid)
+            ->first();
+    }
+
+    private function resolveTag(array $config): ?Tag
+    {
+        if (! empty($config['tag_uid'])) {
+            return Tag::query()->where('uid', $config['tag_uid'])->first();
+        }
+
+        if (! empty($config['tag_key'])) {
+            return Tag::query()->where('key', $config['tag_key'])->first();
+        }
+
+        if (! empty($config['tag_name'])) {
+            return Tag::query()->where('name', $config['tag_name'])->first();
+        }
+
+        return null;
     }
 
     private function resolveUserId(?string $uid): ?int

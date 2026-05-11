@@ -6,7 +6,9 @@ use App\Models\Account;
 use App\Models\Activity;
 use App\Models\AutomationRule;
 use App\Models\Contact;
+use App\Models\CrmEntity;
 use App\Models\Permission;
+use App\Models\Tag;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AutomationService;
@@ -207,6 +209,99 @@ class StructuralModulesIntegrationTest extends TestCase
 
         $this->assertSame(1, $result['executed']);
         $this->assertSame(1, Activity::query()->where('title', 'Gestionar lead CRM')->count());
+    }
+
+    public function test_automation_supports_frontend_action_types(): void
+    {
+        $owner = $this->authenticateWithPermissions([
+            'automation.read',
+            'automation.create',
+        ]);
+        $assigned = User::query()->create([
+            'tenant_id' => $owner->tenant_id,
+            'name' => 'Vendedor Automation',
+            'email' => 'vendedor-actions-auto@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+        $account = Account::query()->create([
+            'tenant_id' => $owner->tenant_id,
+            'owner_user_id' => $owner->getKey(),
+            'name' => 'Cuenta Automation',
+            'document' => 'AUTO-'.uniqid(),
+        ]);
+        $tag = Tag::query()->create([
+            'tenant_id' => $owner->tenant_id,
+            'name' => 'Prioritario',
+            'key' => 'priority',
+            'color' => '#ff0000',
+            'category' => 'automation',
+        ]);
+
+        $this->postJson('/api/automation/assignment-rules', [
+            'name' => 'Lead origen CRM',
+            'user_ids' => [$assigned->uid],
+            'conditions' => [
+                ['field' => 'source', 'operator' => 'equals', 'value' => 'crm'],
+            ],
+            'is_active' => true,
+        ])->assertCreated();
+
+        $this->postJson('/api/automation/rules', [
+            'name' => 'Acciones frontend',
+            'trigger_source' => 'crm',
+            'trigger_event' => 'lead_created',
+            'conditions' => [
+                ['field' => 'source', 'operator' => 'equals', 'value' => 'crm'],
+            ],
+            'actions' => [
+                ['type' => 'create_lead', 'config' => ['company_name' => 'Lead creado por automation']],
+                ['type' => 'assign_owner', 'config' => ['entity_type' => 'account', 'entity_uid' => $account->uid]],
+                ['type' => 'create_activity', 'config' => [
+                    'entity_type' => 'account',
+                    'entity_uid' => $account->uid,
+                    'assigned_to_uid' => $assigned->uid,
+                    'type' => 'call',
+                    'title' => 'Seguimiento automatico',
+                ]],
+                ['type' => 'apply_tag', 'config' => [
+                    'entity_type' => 'account',
+                    'entity_uid' => $account->uid,
+                    'tag_uid' => $tag->uid,
+                ]],
+                ['type' => 'send_notification', 'config' => [
+                    'entity_type' => 'account',
+                    'entity_uid' => $account->uid,
+                    'to_user_uid' => $assigned->uid,
+                    'title' => 'Notificacion interna',
+                    'message' => 'Hay un lead listo para gestionar',
+                ]],
+            ],
+            'logic' => 'AND',
+            'is_active' => true,
+        ])->assertCreated();
+
+        $result = app(AutomationService::class)->execute('lead_created', ['source' => 'crm']);
+
+        $this->assertSame(1, $result['executed']);
+        $this->assertSame(
+            ['create_lead', 'assign_owner', 'create_activity', 'apply_tag', 'send_notification'],
+            collect($result['results']->first()['actions'])->pluck('type')->all()
+        );
+        $this->assertSame(
+            [true, true, true, true, true],
+            collect($result['results']->first()['actions'])
+                ->map(fn (array $action) => $action['success'] ? true : ($action['message'] ?? false))
+                ->all()
+        );
+        $this->assertDatabaseHas('crm_entities', [
+            'tenant_id' => $owner->tenant_id,
+            'owner_user_id' => $assigned->getKey(),
+        ]);
+        $this->assertSame($assigned->getKey(), $account->fresh()->owner_user_id);
+        $this->assertTrue($account->fresh()->tags()->where('tags.uid', $tag->uid)->exists());
+        $this->assertSame(1, Activity::withoutGlobalScope('row_level_security')->where('title', 'Seguimiento automatico')->count());
+        $this->assertSame(1, Activity::withoutGlobalScope('row_level_security')->where('title', 'Notificacion interna')->where('assigned_user_id', $assigned->getKey())->count());
+        $this->assertSame('Lead creado por automation', CrmEntity::withoutGlobalScope('row_level_security')->first()->profile_data['company_name']);
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User
