@@ -72,6 +72,22 @@ class OpportunityController extends Controller
         }
     }
 
+    public function import(Request $request)
+    {
+        try {
+            return $this->successResponse($this->opportunityService->import($request->all()), 201, 'Importacion procesada');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function template()
+    {
+        return $this->opportunityService->template();
+    }
+
     public function show(string $uid)
     {
         return $this->successResponse($this->opportunityService->getOpportunity($uid));

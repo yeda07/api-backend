@@ -9,13 +9,18 @@ use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\User;
 use App\Support\ApiIndex;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use ZipArchive;
 
 class OpportunityService
 {
-    public function __construct(private readonly ProjectService $projectService)
+    public function __construct(
+        private readonly ProjectService $projectService,
+        private readonly ExportService $exportService
+    )
     {
     }
 
@@ -174,6 +179,64 @@ class OpportunityService
         Opportunity::query()->where('uid', $uid)->firstOrFail()->delete();
     }
 
+    public function import(array $data): array
+    {
+        $validated = Validator::make($data, [
+            'file' => 'required|file|mimes:csv,txt,xlsx|max:10240',
+            'stage_uid' => 'nullable|uuid',
+        ])->validate();
+
+        $rows = $this->readImportRows($validated['file']);
+        $created = [];
+        $errors = [];
+        $defaultStageUid = $validated['stage_uid'] ?? $this->defaultStageUid();
+
+        foreach ($rows as $index => $row) {
+            $line = $index + 2;
+
+            try {
+                $payload = $this->importRowPayload($row, $defaultStageUid);
+
+                if (empty($payload['title'])) {
+                    continue;
+                }
+
+                $created[] = $this->createOpportunity($payload);
+            } catch (\Throwable $e) {
+                $errors[] = [
+                    'row' => $line,
+                    'message' => $e instanceof ValidationException
+                        ? collect($e->errors())->flatten()->implode(' ')
+                        : $e->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'created_count' => count($created),
+            'failed_count' => count($errors),
+            'opportunities' => $created,
+            'errors' => $errors,
+        ];
+    }
+
+    public function template()
+    {
+        return $this->exportService->file('opportunities-import-template', [[
+            'title' => '',
+            'amount' => '',
+            'currency' => 'COP',
+            'expected_close_date' => '2026-05-31',
+            'description' => '',
+            'stage_uid' => '',
+            'account_uid' => '',
+            'contact_uid' => '',
+            'owner_user_uid' => '',
+        ]], [
+            'format' => 'excel',
+        ]);
+    }
+
     public function board(array $filters = []): array
     {
         $validated = Validator::make($filters, [
@@ -308,6 +371,180 @@ class OpportunityService
                 })
                 ->values(),
         ];
+    }
+
+    private function importRowPayload(array $row, string $defaultStageUid): array
+    {
+        $stageUid = $row['stage_uid'] ?? null;
+
+        if (!$stageUid && !empty($row['stage_key'])) {
+            $stageUid = OpportunityStage::query()->where('key', $row['stage_key'])->value('uid');
+        }
+
+        $payload = [
+            'stage_uid' => $stageUid ?: $defaultStageUid,
+            'owner_user_uid' => $row['owner_user_uid'] ?? null,
+            'title' => $row['title'] ?? $row['lead_name'] ?? $row['name'] ?? null,
+            'amount' => $row['amount'] ?? 0,
+            'currency' => $row['currency'] ?? null,
+            'expected_close_date' => $row['expected_close_date'] ?? null,
+            'description' => $row['description'] ?? $row['notes'] ?? null,
+        ];
+
+        if (!empty($row['account_uid'])) {
+            $payload['entity_type'] = 'account';
+            $payload['entity_uid'] = $row['account_uid'];
+        } elseif (!empty($row['contact_uid'])) {
+            $payload['entity_type'] = 'contact';
+            $payload['entity_uid'] = $row['contact_uid'];
+        }
+
+        return array_filter($payload, fn ($value) => $value !== null && $value !== '');
+    }
+
+    private function defaultStageUid(): string
+    {
+        return OpportunityStage::query()
+            ->orderBy('position')
+            ->value('uid')
+            ?? throw ValidationException::withMessages([
+                'stage_uid' => ['No hay etapas de oportunidad configuradas'],
+            ]);
+    }
+
+    private function readImportRows(UploadedFile $file): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        return $extension === 'xlsx'
+            ? $this->readXlsxRows($file)
+            : $this->readCsvRows($file);
+    }
+
+    private function readCsvRows(UploadedFile $file): array
+    {
+        $handle = fopen($file->getRealPath(), 'r');
+
+        if (!$handle) {
+            return [];
+        }
+
+        $headers = null;
+        $rows = [];
+
+        while (($data = fgetcsv($handle)) !== false) {
+            if ($headers === null) {
+                $headers = $this->normalizeImportHeaders($data);
+                continue;
+            }
+
+            $rows[] = $this->combineImportRow($headers, $data);
+        }
+
+        fclose($handle);
+
+        return $rows;
+    }
+
+    private function readXlsxRows(UploadedFile $file): array
+    {
+        $zip = new ZipArchive();
+
+        if ($zip->open($file->getRealPath()) !== true) {
+            throw ValidationException::withMessages([
+                'file' => ['No fue posible leer el archivo XLSX'],
+            ]);
+        }
+
+        $sharedStrings = $this->xlsxSharedStrings($zip);
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+
+        if (!$sheetXml) {
+            return [];
+        }
+
+        $xml = simplexml_load_string($sheetXml);
+        $headers = null;
+        $rows = [];
+
+        foreach ($xml->sheetData->row as $row) {
+            $values = [];
+
+            foreach ($row->c as $cell) {
+                $reference = (string) $cell['r'];
+                $columnIndex = $this->xlsxColumnIndex(preg_replace('/\d+/', '', $reference));
+                $type = (string) $cell['t'];
+                $value = (string) $cell->v;
+
+                if ($type === 's') {
+                    $value = $sharedStrings[(int) $value] ?? '';
+                } elseif ($type === 'inlineStr') {
+                    $value = (string) $cell->is->t;
+                }
+
+                $values[$columnIndex] = $value;
+            }
+
+            ksort($values);
+            $values = array_values($values);
+
+            if ($headers === null) {
+                $headers = $this->normalizeImportHeaders($values);
+                continue;
+            }
+
+            $rows[] = $this->combineImportRow($headers, $values);
+        }
+
+        return $rows;
+    }
+
+    private function xlsxSharedStrings(ZipArchive $zip): array
+    {
+        $xml = $zip->getFromName('xl/sharedStrings.xml');
+
+        if (!$xml) {
+            return [];
+        }
+
+        $shared = simplexml_load_string($xml);
+        $strings = [];
+
+        foreach ($shared->si as $item) {
+            $strings[] = (string) ($item->t ?? collect($item->r)->map(fn ($run) => (string) $run->t)->implode(''));
+        }
+
+        return $strings;
+    }
+
+    private function normalizeImportHeaders(array $headers): array
+    {
+        return collect($headers)
+            ->map(fn ($header) => str((string) $header)->lower()->snake()->toString())
+            ->all();
+    }
+
+    private function combineImportRow(array $headers, array $values): array
+    {
+        $row = [];
+
+        foreach ($headers as $index => $header) {
+            $row[$header] = $values[$index] ?? null;
+        }
+
+        return $row;
+    }
+
+    private function xlsxColumnIndex(string $letters): int
+    {
+        $index = 0;
+
+        foreach (str_split($letters) as $letter) {
+            $index = $index * 26 + (ord(strtoupper($letter)) - 64);
+        }
+
+        return $index - 1;
     }
 
     private function validateStage(array $data, bool $partial = false): array

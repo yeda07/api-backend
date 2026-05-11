@@ -80,6 +80,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token'])->group(func
 
 Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/me', [AuthController::class, 'updateMe']);
     Route::get('/auth/init', [AuthController::class, 'init']);
     Route::post('/2fa/recovery-codes/regenerate', [AuthController::class, 'regenerateRecoveryCodes']);
 
@@ -426,6 +427,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::delete('/stages/{uid}', [OpportunityController::class, 'destroyStage'])->middleware('permission:opportunities.manage');
         Route::get('/board', [OpportunityController::class, 'board'])->middleware('permission:opportunities.read');
         Route::get('/summary', [OpportunityController::class, 'summary'])->middleware('permission:opportunities.read');
+        Route::get('/template', [OpportunityController::class, 'template'])->middleware('permission:opportunities.read');
+        Route::post('/import', [OpportunityController::class, 'import'])->middleware('permission:opportunities.manage');
         Route::get('/', [OpportunityController::class, 'index'])->middleware('permission:opportunities.read');
         Route::post('/', [OpportunityController::class, 'store'])->middleware('permission:opportunities.manage');
         Route::get('/{uid}', [OpportunityController::class, 'show'])->middleware('permission:opportunities.read');

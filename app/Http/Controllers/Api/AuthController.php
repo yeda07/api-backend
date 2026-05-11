@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -97,6 +98,36 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return $this->successResponse($this->serializeUser($request->user()));
+    }
+
+    public function updateMe(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'email' => ['sometimes', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => 'sometimes|string|min:8',
+            'avatar_url' => 'sometimes|nullable|url|max:2048',
+        ]);
+
+        $payload = [];
+
+        foreach (['name', 'email', 'avatar_url'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $payload[$field] = $validated[$field];
+            }
+        }
+
+        if (array_key_exists('password', $validated)) {
+            $payload['password'] = Hash::make($validated['password']);
+        }
+
+        if ($payload !== []) {
+            $user->forceFill($payload)->save();
+        }
+
+        return $this->successResponse($this->serializeUser($user->fresh()), 200, 'Perfil actualizado');
     }
 
     public function init(Request $request)
@@ -292,6 +323,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'tenant_uid' => $user->tenant?->uid,
             'is_platform_admin' => (bool) $user->is_platform_admin,
+            'avatar_url' => $user->avatar_url,
             'two_factor_enabled' => $user->hasTwoFactorEnabled(),
             'locked_until' => $user->locked_until?->toISOString(),
         ];

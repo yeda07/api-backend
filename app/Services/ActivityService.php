@@ -6,6 +6,7 @@ use App\Support\ApiIndex;
 use App\Models\Activity;
 use App\Models\Contact;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -24,6 +25,8 @@ class ActivityService
             'type' => 'nullable|string|in:task,call,meeting,email,note,reminder,nota,llamada,reunion,demo,seguimiento',
             'status' => 'nullable|string|in:pending,in_progress,completed,cancelled,overdue',
             'search' => 'nullable|string|max:255',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
             'page' => 'sometimes|integer|min:1',
             'per_page' => 'sometimes|integer|min:1|max:100',
             'paginate' => 'sometimes',
@@ -66,6 +69,14 @@ class ActivityService
                 $searchQuery->whereRaw('LOWER(title) LIKE ?', [$search])
                     ->orWhereRaw('LOWER(description) LIKE ?', [$search]);
             });
+        }
+
+        if (!empty($validated['date_from'])) {
+            $query->where('scheduled_at', '>=', $this->dateBoundary($validated['date_from'], true));
+        }
+
+        if (!empty($validated['date_to'])) {
+            $query->where('scheduled_at', '<=', $this->dateBoundary($validated['date_to'], false));
         }
 
         $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
@@ -289,6 +300,15 @@ class ActivityService
         }
 
         return $userId;
+    }
+
+    private function dateBoundary(string $value, bool $start): Carbon
+    {
+        $date = Carbon::parse($value);
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)
+            ? ($start ? $date->startOfDay() : $date->endOfDay())
+            : $date;
     }
 
     private function syncOverdueStatuses(): void

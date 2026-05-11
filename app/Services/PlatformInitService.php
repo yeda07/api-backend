@@ -107,7 +107,7 @@ class PlatformInitService
                 'email' => $user->email,
                 'role' => $role,
                 'is_platform_admin' => (bool) $user->is_platform_admin,
-                'avatar_url' => null,
+                'avatar_url' => $user->avatar_url,
             ],
             'tenant' => [
                 'uid' => $user->tenant?->uid,
