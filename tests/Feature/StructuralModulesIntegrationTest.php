@@ -27,7 +27,7 @@ class StructuralModulesIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'name' => 'B2B Activo',
-            'document' => 'DOC-' . uniqid(),
+            'document' => 'DOC-'.uniqid(),
             'industry' => 'software',
         ]);
         Contact::query()->create([
@@ -60,7 +60,7 @@ class StructuralModulesIntegrationTest extends TestCase
         $response->assertCreated()->assertJsonPath('data.name', 'Compradores');
         $uid = $response->json('data.uid');
 
-        $this->postJson('/api/segments/' . $uid . '/run')
+        $this->postJson('/api/segments/'.$uid.'/run')
             ->assertOk()
             ->assertJsonPath('data.count', 1)
             ->assertJsonPath('data.data.0.email', 'segmentado@example.test')
@@ -98,7 +98,7 @@ class StructuralModulesIntegrationTest extends TestCase
 
         $uid = $response->json('data.uid');
 
-        $this->putJson('/api/teams/' . $uid, ['is_active' => false])
+        $this->putJson('/api/teams/'.$uid, ['is_active' => false])
             ->assertOk()
             ->assertJsonPath('data.is_active', false);
     }
@@ -158,6 +158,57 @@ class StructuralModulesIntegrationTest extends TestCase
         $this->assertSame(1, AutomationRule::query()->first()->execution_count);
     }
 
+    public function test_automation_accepts_frontend_trigger_source_event_and_assignment_user_ids(): void
+    {
+        $owner = $this->authenticateWithPermissions([
+            'automation.read',
+            'automation.create',
+        ]);
+        $first = User::query()->create([
+            'tenant_id' => $owner->tenant_id,
+            'name' => 'Vendedor Uno',
+            'email' => 'vendedor-uno-auto@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+        $second = User::query()->create([
+            'tenant_id' => $owner->tenant_id,
+            'name' => 'Vendedor Dos',
+            'email' => 'vendedor-dos-auto@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        $this->postJson('/api/automation/rules', [
+            'name' => 'Lead CRM',
+            'trigger_source' => 'crm',
+            'trigger_event' => 'lead_created',
+            'actions' => [
+                ['type' => 'create_task', 'config' => ['title' => 'Gestionar lead CRM']],
+            ],
+            'is_active' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.trigger_source', 'crm')
+            ->assertJsonPath('data.trigger_event', 'lead_created');
+
+        $this->postJson('/api/automation/assignment-rules', [
+            'name' => 'Asignacion multiple',
+            'user_ids' => [$first->uid, $second->uid],
+            'conditions' => [
+                ['field' => 'source', 'operator' => 'equals', 'value' => 'crm'],
+            ],
+            'is_active' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.assigned_to_uid', $first->uid)
+            ->assertJsonPath('data.user_ids.0', $first->uid)
+            ->assertJsonPath('data.user_ids.1', $second->uid);
+
+        $result = app(AutomationService::class)->execute('lead_created', ['source' => 'crm']);
+
+        $this->assertSame(1, $result['executed']);
+        $this->assertSame(1, Activity::query()->where('title', 'Gestionar lead CRM')->count());
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
@@ -180,14 +231,14 @@ class StructuralModulesIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Structural Owner',
-            'email' => 'structural-owner+' . uniqid() . '@example.test',
+            'email' => 'structural-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
         $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
         $user->permissions()->sync($permissionIds);
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

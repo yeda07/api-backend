@@ -16,11 +16,12 @@ use Illuminate\Validation\ValidationException;
 class AutomationService
 {
     private const TRIGGERS = 'lead_created,lead_updated,lead_stage_changed,lead_assigned,opportunity_created,opportunity_stage_changed,deal_won,deal_lost,contact_updated,task_completed';
+
+    private const TRIGGER_SOURCES = 'crm,linkedin,facebook,time';
+
     private const ACTIONS = 'send_email,update_field,create_task,send_webhook';
 
-    public function __construct(private readonly ConditionEvaluator $conditionEvaluator)
-    {
-    }
+    public function __construct(private readonly ConditionEvaluator $conditionEvaluator) {}
 
     public function listRules(array $filters = [])
     {
@@ -53,7 +54,7 @@ class AutomationService
     public function toggleRule(string $uid): AutomationRule
     {
         $rule = $this->getRule($uid);
-        $rule->update(['is_active' => !$rule->is_active]);
+        $rule->update(['is_active' => ! $rule->is_active]);
 
         return $rule->fresh();
     }
@@ -91,7 +92,14 @@ class AutomationService
 
         $results = AutomationRule::query()
             ->where('is_active', true)
-            ->whereIn('trigger_source', $triggerSources)
+            ->where(function ($query) use ($triggerSources) {
+                $query->whereIn('trigger_event', $triggerSources)
+                    ->orWhere(function ($legacyQuery) use ($triggerSources) {
+                        $legacyQuery
+                            ->whereNull('trigger_event')
+                            ->whereIn('trigger_source', $triggerSources);
+                    });
+            })
             ->get()
             ->map(function (AutomationRule $rule) use ($payload) {
                 $matched = $this->conditionEvaluator->matches($rule->conditions ?? [], $payload, $rule->logic);
@@ -147,21 +155,24 @@ class AutomationService
 
     private function validateRule(array $data, bool $partial = false): array
     {
-        return Validator::make($data, [
+        $validated = Validator::make($data, [
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'description' => 'nullable|string',
-            'trigger_source' => [$partial ? 'sometimes' : 'required', 'string', 'in:' . self::TRIGGERS],
+            'trigger_source' => [$partial ? 'sometimes' : 'required', 'string', 'in:'.self::TRIGGERS.','.self::TRIGGER_SOURCES],
+            'trigger_event' => 'sometimes|string|in:'.self::TRIGGERS,
             'trigger_config' => 'sometimes|array',
             'conditions' => 'sometimes|array',
             'conditions.*.field' => 'required_with:conditions|string|max:255',
             'conditions.*.operator' => 'required_with:conditions|string|in:equals,not_equals,contains,greater_than,less_than,in,not_in',
             'conditions.*.value' => 'nullable',
             'actions' => [$partial ? 'sometimes' : 'required', 'array', 'min:1'],
-            'actions.*.type' => 'required_with:actions|string|in:' . self::ACTIONS,
+            'actions.*.type' => 'required_with:actions|string|in:'.self::ACTIONS,
             'actions.*.config' => 'sometimes|array',
             'logic' => 'sometimes|string|in:AND,OR',
             'is_active' => 'sometimes|boolean',
         ])->validate();
+
+        return $this->normalizeTriggerContract($validated, $partial);
     }
 
     private function validateAssignmentRule(array $data, bool $partial = false): array
@@ -173,15 +184,55 @@ class AutomationService
             'conditions.*.field' => 'required_with:conditions|string|max:255',
             'conditions.*.operator' => 'required_with:conditions|string|in:equals,not_equals,contains,greater_than,less_than,in,not_in',
             'conditions.*.value' => 'nullable',
-            'assigned_to_uid' => [$partial ? 'sometimes' : 'required', 'uuid'],
+            'assigned_to_uid' => [$partial ? 'sometimes' : 'required_without:user_ids', 'uuid'],
             'assigned_to_name' => 'sometimes|string|max:255',
+            'user_ids' => 'sometimes|array|min:1',
+            'user_ids.*' => 'uuid',
             'logic' => 'sometimes|string|in:AND,OR',
             'is_active' => 'sometimes|boolean',
         ])->validate();
 
+        if (array_key_exists('user_ids', $validated)) {
+            $userIds = $this->resolveUserIds($validated['user_ids']);
+            $validated['assigned_user_ids'] = $userIds;
+            $validated['assigned_to_user_id'] = $userIds[0];
+            unset($validated['user_ids'], $validated['assigned_to_uid'], $validated['assigned_to_name']);
+
+            return $validated;
+        }
+
         if (array_key_exists('assigned_to_uid', $validated)) {
-            $validated['assigned_to_user_id'] = $this->resolveUserId($validated['assigned_to_uid']);
+            $userId = $this->resolveUserId($validated['assigned_to_uid']);
+            $validated['assigned_to_user_id'] = $userId;
+            $validated['assigned_user_ids'] = [$userId];
             unset($validated['assigned_to_uid'], $validated['assigned_to_name']);
+        }
+
+        return $validated;
+    }
+
+    private function normalizeTriggerContract(array $validated, bool $partial): array
+    {
+        if (! array_key_exists('trigger_source', $validated)) {
+            return $validated;
+        }
+
+        $source = $validated['trigger_source'];
+        $events = explode(',', self::TRIGGERS);
+        $sources = explode(',', self::TRIGGER_SOURCES);
+
+        if (in_array($source, $sources, true)) {
+            if (empty($validated['trigger_event'])) {
+                throw ValidationException::withMessages([
+                    'trigger_event' => ['El evento es requerido cuando trigger_source es una fuente'],
+                ]);
+            }
+
+            return $validated;
+        }
+
+        if (in_array($source, $events, true) && ! array_key_exists('trigger_event', $validated)) {
+            $validated['trigger_event'] = $source;
         }
 
         return $validated;
@@ -229,7 +280,7 @@ class AutomationService
             return ['type' => 'send_email', 'success' => false, 'message' => 'Missing recipient'];
         }
 
-        Mail::raw($config['body'] ?? 'Automation triggered: ' . ($config['template'] ?? 'default'), function ($message) use ($config) {
+        Mail::raw($config['body'] ?? 'Automation triggered: '.($config['template'] ?? 'default'), function ($message) use ($config) {
             $message->to($config['to'])->subject($config['subject'] ?? 'Automation notification');
         });
 
@@ -240,7 +291,7 @@ class AutomationService
     {
         $entity = find_entity_by_uid($config['entity_type'] ?? data_get($payload, 'entity_type'), $config['entity_uid'] ?? data_get($payload, 'entity_uid'));
 
-        if (!$entity || empty($config['field'])) {
+        if (! $entity || empty($config['field'])) {
             return ['type' => 'update_field', 'success' => false];
         }
 
@@ -258,7 +309,7 @@ class AutomationService
         }
 
         $activity = Activity::query()->create([
-            'assigned_user_id' => !empty($config['assigned_to_uid']) ? $this->resolveUserId($config['assigned_to_uid']) : null,
+            'assigned_user_id' => ! empty($config['assigned_to_uid']) ? $this->resolveUserId($config['assigned_to_uid']) : null,
             'activityable_type' => $entity ? get_class($entity) : null,
             'activityable_id' => $entity?->getKey(),
             'owner_user_id' => $entity->owner_user_id ?? auth()->id(),
@@ -286,18 +337,36 @@ class AutomationService
 
     private function resolveUserId(?string $uid): ?int
     {
-        if (!$uid) {
+        if (! $uid) {
             return null;
         }
 
         $id = User::query()->where('uid', $uid)->value('id');
 
-        if (!$id) {
+        if (! $id) {
             throw ValidationException::withMessages([
                 'assigned_to_uid' => ['El usuario asignado no existe o no pertenece a este tenant'],
             ]);
         }
 
         return $id;
+    }
+
+    private function resolveUserIds(array $uids): array
+    {
+        $uniqueUids = array_values(array_unique($uids));
+        $users = User::query()
+            ->whereIn('uid', $uniqueUids)
+            ->get(['id', 'uid']);
+
+        if ($users->count() !== count($uniqueUids)) {
+            throw ValidationException::withMessages([
+                'user_ids' => ['Uno o mas usuarios asignados no existen o no pertenecen a este tenant'],
+            ]);
+        }
+
+        return collect($uniqueUids)
+            ->map(fn (string $uid) => (int) $users->firstWhere('uid', $uid)->id)
+            ->all();
     }
 }

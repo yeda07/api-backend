@@ -17,6 +17,7 @@ class AutomationRule extends Model
         'name',
         'description',
         'trigger_source',
+        'trigger_event',
         'trigger_config',
         'conditions',
         'actions',

@@ -15,6 +15,7 @@ class AutomationAssignmentRule extends Model
         'uid',
         'tenant_id',
         'assigned_to_user_id',
+        'assigned_user_ids',
         'name',
         'description',
         'conditions',
@@ -31,9 +32,12 @@ class AutomationAssignmentRule extends Model
     protected $appends = [
         'assigned_to_uid',
         'assigned_to_name',
+        'user_ids',
+        'user_names',
     ];
 
     protected $casts = [
+        'assigned_user_ids' => 'array',
         'conditions' => 'array',
         'is_active' => 'boolean',
     ];
@@ -51,5 +55,27 @@ class AutomationAssignmentRule extends Model
     public function getAssignedToNameAttribute()
     {
         return $this->assignedTo?->name;
+    }
+
+    public function getUserIdsAttribute(): array
+    {
+        $ids = $this->assigned_user_ids ?: array_filter([$this->assigned_to_user_id]);
+
+        return User::query()
+            ->whereIn('id', $ids)
+            ->pluck('uid')
+            ->values()
+            ->all();
+    }
+
+    public function getUserNamesAttribute(): array
+    {
+        $ids = $this->assigned_user_ids ?: array_filter([$this->assigned_to_user_id]);
+
+        return User::query()
+            ->whereIn('id', $ids)
+            ->pluck('name')
+            ->values()
+            ->all();
     }
 }
