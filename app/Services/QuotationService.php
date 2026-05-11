@@ -99,7 +99,7 @@ class QuotationService
                 'price_book_id' => $priceBook?->getKey(),
                 'quoteable_type' => $quoteable ? get_class($quoteable) : null,
                 'quoteable_id' => $quoteable?->getKey(),
-                'quote_number' => $validated['quote_number'],
+                'quote_number' => $validated['quote_number'] ?? $this->generateQuoteNumber(),
                 'title' => $validated['title'],
                 'status' => $validated['status'] ?? 'draft',
                 'currency' => $validated['currency'] ?? null,
@@ -371,7 +371,7 @@ class QuotationService
     private function validateQuotation(array $data, bool $partial = false): array
     {
         $validator = Validator::make($data, [
-            'quote_number' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'quote_number' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:255'],
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'status' => 'sometimes|string|in:draft,sent,approved,rejected,cancelled',
             'currency' => 'nullable|string|max:10',
@@ -495,6 +495,36 @@ class QuotationService
     private function getItemByUid(string $uid): QuotationItem
     {
         return QuotationItem::query()->with(['quotation', 'product', 'catalogProduct', 'warehouse'])->where('uid', $uid)->firstOrFail();
+    }
+
+    private function generateQuoteNumber(): string
+    {
+        $tenantId = auth()->user()?->tenant_id;
+        $prefix = 'COT-' . now()->format('Y') . '-';
+        $lastNumber = Quotation::query()
+            ->where('tenant_id', $tenantId)
+            ->where('quote_number', 'like', $prefix . '%')
+            ->lockForUpdate()
+            ->orderByDesc('quote_number')
+            ->value('quote_number');
+
+        $nextSequence = 1;
+
+        if ($lastNumber && preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $lastNumber, $matches)) {
+            $nextSequence = ((int) $matches[1]) + 1;
+        }
+
+        do {
+            $quoteNumber = $prefix . str_pad((string) $nextSequence, 3, '0', STR_PAD_LEFT);
+            $nextSequence++;
+        } while (
+            Quotation::query()
+                ->where('tenant_id', $tenantId)
+                ->where('quote_number', $quoteNumber)
+                ->exists()
+        );
+
+        return $quoteNumber;
     }
 
     private function quotationByIdentifier(string $identifier)

@@ -18,6 +18,11 @@ class PartnerResourceController extends Controller
         return $this->successResponse($this->partnerResourceService->resources($request->query()));
     }
 
+    public function types()
+    {
+        return $this->successResponse($this->partnerResourceService->types());
+    }
+
     public function store(Request $request)
     {
         try {

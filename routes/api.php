@@ -441,6 +441,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('partners')->group(function () {
+        Route::get('/types', [PartnerController::class, 'types'])->middleware('permission:partners.read');
         Route::get('/', [PartnerController::class, 'index'])->middleware('permission:partners.read');
         Route::post('/', [PartnerController::class, 'store'])->middleware('permission:partners.manage');
         Route::put('/{uid}', [PartnerController::class, 'update'])->middleware('permission:partners.manage');
@@ -448,6 +449,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::post('/materials', [PartnerResourceController::class, 'store'])->middleware('permission:partners.resources.manage');
 
         Route::prefix('opportunities')->group(function () {
+            Route::get('/statuses', [PartnerController::class, 'opportunityStatuses'])->middleware('permission:partners.opportunities.read');
             Route::get('/', [PartnerController::class, 'opportunities'])->middleware('permission:partners.opportunities.read');
             Route::post('/', [PartnerController::class, 'storeOpportunity'])->middleware('permission:partners.opportunities.manage');
             Route::get('/{uid}', [PartnerController::class, 'showOpportunity'])->middleware('permission:partners.opportunities.read');
@@ -460,6 +462,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('partner-resources')->group(function () {
+        Route::get('/types', [PartnerResourceController::class, 'types'])->middleware('permission:partners.resources.read');
         Route::get('/', [PartnerResourceController::class, 'index'])->middleware('permission:partners.resources.read');
         Route::post('/', [PartnerResourceController::class, 'store'])->middleware('permission:partners.resources.manage');
         Route::post('/{uid}/assign', [PartnerResourceController::class, 'assign'])->middleware('permission:partners.resources.manage');

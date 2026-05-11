@@ -226,6 +226,28 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.invoice_number', 'INV-ENTERPRISE-001');
     }
 
+    public function test_quotation_create_auto_generates_quote_number(): void
+    {
+        $this->authenticateWithPermissions(['quotations.create']);
+        $year = now()->format('Y');
+
+        $first = $this->postJson('/api/quotations', [
+            'title' => 'Cotizacion sin numero',
+            'status' => 'draft',
+        ]);
+
+        $first->assertCreated()
+            ->assertJsonPath('data.quote_number', 'COT-' . $year . '-001');
+
+        $second = $this->postJson('/api/quotations', [
+            'title' => 'Cotizacion sin numero 2',
+            'status' => 'draft',
+        ]);
+
+        $second->assertCreated()
+            ->assertJsonPath('data.quote_number', 'COT-' . $year . '-002');
+    }
+
     public function test_opportunity_board_supports_origin_and_product_filters(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read']);

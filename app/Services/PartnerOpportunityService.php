@@ -11,11 +11,25 @@ use Illuminate\Validation\ValidationException;
 
 class PartnerOpportunityService
 {
+    private const STATUSES = [
+        'pending' => 'Pendiente',
+        'validated' => 'Validada',
+        'closed' => 'Cerrada',
+        'won' => 'Ganada',
+        'lost' => 'Perdida',
+        'cancelled' => 'Cancelada',
+    ];
+
     public function __construct(
         private readonly PartnerOpportunityRepository $partnerOpportunityRepository,
         private readonly PartnerService $partnerService,
         private readonly ConflictService $conflictService
     ) {
+    }
+
+    public function statuses(): array
+    {
+        return $this->options(self::STATUSES);
     }
 
     public function opportunities(array $filters = [])
@@ -155,6 +169,31 @@ class PartnerOpportunityService
         }
 
         return $validated;
+    }
+
+    private function options(array $options): array
+    {
+        return collect($options)
+            ->map(fn (string $label, string $value) => [
+                'uid' => $this->stableUid($value),
+                'key' => $value,
+                'name' => $label,
+                'value' => $value,
+                'label' => $label,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function stableUid(string $key): string
+    {
+        $hash = md5('partner-opportunity-status:' . $key);
+
+        return substr($hash, 0, 8)
+            . '-' . substr($hash, 8, 4)
+            . '-' . substr($hash, 12, 4)
+            . '-' . substr($hash, 16, 4)
+            . '-' . substr($hash, 20, 12);
     }
 
     private function normalizeOpportunityPayload(array $data): array

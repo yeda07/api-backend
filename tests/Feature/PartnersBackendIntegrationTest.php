@@ -132,6 +132,36 @@ class PartnersBackendIntegrationTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_partner_option_endpoints_return_backend_supported_values(): void
+    {
+        $this->authenticateWithPermissions([
+            'partners.read',
+            'partners.resources.read',
+            'partners.opportunities.read',
+        ]);
+
+        $this->getJson('/api/partners/types')
+            ->assertOk()
+            ->assertJsonPath('data.0.key', 'distributor')
+            ->assertJsonPath('data.0.value', 'distributor')
+            ->assertJsonPath('data.1.key', 'reseller')
+            ->assertJsonPath('data.2.key', 'ally');
+
+        $this->getJson('/api/partners/opportunities/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.key', 'pending')
+            ->assertJsonPath('data.1.key', 'validated')
+            ->assertJsonPath('data.2.key', 'closed')
+            ->assertJsonPath('data.3.key', 'won')
+            ->assertJsonPath('data.4.key', 'lost')
+            ->assertJsonPath('data.5.key', 'cancelled');
+
+        $this->getJson('/api/partner-resources/types')
+            ->assertOk()
+            ->assertJsonPath('data.0.key', 'sales')
+            ->assertJsonPath('data.1.key', 'training');
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([

@@ -21,6 +21,11 @@ class PartnerController extends Controller
         return $this->successResponse($this->partnerService->getPartners($request->query()));
     }
 
+    public function types()
+    {
+        return $this->successResponse($this->partnerService->types());
+    }
+
     public function store(Request $request)
     {
         return $this->wrap(fn () => $this->partnerService->createPartner($request->all()), 'Partner creado', 201);
@@ -34,6 +39,11 @@ class PartnerController extends Controller
     public function opportunities(Request $request)
     {
         return $this->successResponse($this->partnerOpportunityService->opportunities($request->query()));
+    }
+
+    public function opportunityStatuses()
+    {
+        return $this->successResponse($this->partnerOpportunityService->statuses());
     }
 
     public function storeOpportunity(Request $request)

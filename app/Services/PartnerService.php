@@ -13,8 +13,19 @@ use Illuminate\Validation\ValidationException;
 
 class PartnerService
 {
+    private const TYPES = [
+        'distributor' => 'Distribuidor',
+        'reseller' => 'Revendedor',
+        'ally' => 'Aliado',
+    ];
+
     public function __construct(private readonly PartnerRepository $partnerRepository)
     {
+    }
+
+    public function types(): array
+    {
+        return $this->options(self::TYPES);
     }
 
     public function getPartners(array $filters = [])
@@ -59,6 +70,31 @@ class PartnerService
             'converted_deals' => PartnerOpportunity::query()->where('status', 'won')->count(),
             'total_materials' => PartnerResource::query()->count(),
         ];
+    }
+
+    private function options(array $options): array
+    {
+        return collect($options)
+            ->map(fn (string $label, string $value) => [
+                'uid' => $this->stableUid($value),
+                'key' => $value,
+                'name' => $label,
+                'value' => $value,
+                'label' => $label,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function stableUid(string $key): string
+    {
+        $hash = md5('partner:' . $key);
+
+        return substr($hash, 0, 8)
+            . '-' . substr($hash, 8, 4)
+            . '-' . substr($hash, 12, 4)
+            . '-' . substr($hash, 16, 4)
+            . '-' . substr($hash, 20, 12);
     }
 
     public function createPartner(array $data): Partner
