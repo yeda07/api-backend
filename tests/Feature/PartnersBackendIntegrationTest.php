@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\PartnerResource;
 use App\Models\Permission;
 use App\Models\Tenant;
 use App\Models\User;
@@ -91,7 +92,7 @@ class PartnersBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.validated_count', 1)
             ->assertJsonPath('data.opportunities.0.status', 'validated');
 
-        $this->postJson('/api/partners/opportunities/' . $uid . '/close')
+        $this->postJson('/api/partners/opportunities/'.$uid.'/close')
             ->assertOk()
             ->assertJsonPath('data.status', 'closed');
     }
@@ -123,13 +124,46 @@ class PartnersBackendIntegrationTest extends TestCase
         $resource->assertCreated()
             ->assertJsonPath('data.title', 'Deck Comercial Q1 2026')
             ->assertJsonPath('data.type', 'sales')
+            ->assertJsonPath('data.description', 'Presentacion de ventas')
             ->assertJsonPath('data.material_type', 'deck')
             ->assertJsonPath('data.file_name', 'deck-q1-2026.pdf')
             ->assertJsonPath('data.download_count', 0);
 
-        $this->postJson('/api/partner-resources/' . $resource->json('data.uid') . '/assign', [
+        $resourceUid = $resource->json('data.uid');
+        $storedResource = PartnerResource::query()->where('uid', $resourceUid)->firstOrFail();
+        Storage::disk('local')->assertExists($storedResource->file_path);
+
+        $this->postJson('/api/partner-resources/'.$resource->json('data.uid').'/assign', [
             'partner_uids' => [$partnerUid],
         ])->assertOk();
+
+        $this->putJson('/api/partner-resources/'.$resourceUid, [
+            'title' => 'Deck Comercial Actualizado',
+            'description' => 'Metadata actualizada',
+            'material_type' => 'training',
+            'is_active' => false,
+            'partner_uids' => [],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.title', 'Deck Comercial Actualizado')
+            ->assertJsonPath('data.description', 'Metadata actualizada')
+            ->assertJsonPath('data.type', 'training')
+            ->assertJsonPath('data.material_type', 'training')
+            ->assertJsonPath('data.is_active', false)
+            ->assertJsonCount(0, 'data.partners');
+
+        $this->get('/api/partner-resources/'.$resourceUid.'/download')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        $this->assertSame(1, PartnerResource::query()->where('uid', $resourceUid)->value('download_count'));
+
+        $this->deleteJson('/api/partner-resources/'.$resourceUid)
+            ->assertOk()
+            ->assertJsonPath('message', 'Recurso de partner eliminado');
+
+        $this->assertDatabaseMissing('partner_resources', ['uid' => $resourceUid]);
+        Storage::disk('local')->assertMissing($storedResource->file_path);
     }
 
     public function test_partner_option_endpoints_return_backend_supported_values(): void
@@ -184,14 +218,14 @@ class PartnersBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Partners Owner',
-            'email' => 'partners-owner+' . uniqid() . '@example.test',
+            'email' => 'partners-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
         $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
         $user->permissions()->sync($permissionIds);
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

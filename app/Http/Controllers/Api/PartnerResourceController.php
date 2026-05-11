@@ -9,9 +9,7 @@ use Illuminate\Validation\ValidationException;
 
 class PartnerResourceController extends Controller
 {
-    public function __construct(private readonly PartnerResourceService $partnerResourceService)
-    {
-    }
+    public function __construct(private readonly PartnerResourceService $partnerResourceService) {}
 
     public function index(Request $request)
     {
@@ -66,6 +64,43 @@ class PartnerResourceController extends Controller
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
             return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function update(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse(
+                $this->partnerResourceService->updateResource($uid, $request->all()),
+                200,
+                'Recurso de partner actualizado'
+            );
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function destroy(string $uid)
+    {
+        try {
+            $this->partnerResourceService->deleteResource($uid);
+
+            return $this->successResponse(null, 200, 'Recurso de partner eliminado');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function download(string $uid)
+    {
+        try {
+            return $this->partnerResourceService->downloadResource($uid);
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
         }
     }
 }

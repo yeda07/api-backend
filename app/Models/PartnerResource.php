@@ -16,11 +16,13 @@ class PartnerResource extends Model
         'tenant_id',
         'title',
         'type',
+        'description',
         'disk',
         'file_path',
         'original_name',
         'mime_type',
         'size',
+        'download_count',
         'is_active',
     ];
 
@@ -31,28 +33,22 @@ class PartnerResource extends Model
     ];
 
     protected $casts = [
+        'download_count' => 'integer',
         'is_active' => 'boolean',
     ];
 
     protected $appends = [
-        'description',
         'material_type',
         'file_name',
         'file_size',
         'uploaded_at',
         'uploaded_by',
         'tags',
-        'download_count',
     ];
 
     public function partners()
     {
         return $this->belongsToMany(Partner::class, 'partner_access')->withTimestamps();
-    }
-
-    public function getDescriptionAttribute(): ?string
-    {
-        return null;
     }
 
     public function getMaterialTypeAttribute(): string
@@ -73,10 +69,10 @@ class PartnerResource extends Model
         $size = (int) $this->size;
 
         if ($size >= 1048576) {
-            return round($size / 1048576, 1) . ' MB';
+            return round($size / 1048576, 1).' MB';
         }
 
-        return round($size / 1024, 1) . ' KB';
+        return round($size / 1024, 1).' KB';
     }
 
     public function getUploadedAtAttribute(): ?string
@@ -92,10 +88,5 @@ class PartnerResource extends Model
     public function getTagsAttribute(): array
     {
         return [];
-    }
-
-    public function getDownloadCountAttribute(): int
-    {
-        return 0;
     }
 }

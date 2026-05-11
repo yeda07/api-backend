@@ -1,8 +1,14 @@
 <?php
 
-use App\Http\Controllers\Api\AccountController;
 use App\Http\Controllers\Api\AccessControlController;
+use App\Http\Controllers\Api\AccountController;
+use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\AdminBillingController;
+use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\AdminTelemetryController;
+use App\Http\Controllers\Api\AdminTenantController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\CommissionController;
 use App\Http\Controllers\Api\CompetitiveIntelligenceController;
 use App\Http\Controllers\Api\ContactController;
@@ -15,11 +21,11 @@ use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DocumentTypeController;
 use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\FinancialOperationsController;
+use App\Http\Controllers\Api\InteractionController;
 use App\Http\Controllers\Api\InventoryCategoryController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\InventoryProductController;
 use App\Http\Controllers\Api\InventoryWarehouseController;
-use App\Http\Controllers\Api\InteractionController;
 use App\Http\Controllers\Api\LogController;
 use App\Http\Controllers\Api\MetricsController;
 use App\Http\Controllers\Api\OpportunityController;
@@ -30,24 +36,18 @@ use App\Http\Controllers\Api\PriceBookController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\PurchaseOrderController;
-use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\QuotationController;
+use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\RelationController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SearchController;
+use App\Http\Controllers\Api\SegmentController;
 use App\Http\Controllers\Api\SettingsController;
-use App\Http\Controllers\Api\ActivityController;
-use App\Http\Controllers\Api\AdminBillingController;
-use App\Http\Controllers\Api\AdminDashboardController;
-use App\Http\Controllers\Api\AdminTelemetryController;
-use App\Http\Controllers\Api\AdminTenantController;
-use App\Http\Controllers\Api\AutomationController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TenantOptionController;
 use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\SegmentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -465,6 +465,9 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/types', [PartnerResourceController::class, 'types'])->middleware('permission:partners.resources.read');
         Route::get('/', [PartnerResourceController::class, 'index'])->middleware('permission:partners.resources.read');
         Route::post('/', [PartnerResourceController::class, 'store'])->middleware('permission:partners.resources.manage');
+        Route::get('/{uid}/download', [PartnerResourceController::class, 'download'])->middleware('permission:partners.resources.read');
+        Route::put('/{uid}', [PartnerResourceController::class, 'update'])->middleware('permission:partners.resources.manage');
+        Route::delete('/{uid}', [PartnerResourceController::class, 'destroy'])->middleware('permission:partners.resources.manage');
         Route::post('/{uid}/assign', [PartnerResourceController::class, 'assign'])->middleware('permission:partners.resources.manage');
     });
 
