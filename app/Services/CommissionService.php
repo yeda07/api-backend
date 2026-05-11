@@ -553,7 +553,7 @@ class CommissionService
     public function historyPdf(array $filters = []): string
     {
         $period = $filters['period'] ?? now()->format('Y-m');
-        $start = Carbon::createFromFormat('Y-m-d', $period . '-01')->startOfMonth();
+        $start = $this->parsePeriodStart((string) $period);
         $end = $start->copy()->endOfMonth();
         $entries = CommissionEntry::query()
             ->with(['user', 'quotation'])
@@ -562,7 +562,7 @@ class CommissionService
             ->get();
 
         $lines = [
-            'Periodo: ' . $period,
+            'Periodo: ' . $start->format('Y-m'),
             'Comisiones: ' . $entries->count(),
             'Base total: ' . number_format((float) $entries->sum('base_amount'), 2),
             'Comision total: ' . number_format((float) $entries->sum('commission_amount'), 2),
@@ -570,7 +570,7 @@ class CommissionService
             '',
         ];
 
-        if (filter_var($filters['include_sales_detail'] ?? true, FILTER_VALIDATE_BOOLEAN)) {
+        if ($this->booleanFilter($filters, ['include_sales_detail', 'detalle_ventas'], true)) {
             foreach ($entries->take(30) as $entry) {
                 $lines[] = ($entry->earned_at?->toDateString() ?? '-') . ' | '
                     . ($entry->user?->name ?? 'Usuario') . ' | '
@@ -580,6 +580,61 @@ class CommissionService
         }
 
         return SimplePdf::document('Historial de Comisiones', $lines);
+    }
+
+    private function parsePeriodStart(string $period): Carbon
+    {
+        $normalized = str($period)->lower()->trim()->replace('_', '-')->toString();
+
+        if (preg_match('/^\d{4}-\d{2}$/', $normalized)) {
+            return Carbon::createFromFormat('Y-m-d', $normalized . '-01')->startOfMonth();
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized)) {
+            return Carbon::parse($normalized)->startOfMonth();
+        }
+
+        if (preg_match('/^([a-záéíóúñ]+)-(\d{4})$/u', $normalized, $matches)) {
+            $month = $this->spanishMonthNumber($matches[1]);
+
+            if ($month !== null) {
+                return Carbon::create((int) $matches[2], $month, 1)->startOfMonth();
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'period' => ['El periodo debe tener formato YYYY-MM o mes-YYYY, por ejemplo 2025-02 o febrero-2025'],
+        ]);
+    }
+
+    private function spanishMonthNumber(string $month): ?int
+    {
+        return [
+            'enero' => 1,
+            'febrero' => 2,
+            'marzo' => 3,
+            'abril' => 4,
+            'mayo' => 5,
+            'junio' => 6,
+            'julio' => 7,
+            'agosto' => 8,
+            'septiembre' => 9,
+            'setiembre' => 9,
+            'octubre' => 10,
+            'noviembre' => 11,
+            'diciembre' => 12,
+        ][$month] ?? null;
+    }
+
+    private function booleanFilter(array $filters, array $keys, bool $default): bool
+    {
+        foreach ($keys as $key) {
+            if (array_key_exists($key, $filters)) {
+                return filter_var($filters[$key], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+
+        return $default;
     }
 
     public function createRun(array $data): CommissionRun
