@@ -15,6 +15,7 @@ use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -75,7 +76,9 @@ class QuotationService
 
     public function getByUid(string $uid): Quotation
     {
-        return Quotation::query()->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->where('uid', $uid)->firstOrFail();
+        return $this->quotationByIdentifier($uid)
+            ->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])
+            ->firstOrFail();
     }
 
     public function create(array $data): Quotation
@@ -492,6 +495,20 @@ class QuotationService
     private function getItemByUid(string $uid): QuotationItem
     {
         return QuotationItem::query()->with(['quotation', 'product', 'catalogProduct', 'warehouse'])->where('uid', $uid)->firstOrFail();
+    }
+
+    private function quotationByIdentifier(string $identifier)
+    {
+        $query = Quotation::query();
+
+        if (Str::isUuid($identifier)) {
+            return $query->where(function ($builder) use ($identifier) {
+                $builder->where('uid', $identifier)
+                    ->orWhere('quote_number', $identifier);
+            });
+        }
+
+        return $query->where('quote_number', $identifier);
     }
 
     private function resolvePriceBook(?string $uid): ?PriceBook
