@@ -199,6 +199,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('automation')->group(function () {
+        Route::get('/trigger-events', [AutomationController::class, 'triggerEvents'])->middleware('permission:automation.read');
         Route::get('/rules', [AutomationController::class, 'rules'])->middleware('permission:automation.read');
         Route::get('/rules/{uid}', [AutomationController::class, 'showRule'])->middleware('permission:automation.read');
         Route::post('/rules', [AutomationController::class, 'storeRule'])->middleware('permission:automation.create');
@@ -376,6 +377,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::get('/battlecards', [CompetitiveIntelligenceController::class, 'battlecards'])->middleware('permission:competitive-intelligence.read');
+    Route::get('/lost-reasons/report', [CompetitiveIntelligenceController::class, 'lostReasonsReport'])->middleware('permission:competitive-intelligence.report');
     Route::get('/lost-reasons', [CompetitiveIntelligenceController::class, 'lostReasons'])->middleware('permission:competitive-intelligence.read');
 
     Route::prefix('expenses')->group(function () {

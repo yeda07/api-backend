@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class AutomationService
 {
-    private const TRIGGERS = 'lead_created,deal_won,deal_lost,contact_updated,task_completed';
+    private const TRIGGERS = 'lead_created,lead_updated,lead_stage_changed,lead_assigned,opportunity_created,opportunity_stage_changed,deal_won,deal_lost,contact_updated,task_completed';
     private const ACTIONS = 'send_email,update_field,create_task,send_webhook';
 
     public function __construct(private readonly ConditionEvaluator $conditionEvaluator)
@@ -87,9 +87,11 @@ class AutomationService
 
     public function execute(string $triggerSource, array $payload = []): array
     {
+        $triggerSources = $this->equivalentTriggerSources($triggerSource);
+
         $results = AutomationRule::query()
             ->where('is_active', true)
-            ->where('trigger_source', $triggerSource)
+            ->whereIn('trigger_source', $triggerSources)
             ->get()
             ->map(function (AutomationRule $rule) use ($payload) {
                 $matched = $this->conditionEvaluator->matches($rule->conditions ?? [], $payload, $rule->logic);
@@ -121,6 +123,17 @@ class AutomationService
             'executed' => $results->where('matched', true)->count(),
             'results' => $results,
         ];
+    }
+
+    public function triggerEvents(): array
+    {
+        return collect(explode(',', self::TRIGGERS))
+            ->map(fn (string $trigger) => [
+                'value' => $trigger,
+                'label' => str($trigger)->replace('_', ' ')->title()->toString(),
+            ])
+            ->values()
+            ->all();
     }
 
     public function resolveAssignment(array $payload): ?AutomationAssignmentRule
@@ -189,6 +202,25 @@ class AutomationService
 
             return ['type' => $action['type'] ?? null, 'success' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    private function equivalentTriggerSources(string $triggerSource): array
+    {
+        $groups = [
+            ['lead_created', 'opportunity_created'],
+            ['lead_stage_changed', 'opportunity_stage_changed', 'deal_won', 'deal_lost'],
+            ['lead_updated', 'contact_updated'],
+            ['lead_assigned'],
+            ['task_completed'],
+        ];
+
+        foreach ($groups as $group) {
+            if (in_array($triggerSource, $group, true)) {
+                return $group;
+            }
+        }
+
+        return [$triggerSource];
     }
 
     private function sendEmail(array $config): array

@@ -9,8 +9,27 @@ class ContactRepository
 {
     public function all(array $filters = [])
     {
+        $query = Contact::query()->with('account')->orderBy('first_name')->orderBy('last_name');
+
+        if (!empty($filters['search'])) {
+            $search = '%' . mb_strtolower($filters['search']) . '%';
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->whereRaw('LOWER(first_name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(last_name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(email) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(phone) LIKE ?', [$search])
+                    ->orWhereHas('account', fn ($accountQuery) => $accountQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+            });
+        }
+
+        if (!empty($filters['account_uid']) || !empty($filters['company_uid'])) {
+            $accountUid = $filters['account_uid'] ?? $filters['company_uid'];
+            $query->whereHas('account', fn ($accountQuery) => $accountQuery->where('uid', $accountUid));
+        }
+
         return ApiIndex::paginateOrGet(
-            Contact::query()->with('account')->orderBy('first_name')->orderBy('last_name'),
+            $query,
             $filters,
             'contacts_page'
         );

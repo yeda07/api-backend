@@ -117,6 +117,7 @@ class PlatformInitService
             ],
             'modules' => $this->modules($effectivePermissionKeys),
             'localization' => $this->localization($user),
+            'permissions' => $this->permissionsPayload($effectivePermissionKeys),
         ];
     }
 
@@ -158,6 +159,26 @@ class PlatformInitService
             })
             ->values()
             ->all();
+    }
+
+    private function permissionsPayload(array $effectivePermissionKeys): array
+    {
+        $effective = collect($effectivePermissionKeys)
+            ->unique()
+            ->sort()
+            ->values();
+
+        return [
+            'effective' => $effective->all(),
+            'modules' => $effective
+                ->groupBy(fn (string $permission) => str($permission)->before('.')->toString())
+                ->map(fn ($permissions) => $permissions
+                    ->map(fn (string $permission) => str($permission)->after('.')->toString())
+                    ->unique()
+                    ->values()
+                    ->all())
+                ->all(),
+        ];
     }
 
     private function moduleItems(string $moduleKey, array $effectivePermissionKeys): array

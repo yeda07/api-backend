@@ -271,6 +271,8 @@ class CompetitiveIntelligenceService
 
     public function lostReasonsReport(array $filters = []): array
     {
+        unset($filters['page'], $filters['per_page']);
+
         $lostReasons = $this->lostReasons($filters);
 
         return [

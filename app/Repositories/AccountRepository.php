@@ -10,8 +10,21 @@ class AccountRepository
 {
     public function all(array $filters = [])
     {
+        $query = Account::query()->orderBy('name');
+
+        if (!empty($filters['search'])) {
+            $search = '%' . mb_strtolower($filters['search']) . '%';
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->whereRaw('LOWER(name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(document) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(email) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(phone) LIKE ?', [$search]);
+            });
+        }
+
         return ApiIndex::paginateOrGet(
-            Account::query()->orderBy('name'),
+            $query,
             $filters,
             'accounts_page'
         );
