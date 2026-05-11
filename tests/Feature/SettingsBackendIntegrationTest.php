@@ -333,6 +333,18 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.locales.0.label', 'Español (Colombia)');
     }
 
+    public function test_localization_options_returns_default_currencies_when_table_is_empty(): void
+    {
+        $this->authenticateWithPermissions([]);
+
+        $this->getJson('/api/settings/localization/options')
+            ->assertOk()
+            ->assertJsonPath('data.currencies.0.code', 'COP')
+            ->assertJsonPath('data.currencies.0.label', 'Peso colombiano')
+            ->assertJsonPath('data.currencies.1.code', 'USD')
+            ->assertJsonPath('data.currencies.2.code', 'EUR');
+    }
+
     public function test_custom_fields_index_returns_totals_by_module(): void
     {
         $this->authenticateWithPermissions(['custom-fields.manage']);

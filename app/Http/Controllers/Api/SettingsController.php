@@ -29,16 +29,7 @@ class SettingsController extends Controller
     {
         return $this->successResponse([
             'timezones' => $this->timezoneOptions(),
-            'currencies' => Currency::query()
-                ->orderBy('code')
-                ->get()
-                ->map(fn (Currency $currency) => [
-                    'code' => $currency->code,
-                    'label' => $currency->name,
-                    'symbol' => $currency->symbol,
-                ])
-                ->values()
-                ->all(),
+            'currencies' => $this->currencyOptions(),
             'date_formats' => ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'],
             'locales' => [
                 ['value' => 'es-CO', 'label' => 'Español (Colombia)'],
@@ -112,5 +103,33 @@ class SettingsController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function currencyOptions(): array
+    {
+        $currencies = Currency::query()
+            ->orderBy('code')
+            ->get()
+            ->map(fn (Currency $currency) => [
+                'code' => $currency->code,
+                'label' => $currency->name,
+                'symbol' => $currency->symbol,
+            ])
+            ->values()
+            ->all();
+
+        if ($currencies !== []) {
+            return $currencies;
+        }
+
+        return [
+            ['code' => 'COP', 'label' => 'Peso colombiano', 'symbol' => '$'],
+            ['code' => 'USD', 'label' => 'US Dollar', 'symbol' => 'US$'],
+            ['code' => 'EUR', 'label' => 'Euro', 'symbol' => '€'],
+            ['code' => 'MXN', 'label' => 'Peso mexicano', 'symbol' => '$'],
+            ['code' => 'PEN', 'label' => 'Sol peruano', 'symbol' => 'S/'],
+            ['code' => 'ARS', 'label' => 'Peso argentino', 'symbol' => '$'],
+            ['code' => 'CLP', 'label' => 'Peso chileno', 'symbol' => '$'],
+        ];
     }
 }
