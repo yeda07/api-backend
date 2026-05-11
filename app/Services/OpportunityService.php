@@ -159,6 +159,8 @@ class OpportunityService
     {
         $validated = Validator::make($filters, [
             'search' => 'nullable|string|max:255',
+            'origin' => 'nullable|string|max:255',
+            'product' => 'nullable|string|max:255',
         ])->validate();
 
         $stages = OpportunityStage::query()->orderBy('position')->get();
@@ -166,6 +168,14 @@ class OpportunityService
 
         if (!empty($validated['search'])) {
             $this->applyOpportunitySearch($opportunityQuery, $validated['search']);
+        }
+
+        if (!empty($validated['origin'])) {
+            $this->applyOpportunityOriginFilter($opportunityQuery, $validated['origin']);
+        }
+
+        if (!empty($validated['product'])) {
+            $this->applyOpportunityProductFilter($opportunityQuery, $validated['product']);
         }
 
         $result = ApiIndex::paginateOrGet($opportunityQuery->latest(), $filters, 'opportunities_board_page');
@@ -214,6 +224,41 @@ class OpportunityService
                 })
                 ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($search) {
                     $entityQuery->where('type', 'like', '%' . $search . '%');
+                });
+        });
+    }
+
+    private function applyOpportunityOriginFilter($query, string $origin): void
+    {
+        $query->where(function ($builder) use ($origin) {
+            $builder
+                ->whereRaw('LOWER(description) LIKE ?', ['%' . mb_strtolower($origin) . '%'])
+                ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($origin) {
+                    $entityQuery->where(function ($crmQuery) use ($origin) {
+                        $crmQuery
+                            ->where('profile_data->lead_origin', $origin)
+                            ->orWhere('profile_data->origin', $origin);
+                    });
+                });
+        });
+    }
+
+    private function applyOpportunityProductFilter($query, string $product): void
+    {
+        $search = '%' . mb_strtolower($product) . '%';
+
+        $query->where(function ($builder) use ($product, $search) {
+            $builder
+                ->whereRaw('LOWER(title) LIKE ?', [$search])
+                ->orWhereRaw('LOWER(description) LIKE ?', [$search])
+                ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($product) {
+                    $entityQuery->where(function ($crmQuery) use ($product) {
+                        $crmQuery
+                            ->where('profile_data->product', $product)
+                            ->orWhere('profile_data->product_uid', $product)
+                            ->orWhere('profile_data->main_product', $product)
+                            ->orWhere('profile_data->primary_product', $product);
+                    });
                 });
         });
     }

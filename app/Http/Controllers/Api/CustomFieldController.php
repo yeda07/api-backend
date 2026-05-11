@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\CustomFieldService;
+use App\Support\ApiIndex;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -19,7 +21,25 @@ class CustomFieldController extends Controller
     public function index(Request $request)
     {
         try {
-            return $this->successResponse($this->service->listFields($request->query()));
+            $result = $this->service->listFields($request->query());
+            $items = $result['items'];
+            $meta = [
+                'total' => $items instanceof LengthAwarePaginator ? $items->total() : $items->count(),
+                'totals' => $result['totals'],
+            ];
+
+            if ($items instanceof LengthAwarePaginator) {
+                $meta = array_merge(ApiIndex::meta($items), $meta);
+                $items = $items->items();
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => null,
+                'data' => $items,
+                'meta' => $meta,
+                'errors' => null,
+            ]);
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Exception $e) {

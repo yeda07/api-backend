@@ -3,10 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\CrmEntity;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
 use App\Models\Invoice;
+use App\Models\Opportunity;
+use App\Models\OpportunityStage;
 use App\Models\Permission;
+use App\Models\Quotation;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -160,6 +164,111 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.result', 4000000)
             ->assertJsonPath('data.rate', 4000)
             ->assertJsonPath('data.rate_date', now()->toDateString());
+    }
+
+    public function test_quotations_and_invoices_support_server_search_filters(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.read', 'finance.read']);
+        $account = $this->account($user);
+
+        $matchingQuote = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-SALES-001',
+            'title' => 'Renovacion Enterprise',
+            'status' => 'approved',
+        ]);
+        Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quote_number' => 'Q-SALES-002',
+            'title' => 'Borrador interno',
+            'status' => 'draft',
+        ]);
+
+        Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $matchingQuote->getKey(),
+            'invoiceable_type' => Account::class,
+            'invoiceable_id' => $account->getKey(),
+            'invoice_number' => 'INV-ENTERPRISE-001',
+            'status' => 'issued',
+            'currency' => 'USD',
+            'total' => 1000,
+            'outstanding_total' => 1000,
+        ]);
+        Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'invoiceable_type' => Account::class,
+            'invoiceable_id' => $account->getKey(),
+            'invoice_number' => 'INV-OTHER-001',
+            'status' => 'paid',
+            'currency' => 'USD',
+            'total' => 500,
+            'outstanding_total' => 0,
+        ]);
+
+        $this->getJson('/api/quotations?search=enterprise&status=approved')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $matchingQuote->uid);
+
+        $this->getJson('/api/quotations?search='.$account->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $matchingQuote->uid);
+
+        $this->getJson('/api/finance/invoices?search='.$matchingQuote->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.invoice_number', 'INV-ENTERPRISE-001');
+    }
+
+    public function test_opportunity_board_supports_origin_and_product_filters(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Nuevo',
+            'key' => 'new',
+            'position' => 1,
+        ]);
+        $entity = CrmEntity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'type' => 'B2B',
+            'profile_data' => [
+                'company_name' => 'Cuenta Pipeline',
+                'lead_origin' => 'web',
+                'product_uid' => 'prod-crm',
+            ],
+        ]);
+
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'opportunityable_type' => CrmEntity::class,
+            'opportunityable_id' => $entity->getKey(),
+            'title' => 'CRM Enterprise',
+            'amount' => 25000,
+            'description' => 'Producto principal CRM',
+        ]);
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Servicio soporte',
+            'amount' => 1000,
+            'description' => 'Origen referido',
+        ]);
+
+        $this->getJson('/api/opportunities/board?origin=web&product=prod-crm')
+            ->assertOk()
+            ->assertJsonPath('data.stages.0.summary.count', 1)
+            ->assertJsonPath('data.stages.0.items.0.title', 'CRM Enterprise');
     }
 
     private function account(User $user): Account

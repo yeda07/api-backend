@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\CustomField;
 use App\Models\CustomFieldValue;
+use App\Models\Account;
+use App\Models\Contact;
+use App\Models\CrmEntity;
 use App\Support\ApiIndex;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
@@ -53,7 +56,10 @@ class CustomFieldService
             $query->whereRaw('LOWER(name) LIKE ?', [$search]);
         }
 
-        return ApiIndex::paginateOrGet($query, $filters, 'custom_fields_page');
+        return [
+            'items' => ApiIndex::paginateOrGet($query, $filters, 'custom_fields_page'),
+            'totals' => $this->moduleTotals($tenantId),
+        ];
     }
 
     public function createField(array $data)
@@ -181,6 +187,12 @@ class CustomFieldService
             $validated['entity_type'] = $validated['module'];
         }
 
+        if (!empty($validated['module'])) {
+            $options = $validated['options'] ?? [];
+            $options['_module'] = $validated['module'];
+            $validated['options'] = $options;
+        }
+
         if (!empty($validated['label'])) {
             $validated['name'] = $validated['label'];
         }
@@ -195,6 +207,29 @@ class CustomFieldService
         }
 
         return $validated;
+    }
+
+    private function moduleTotals(int $tenantId): array
+    {
+        $totals = array_fill_keys(array_keys(self::SUPPORTED_MODULES), 0);
+
+        CustomField::query()
+            ->where('tenant_id', $tenantId)
+            ->get(['entity_type', 'options'])
+            ->each(function (CustomField $field) use (&$totals) {
+                $module = $field->options['_module'] ?? match ($field->entity_type) {
+                    Contact::class => 'contacts',
+                    Account::class => 'companies',
+                    CrmEntity::class => 'opportunities',
+                    default => null,
+                };
+
+                if ($module && array_key_exists($module, $totals)) {
+                    $totals[$module]++;
+                }
+            });
+
+        return $totals;
     }
 
     private function validateValue($field, $value)

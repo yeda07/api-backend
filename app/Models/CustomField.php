@@ -81,6 +81,10 @@ class CustomField extends Model
 
     public function getModuleAttribute()
     {
+        if (!empty($this->options['_module'])) {
+            return $this->options['_module'];
+        }
+
         return match ($this->entity_type) {
             Account::class => 'companies',
             Contact::class => 'contacts',

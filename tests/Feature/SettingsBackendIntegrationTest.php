@@ -119,7 +119,8 @@ class SettingsBackendIntegrationTest extends TestCase
         $this->getJson('/api/custom-fields?search=licitacion')
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.label', 'Codigo de Licitacion');
+            ->assertJsonPath('data.0.label', 'Codigo de Licitacion')
+            ->assertJsonPath('meta.totals.companies', 2);
 
         $this->getJson('/api/rbac/roles?search=comercial')
             ->assertOk()
@@ -330,6 +331,34 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.date_formats', ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'])
             ->assertJsonPath('data.locales.0.value', 'es-CO')
             ->assertJsonPath('data.locales.0.label', 'Español (Colombia)');
+    }
+
+    public function test_custom_fields_index_returns_totals_by_module(): void
+    {
+        $this->authenticateWithPermissions(['custom-fields.manage']);
+
+        $this->postJson('/api/custom-fields', [
+            'module' => 'contacts',
+            'label' => 'Cumpleanos',
+            'key' => 'cumpleanos',
+            'type' => 'date',
+        ])->assertCreated();
+
+        $this->postJson('/api/custom-fields', [
+            'module' => 'products',
+            'label' => 'Familia producto',
+            'key' => 'familia_producto',
+            'type' => 'text',
+        ])->assertCreated()
+            ->assertJsonPath('data.module', 'products');
+
+        $this->getJson('/api/custom-fields')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.totals.contacts', 1)
+            ->assertJsonPath('meta.totals.companies', 0)
+            ->assertJsonPath('meta.totals.opportunities', 0)
+            ->assertJsonPath('meta.totals.products', 1);
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User

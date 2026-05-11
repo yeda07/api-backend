@@ -6,6 +6,8 @@ use App\Support\ApiIndex;
 use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
 use App\Models\Account;
+use App\Models\Contact;
+use App\Models\CrmEntity;
 use App\Models\PriceBook;
 use App\Models\Product;
 use App\Models\Quotation;
@@ -31,8 +33,33 @@ class QuotationService
 
     public function getAll(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+            'status' => 'nullable|string|in:draft,sent,approved,rejected,cancelled',
+        ])->validate();
+
+        $query = Quotation::query()
+            ->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])
+            ->latest();
+
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->whereRaw('LOWER(quote_number) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(title) LIKE ?', [$search])
+                    ->orWhereHasMorph('quoteable', [Account::class, Contact::class, CrmEntity::class], function ($entityQuery) use ($search) {
+                        $entityQuery->whereRaw('LOWER(uid) LIKE ?', [$search]);
+                    });
+            });
+        }
+
         return ApiIndex::paginateOrGet(
-            Quotation::query()->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->latest(),
+            $query,
             $filters,
             'quotations_page'
         );

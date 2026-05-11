@@ -28,6 +28,7 @@ class InvoiceService
             'entity_type' => 'nullable|string',
             'entity_uid' => 'nullable|uuid',
             'status' => 'nullable|string|in:draft,issued,partial,paid,overdue',
+            'search' => 'nullable|string|max:255',
         ])->validate();
 
         $query = Invoice::query()->with(['quotation', 'invoiceable', 'payments'])->latest();
@@ -40,6 +41,16 @@ class InvoiceService
 
         if (!empty($validated['status'])) {
             $query->where('status', $validated['status']);
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->whereRaw('LOWER(invoice_number) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(uid) LIKE ?', [$search])
+                    ->orWhereHas('quotation', fn ($quotationQuery) => $quotationQuery->whereRaw('LOWER(uid) LIKE ?', [$search]));
+            });
         }
 
         return ApiIndex::paginateOrGet($query, $filters, 'invoices_page');
