@@ -14,6 +14,7 @@ use App\Models\InventoryProduct;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Role;
+use App\Models\Team;
 use App\Models\User;
 use App\Support\ApiIndex;
 use App\Support\SimplePdf;
@@ -32,8 +33,18 @@ class CommissionService
 
     public function plans(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+        $query = CommissionPlan::query()->with('roles')->orderBy('name');
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->whereRaw('LOWER(name) LIKE ?', [$search]);
+        }
+
         return ApiIndex::paginateOrGet(
-            CommissionPlan::query()->with('roles')->orderBy('name'),
+            $query,
             $filters,
             'commission_plans_page'
         );
@@ -107,18 +118,34 @@ class CommissionService
 
     public function assignments(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'user_uid' => 'nullable|string',
+            'manager_uid' => 'nullable|string',
+            'team_uid' => 'nullable|uuid',
+            'search' => 'nullable|string|max:255',
+            'active' => 'nullable',
+        ])->validate();
         $query = CommissionAssignment::query()->with(['user.roles', 'commissionPlan.roles'])->latest('starts_at');
 
-        if (!empty($filters['user_uid'])) {
-            $query->where('user_id', $this->resolveUserId($filters['user_uid']));
+        if (!empty($validated['user_uid'])) {
+            $query->where('user_id', $this->resolveUserId($validated['user_uid']));
         }
 
-        if (!empty($filters['manager_uid'])) {
-            $query->whereIn('user_id', $this->resolveTeamUserIds($filters['manager_uid']));
+        if (!empty($validated['manager_uid'])) {
+            $query->whereIn('user_id', $this->resolveTeamUserIds($validated['manager_uid']));
         }
 
-        if (array_key_exists('active', $filters) && $filters['active'] !== null && $filters['active'] !== '') {
-            $query->where('active', filter_var($filters['active'], FILTER_VALIDATE_BOOLEAN));
+        if (!empty($validated['team_uid'])) {
+            $query->whereIn('user_id', $this->resolveTeamMemberUserIds($validated['team_uid']));
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->whereHas('user', fn ($userQuery) => $userQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+        }
+
+        if (array_key_exists('active', $validated) && $validated['active'] !== null && $validated['active'] !== '') {
+            $query->where('active', filter_var($validated['active'], FILTER_VALIDATE_BOOLEAN));
         }
 
         return ApiIndex::paginateOrGet($query, $filters, 'commission_assignments_page');
@@ -475,14 +502,33 @@ class CommissionService
 
     public function runs(array $filters = [])
     {
+        $validated = Validator::make($filters, [
+            'user_uid' => 'nullable|string',
+            'status' => 'nullable|string|max:50',
+            'search' => 'nullable|string|max:255',
+            'period' => 'nullable|string|regex:/^\d{4}-\d{2}$/',
+        ])->validate();
         $query = CommissionRun::query()->with(['user', 'commissionPlan.roles', 'items'])->latest('period_start');
 
-        if (!empty($filters['user_uid'])) {
-            $query->where('user_id', $this->resolveUserId($filters['user_uid']));
+        if (!empty($validated['user_uid'])) {
+            $query->where('user_id', $this->resolveUserId($validated['user_uid']));
         }
 
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->whereHas('user', fn ($userQuery) => $userQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+        }
+
+        if (!empty($validated['period'])) {
+            $periodStart = Carbon::createFromFormat('Y-m-d', $validated['period'] . '-01')->startOfMonth()->toDateString();
+            $periodEnd = Carbon::createFromFormat('Y-m-d', $validated['period'] . '-01')->endOfMonth()->toDateString();
+
+            $query->whereDate('period_start', '<=', $periodEnd)
+                ->whereDate('period_end', '>=', $periodStart);
         }
 
         return ApiIndex::paginateOrGet($query, $filters, 'commission_runs_page');
@@ -1025,6 +1071,22 @@ class CommissionService
         }
 
         return $visible;
+    }
+
+    private function resolveTeamMemberUserIds(string $teamUid): array
+    {
+        $team = Team::query()->with('members')->where('uid', $teamUid)->firstOr(function () {
+            throw ValidationException::withMessages([
+                'team_uid' => ['El equipo no existe o no pertenece a este tenant'],
+            ]);
+        });
+
+        return collect([$team->manager_user_id])
+            ->merge($team->members->pluck('id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function ensureUserMatchesPlanRoles(User $user, CommissionPlan $plan): void

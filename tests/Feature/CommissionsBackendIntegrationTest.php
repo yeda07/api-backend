@@ -10,6 +10,7 @@ use App\Models\CommissionRun;
 use App\Models\CommissionTarget;
 use App\Models\Permission;
 use App\Models\Quotation;
+use App\Models\Team;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -263,6 +264,103 @@ class CommissionsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.recentSales.0.commission_generated', 5250)
             ->assertJsonMissingPath('data.monthly_target')
             ->assertJsonMissingPath('data.recent_entries');
+    }
+
+    public function test_commission_plans_assignments_and_runs_support_server_filters(): void
+    {
+        $user = $this->authenticateWithPermissions(['commissions.read', 'commissions.manage']);
+        $ana = User::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Ana Comercial',
+            'email' => 'ana-commissions+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+        $bruno = User::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bruno Ventas',
+            'email' => 'bruno-commissions+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        $planNorth = CommissionPlan::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Plan Norte Especial',
+            'type' => 'sale',
+            'base_percent' => 5,
+            'active' => true,
+        ]);
+        $planSouth = CommissionPlan::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Plan Sur',
+            'type' => 'sale',
+            'base_percent' => 4,
+            'active' => true,
+        ]);
+
+        $team = Team::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Equipo Norte',
+            'manager_user_id' => $user->getKey(),
+            'is_active' => true,
+        ]);
+        $team->members()->attach($ana->getKey());
+
+        CommissionAssignment::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $ana->getKey(),
+            'commission_plan_id' => $planNorth->getKey(),
+            'starts_at' => '2026-01-01',
+            'active' => true,
+        ]);
+        CommissionAssignment::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $bruno->getKey(),
+            'commission_plan_id' => $planSouth->getKey(),
+            'starts_at' => '2026-01-01',
+            'active' => true,
+        ]);
+
+        CommissionRun::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $ana->getKey(),
+            'commission_plan_id' => $planNorth->getKey(),
+            'period_start' => '2026-02-01',
+            'period_end' => '2026-02-28',
+            'sales_amount' => 50000,
+            'commission_amount' => 2500,
+            'status' => 'approved',
+        ]);
+        CommissionRun::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $bruno->getKey(),
+            'commission_plan_id' => $planSouth->getKey(),
+            'period_start' => '2026-03-01',
+            'period_end' => '2026-03-31',
+            'sales_amount' => 40000,
+            'commission_amount' => 1600,
+            'status' => 'draft',
+        ]);
+
+        $this->getJson('/api/commissions/plans?search=norte')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $planNorth->uid);
+
+        $this->getJson('/api/commissions/assignments?search=ana')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.user_uid', $ana->uid);
+
+        $this->getJson('/api/commissions/assignments?team_uid='.$team->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.user_uid', $ana->uid);
+
+        $this->getJson('/api/commissions/runs?search=ana&period=2026-02')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.user_uid', $ana->uid)
+            ->assertJsonPath('data.0.status', 'approved');
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User
