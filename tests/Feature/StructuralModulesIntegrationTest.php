@@ -211,6 +211,20 @@ class StructuralModulesIntegrationTest extends TestCase
         $this->assertSame(1, Activity::query()->where('title', 'Gestionar lead CRM')->count());
     }
 
+    public function test_automation_actions_endpoint_returns_supported_action_options(): void
+    {
+        $this->authenticateWithPermissions(['automation.read']);
+
+        $this->getJson('/api/automation/actions')
+            ->assertOk()
+            ->assertJsonFragment(['value' => 'send_email', 'label' => 'Send Email'])
+            ->assertJsonFragment(['value' => 'create_lead', 'label' => 'Create Lead'])
+            ->assertJsonFragment(['value' => 'assign_owner', 'label' => 'Assign Owner'])
+            ->assertJsonFragment(['value' => 'create_activity', 'label' => 'Create Activity'])
+            ->assertJsonFragment(['value' => 'apply_tag', 'label' => 'Apply Tag'])
+            ->assertJsonFragment(['value' => 'send_notification', 'label' => 'Send Notification']);
+    }
+
     public function test_automation_supports_frontend_action_types(): void
     {
         $owner = $this->authenticateWithPermissions([

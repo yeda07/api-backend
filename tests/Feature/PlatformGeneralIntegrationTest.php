@@ -82,6 +82,43 @@ class PlatformGeneralIntegrationTest extends TestCase
             ->assertJsonPath('data.modules.10.enabled', true);
     }
 
+    public function test_auth_init_disables_tenant_modules_for_platform_admin_without_removing_permissions(): void
+    {
+        foreach (['users.manage', 'admin.dashboard.read'] as $key) {
+            Permission::query()->firstOrCreate(
+                ['key' => $key],
+                [
+                    'module' => str_contains($key, '.') ? explode('.', $key)[0] : 'platform',
+                    'action' => $key,
+                    'description' => $key,
+                ]
+            );
+        }
+
+        $admin = User::withoutGlobalScopes()->create([
+            'tenant_id' => null,
+            'name' => 'Platform Admin',
+            'email' => 'platform-admin+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
+            'is_platform_admin' => true,
+        ]);
+        $admin->permissions()->sync(Permission::query()->whereIn('key', ['users.manage', 'admin.dashboard.read'])->pluck('id')->all());
+
+        Sanctum::actingAs($admin, ['access:full', 'platform:admin']);
+
+        $response = $this->getJson('/api/auth/init')
+            ->assertOk()
+            ->assertJsonPath('data.user.is_platform_admin', true)
+            ->assertJsonPath('data.modules.0.enabled', false)
+            ->assertJsonPath('data.modules.0.items.0.enabled', false)
+            ->assertJsonPath('data.modules.10.key', 'settings')
+            ->assertJsonPath('data.modules.10.enabled', false)
+            ->assertJsonPath('data.modules.10.permissions', []);
+
+        $this->assertContains('users.manage', $response->json('data.permissions.effective'));
+        $this->assertContains('admin.dashboard.read', $response->json('data.permissions.effective'));
+    }
+
     public function test_localization_endpoint_returns_frontend_fields(): void
     {
         $currency = Currency::query()->create([

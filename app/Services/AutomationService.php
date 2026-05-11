@@ -146,6 +146,17 @@ class AutomationService
             ->all();
     }
 
+    public function actions(): array
+    {
+        return collect(explode(',', self::ACTIONS))
+            ->map(fn (string $action) => [
+                'value' => $action,
+                'label' => str($action)->replace('_', ' ')->title()->toString(),
+            ])
+            ->values()
+            ->all();
+    }
+
     public function resolveAssignment(array $payload): ?AutomationAssignmentRule
     {
         return AutomationAssignmentRule::query()

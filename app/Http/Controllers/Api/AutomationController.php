@@ -23,6 +23,11 @@ class AutomationController extends Controller
         return $this->successResponse($this->automationService->triggerEvents());
     }
 
+    public function actions()
+    {
+        return $this->successResponse($this->automationService->actions());
+    }
+
     public function showRule(string $uid)
     {
         return $this->successResponse($this->automationService->getRule($uid));

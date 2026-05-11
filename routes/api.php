@@ -203,6 +203,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('automation')->group(function () {
         Route::get('/trigger-events', [AutomationController::class, 'triggerEvents'])->middleware('permission:automation.read');
+        Route::get('/actions', [AutomationController::class, 'actions'])->middleware('permission:automation.read');
         Route::get('/rules', [AutomationController::class, 'rules'])->middleware('permission:automation.read');
         Route::get('/rules/{uid}', [AutomationController::class, 'showRule'])->middleware('permission:automation.read');
         Route::post('/rules', [AutomationController::class, 'storeRule'])->middleware('permission:automation.create');
