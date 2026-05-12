@@ -2,21 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use App\Models\Traits\HasPublicUid;
-use App\Models\Traits\HasCustomFieldValues;
-use App\Models\Traits\HasTags;
-use App\Models\Traits\TenantScope;
-use App\Models\Account;
-use App\Models\Tenant;
-use App\Models\User;
 use App\Models\Traits\AppliesRowLevelSecurity;
+use App\Models\Traits\HasCustomFieldValues;
+use App\Models\Traits\HasPublicUid;
+use App\Models\Traits\HasTags;
 use App\Models\Traits\HasUserTimezone;
-
+use App\Models\Traits\TenantScope;
+use Illuminate\Database\Eloquent\Model;
 
 class Contact extends Model
 {
-    use HasPublicUid, TenantScope, AppliesRowLevelSecurity, HasTags, HasCustomFieldValues, HasUserTimezone;
+    use AppliesRowLevelSecurity, HasCustomFieldValues, HasPublicUid, HasTags, HasUserTimezone, TenantScope;
 
     protected $fillable = [
         'uid',
@@ -28,6 +24,12 @@ class Contact extends Model
         'email',
         'phone',
         'position',
+        'status',
+        'is_public_entity',
+    ];
+
+    protected $casts = [
+        'is_public_entity' => 'boolean',
     ];
 
     protected $hidden = [
@@ -103,7 +105,7 @@ class Contact extends Model
     public function applyInheritedRowLevelSecurity($query, array $visibleUserIds, string $table): void
     {
         $query->orWhere(function ($nestedQuery) use ($visibleUserIds, $table) {
-            $nestedQuery->whereNull($table . '.owner_user_id')
+            $nestedQuery->whereNull($table.'.owner_user_id')
                 ->whereHas('account', fn ($accountQuery) => $accountQuery->whereIn('owner_user_id', $visibleUserIds));
         });
     }
@@ -111,7 +113,7 @@ class Contact extends Model
     //  Helper
     public function getDisplayNameAttribute()
     {
-        return trim($this->first_name . ' ' . $this->last_name);
+        return trim($this->first_name.' '.$this->last_name);
     }
 
     public function getNameAttribute()
@@ -126,12 +128,12 @@ class Contact extends Model
 
     public function getTypeAttribute()
     {
-        return 'person';
+        return $this->is_public_entity ? 'government' : 'person';
     }
 
     public function getStatusAttribute()
     {
-        return 'active';
+        return $this->attributes['status'] ?? 'active';
     }
 
     public function getIdNumberAttribute()

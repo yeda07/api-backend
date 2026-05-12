@@ -335,6 +335,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::delete('/plans/{uid}', [CommissionController::class, 'destroyPlan'])->middleware('permission:commissions.manage');
         Route::get('/assignments', [CommissionController::class, 'assignments'])->middleware('permission:commissions.read');
         Route::post('/assignments', [CommissionController::class, 'storeAssignment'])->middleware('permission:commissions.manage');
+        Route::post('/assignments/bulk', [CommissionController::class, 'storeBulkAssignments'])->middleware('permission:commissions.manage');
         Route::get('/assignments/{uid}', [CommissionController::class, 'showAssignment'])->middleware('permission:commissions.read');
         Route::put('/assignments/{uid}', [CommissionController::class, 'updateAssignment'])->middleware('permission:commissions.manage');
         Route::delete('/assignments/{uid}', [CommissionController::class, 'destroyAssignment'])->middleware('permission:commissions.manage');

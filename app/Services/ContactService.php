@@ -100,15 +100,15 @@ class ContactService
         $filters = $validated['filters'] ?? [];
         $rows = Contact::query()
             ->with('account')
-            ->when(!empty($filters['search']), function ($query) use ($filters) {
+            ->when(! empty($filters['search']), function ($query) use ($filters) {
                 $search = $filters['search'];
                 $query->where(function ($builder) use ($search) {
                     $builder
-                        ->where('first_name', 'like', '%' . $search . '%')
-                        ->orWhere('last_name', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%')
-                        ->orWhere('phone', 'like', '%' . $search . '%')
-                        ->orWhereHas('account', fn ($accountQuery) => $accountQuery->where('name', 'like', '%' . $search . '%'));
+                        ->where('first_name', 'like', '%'.$search.'%')
+                        ->orWhere('last_name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%')
+                        ->orWhere('phone', 'like', '%'.$search.'%')
+                        ->orWhereHas('account', fn ($accountQuery) => $accountQuery->where('name', 'like', '%'.$search.'%'));
                 });
             })
             ->orderBy('first_name')
@@ -141,6 +141,9 @@ class ContactService
             'email' => 'nullable|email|max:150',
             'phone' => 'nullable|string|max:50',
             'position' => 'nullable|string|max:100',
+            'status' => 'sometimes|string|in:active,prospect,inactive',
+            'type' => 'sometimes|string|in:person,government',
+            'is_public_entity' => 'sometimes|boolean',
             'account_uid' => 'nullable|exists:accounts,uid',
             'account_id' => 'prohibited',
         ]);
@@ -154,7 +157,7 @@ class ContactService
     {
         unset($data['account_id']);
 
-        if (array_key_exists('company_uid', $data) && !array_key_exists('account_uid', $data)) {
+        if (array_key_exists('company_uid', $data) && ! array_key_exists('account_uid', $data)) {
             $data['account_uid'] = $data['company_uid'];
         }
 
@@ -170,17 +173,21 @@ class ContactService
 
     private function normalizeFrontendPayload(array $data): array
     {
-        if (!array_key_exists('first_name', $data) && !empty($data['name'])) {
+        if (! array_key_exists('first_name', $data) && ! empty($data['name'])) {
             $parts = preg_split('/\s+/', trim($data['name']), 2);
             $data['first_name'] = $parts[0] ?? $data['name'];
             $data['last_name'] = $parts[1] ?? null;
         }
 
-        if (array_key_exists('job_title', $data) && !array_key_exists('position', $data)) {
+        if (array_key_exists('job_title', $data) && ! array_key_exists('position', $data)) {
             $data['position'] = $data['job_title'];
         }
 
-        unset($data['name'], $data['job_title'], $data['type'], $data['status'], $data['id_number'], $data['institution_type'], $data['is_public_entity']);
+        if (array_key_exists('type', $data) && ! array_key_exists('is_public_entity', $data)) {
+            $data['is_public_entity'] = $data['type'] === 'government';
+        }
+
+        unset($data['name'], $data['job_title'], $data['type'], $data['id_number'], $data['institution_type']);
 
         return $data;
     }

@@ -11,8 +11,8 @@ class ContactRepository
     {
         $query = Contact::query()->with('account')->orderBy('first_name')->orderBy('last_name');
 
-        if (!empty($filters['search'])) {
-            $search = '%' . mb_strtolower($filters['search']) . '%';
+        if (! empty($filters['search'])) {
+            $search = '%'.mb_strtolower($filters['search']).'%';
             $query->where(function ($builder) use ($search) {
                 $builder
                     ->whereRaw('LOWER(first_name) LIKE ?', [$search])
@@ -23,9 +23,17 @@ class ContactRepository
             });
         }
 
-        if (!empty($filters['account_uid']) || !empty($filters['company_uid'])) {
+        if (! empty($filters['account_uid']) || ! empty($filters['company_uid'])) {
             $accountUid = $filters['account_uid'] ?? $filters['company_uid'];
             $query->whereHas('account', fn ($accountQuery) => $accountQuery->where('uid', $accountUid));
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (! empty($filters['type'])) {
+            $query->where('is_public_entity', $filters['type'] === 'government');
         }
 
         return ApiIndex::paginateOrGet(
@@ -65,12 +73,13 @@ class ContactRepository
     public function delete(string $uid)
     {
         $contact = $this->findByUid($uid);
+
         return $contact->delete();
     }
 
     public function emailExists(?string $email, ?string $excludeUid = null): bool
     {
-        if (!$email) {
+        if (! $email) {
             return false;
         }
 

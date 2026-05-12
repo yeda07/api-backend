@@ -43,11 +43,11 @@ class CommissionsBackendIntegrationTest extends TestCase
 
         $uid = $create->json('data.uid');
 
-        $this->getJson('/api/commissions/plans/' . $uid)
+        $this->getJson('/api/commissions/plans/'.$uid)
             ->assertOk()
             ->assertJsonPath('data.uid', $uid);
 
-        $this->putJson('/api/commissions/plans/' . $uid, [
+        $this->putJson('/api/commissions/plans/'.$uid, [
             'base_percentage' => 6,
             'is_active' => false,
         ])
@@ -65,7 +65,7 @@ class CommissionsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.effective_percentage', 7)
             ->assertJsonPath('data.tier_applied', 1);
 
-        $this->deleteJson('/api/commissions/plans/' . $uid)
+        $this->deleteJson('/api/commissions/plans/'.$uid)
             ->assertOk()
             ->assertJsonPath('message', 'Plan de comision eliminado');
 
@@ -78,7 +78,7 @@ class CommissionsBackendIntegrationTest extends TestCase
         $seller = User::query()->create([
             'tenant_id' => $user->tenant_id,
             'name' => 'Vendedor Comisiones',
-            'email' => 'seller-commissions+' . uniqid() . '@example.test',
+            'email' => 'seller-commissions+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
@@ -100,7 +100,7 @@ class CommissionsBackendIntegrationTest extends TestCase
 
         $assignmentUid = $assignment->json('data.uid');
 
-        $this->getJson('/api/commissions/assignments/' . $assignmentUid)
+        $this->getJson('/api/commissions/assignments/'.$assignmentUid)
             ->assertOk()
             ->assertJsonPath('data.uid', $assignmentUid);
 
@@ -118,23 +118,65 @@ class CommissionsBackendIntegrationTest extends TestCase
 
         $targetUid = $target->json('data.uid');
 
-        $this->getJson('/api/commissions/targets/' . $targetUid)
+        $this->getJson('/api/commissions/targets/'.$targetUid)
             ->assertOk()
             ->assertJsonPath('data.uid', $targetUid);
 
-        $this->putJson('/api/commissions/targets/' . $targetUid, [
+        $this->putJson('/api/commissions/targets/'.$targetUid, [
             'goal_value' => 150000,
         ])
             ->assertOk()
             ->assertJsonPath('data.goal_value', 150000);
 
-        $this->deleteJson('/api/commissions/targets/' . $targetUid)
+        $this->deleteJson('/api/commissions/targets/'.$targetUid)
             ->assertOk()
             ->assertJsonPath('message', 'Meta de comision eliminada');
 
-        $this->deleteJson('/api/commissions/assignments/' . $assignmentUid)
+        $this->deleteJson('/api/commissions/assignments/'.$assignmentUid)
             ->assertOk()
             ->assertJsonPath('message', 'Asignacion de comision eliminada');
+    }
+
+    public function test_bulk_assignments_create_one_assignment_per_user(): void
+    {
+        $user = $this->authenticateWithPermissions(['commissions.read', 'commissions.manage']);
+        $first = User::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bulk Uno',
+            'email' => 'bulk-uno-commissions+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+        $second = User::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bulk Dos',
+            'email' => 'bulk-dos-commissions+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        $planUid = $this->postJson('/api/commissions/plans', [
+            'name' => 'Plan bulk',
+            'base_percentage' => 3,
+        ])->assertCreated()->json('data.uid');
+
+        $this->postJson('/api/commissions/assignments/bulk', [
+            'user_uids' => [$first->uid, $second->uid],
+            'commission_plan_uid' => $planUid,
+            'starts_at' => '2026-01-01',
+            'ends_at' => '2026-12-31',
+        ])
+            ->assertCreated()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.user_uid', $first->uid)
+            ->assertJsonPath('data.1.user_uid', $second->uid);
+
+        $this->assertDatabaseHas('commission_assignments', [
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $first->getKey(),
+        ]);
+        $this->assertDatabaseHas('commission_assignments', [
+            'tenant_id' => $user->tenant_id,
+            'user_id' => $second->getKey(),
+        ]);
     }
 
     public function test_simple_financial_record_payload_and_entry_frontend_status_work(): void
@@ -385,7 +427,7 @@ class CommissionsBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Commissions Owner',
-            'email' => 'commissions-owner+' . uniqid() . '@example.test',
+            'email' => 'commissions-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
@@ -394,7 +436,7 @@ class CommissionsBackendIntegrationTest extends TestCase
             $user->permissions()->sync($permissionIds);
         }
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

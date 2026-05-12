@@ -2,8 +2,8 @@
 
 namespace App\Repositories;
 
-use App\Support\ApiIndex;
 use App\Models\Account;
+use App\Support\ApiIndex;
 use Exception;
 
 class AccountRepository
@@ -12,8 +12,8 @@ class AccountRepository
     {
         $query = Account::query()->orderBy('name');
 
-        if (!empty($filters['search'])) {
-            $search = '%' . mb_strtolower($filters['search']) . '%';
+        if (! empty($filters['search'])) {
+            $search = '%'.mb_strtolower($filters['search']).'%';
             $query->where(function ($builder) use ($search) {
                 $builder
                     ->whereRaw('LOWER(name) LIKE ?', [$search])
@@ -21,6 +21,10 @@ class AccountRepository
                     ->orWhereRaw('LOWER(email) LIKE ?', [$search])
                     ->orWhereRaw('LOWER(phone) LIKE ?', [$search]);
             });
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
         }
 
         return ApiIndex::paginateOrGet(
@@ -42,7 +46,7 @@ class AccountRepository
 
             return Account::create($data);
         } catch (Exception $e) {
-            throw new Exception('Error creating account: ' . $e->getMessage());
+            throw new Exception('Error creating account: '.$e->getMessage());
         }
     }
 
@@ -52,9 +56,10 @@ class AccountRepository
 
         try {
             $account->update($data);
+
             return $account;
         } catch (Exception $e) {
-            throw new Exception('Error updating account: ' . $e->getMessage());
+            throw new Exception('Error updating account: '.$e->getMessage());
         }
     }
 
@@ -64,9 +69,10 @@ class AccountRepository
 
         try {
             $account->delete();
+
             return true;
         } catch (Exception $e) {
-            throw new Exception('Error deleting account: ' . $e->getMessage());
+            throw new Exception('Error deleting account: '.$e->getMessage());
         }
     }
 }

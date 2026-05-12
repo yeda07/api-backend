@@ -62,6 +62,29 @@ class ContactsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.job_title', 'Gerente de Compras')
             ->assertJsonPath('data.type', 'person')
             ->assertJsonPath('data.status', 'active');
+
+        $government = $this->postJson('/api/contacts', [
+            'name' => 'Alcaldia Central',
+            'email' => 'alcaldia@example.test',
+            'company_uid' => $accountUid,
+            'type' => 'government',
+            'status' => 'prospect',
+        ]);
+
+        $government->assertCreated()
+            ->assertJsonPath('data.type', 'government')
+            ->assertJsonPath('data.status', 'prospect');
+
+        $this->getJson('/api/contacts?status=prospect&type=government')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.email', 'alcaldia@example.test')
+            ->assertJsonPath('data.0.type', 'government');
+
+        $this->getJson('/api/accounts?status=active')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $accountUid);
     }
 
     public function test_contacts_duplicate_check_matches_frontend_contract(): void
@@ -124,7 +147,7 @@ class ContactsBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Contacts Owner',
-            'email' => 'contacts-owner+' . uniqid() . '@example.test',
+            'email' => 'contacts-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
@@ -133,7 +156,7 @@ class ContactsBackendIntegrationTest extends TestCase
             $user->permissions()->sync($permissionIds);
         }
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

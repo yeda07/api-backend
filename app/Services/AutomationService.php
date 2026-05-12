@@ -137,13 +137,51 @@ class AutomationService
 
     public function triggerEvents(): array
     {
-        return collect(explode(',', self::TRIGGERS))
-            ->map(fn (string $trigger) => [
-                'value' => $trigger,
-                'label' => str($trigger)->replace('_', ' ')->title()->toString(),
-            ])
-            ->values()
+        $sources = [
+            'crm' => 'CRM',
+            'linkedin' => 'LinkedIn',
+            'facebook' => 'Facebook',
+            'time' => 'Tiempo',
+        ];
+        $events = collect(explode(',', self::TRIGGERS))
+            ->mapWithKeys(fn (string $trigger) => [$trigger => str($trigger)->replace('_', ' ')->title()->toString()])
             ->all();
+
+        return [
+            'sources' => $sources,
+            'events' => $events,
+            'mappings' => [
+                'crm' => [
+                    'lead_created',
+                    'lead_updated',
+                    'lead_stage_changed',
+                    'lead_assigned',
+                    'lead_lost',
+                    'lead_won',
+                    'lead_stalled',
+                    'opportunity_created',
+                    'opportunity_stage_changed',
+                    'deal_won',
+                    'deal_lost',
+                    'contact_updated',
+                    'task_completed',
+                ],
+                'linkedin' => [
+                    'linkedin_message',
+                    'linkedin_reply',
+                    'linkedin_connection',
+                ],
+                'facebook' => [
+                    'facebook_comment',
+                    'facebook_message',
+                    'facebook_like',
+                ],
+                'time' => [
+                    'stage_duration_exceeded',
+                    'inactivity_days',
+                ],
+            ],
+        ];
     }
 
     public function actions(): array

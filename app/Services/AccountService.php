@@ -63,6 +63,7 @@ class AccountService
             'website' => 'nullable|string|max:150',
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string',
+            'status' => 'sometimes|string|in:active,prospect,inactive',
         ]);
 
         if ($validator->fails()) {
@@ -87,7 +88,7 @@ class AccountService
             ]);
         }
 
-        if (!empty($data['email'])) {
+        if (! empty($data['email'])) {
             $query = Account::where('tenant_id', $tenantId)
                 ->where('email', $data['email']);
 
@@ -113,16 +114,17 @@ class AccountService
             'website' => $data['website'] ?? null,
             'phone' => $data['phone'] ?? null,
             'address' => $data['address'] ?? null,
+            'status' => $data['status'] ?? 'active',
         ];
     }
 
     private function normalizeFrontendPayload(array $data): array
     {
-        if (array_key_exists('tax_id', $data) && !array_key_exists('document', $data)) {
+        if (array_key_exists('tax_id', $data) && ! array_key_exists('document', $data)) {
             $data['document'] = $data['tax_id'];
         }
 
-        unset($data['tax_id'], $data['status'], $data['country'], $data['city'], $data['company_size']);
+        unset($data['tax_id'], $data['country'], $data['city'], $data['company_size']);
 
         return $data;
     }

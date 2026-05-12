@@ -2,18 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use App\Models\User;
 use App\Models\Traits\AppliesRowLevelSecurity;
 use App\Models\Traits\HasCustomFieldValues;
-use App\Models\Traits\HasTags;
 use App\Models\Traits\HasPublicUid;
-use App\Models\Traits\TenantScope;
+use App\Models\Traits\HasTags;
 use App\Models\Traits\HasUserTimezone;
+use App\Models\Traits\TenantScope;
+use Illuminate\Database\Eloquent\Model;
 
 class Account extends Model
 {
-    use HasPublicUid, TenantScope, AppliesRowLevelSecurity, HasTags, HasCustomFieldValues, HasUserTimezone;
+    use AppliesRowLevelSecurity, HasCustomFieldValues, HasPublicUid, HasTags, HasUserTimezone, TenantScope;
 
     protected $fillable = [
         'uid',
@@ -25,7 +24,8 @@ class Account extends Model
         'industry',
         'website',
         'phone',
-        'address'
+        'address',
+        'status',
     ];
 
     protected $hidden = [
@@ -85,7 +85,7 @@ class Account extends Model
 
     public function getStatusAttribute()
     {
-        return 'active';
+        return $this->attributes['status'] ?? 'active';
     }
 
     public function getCountryAttribute()

@@ -215,6 +215,14 @@ class StructuralModulesIntegrationTest extends TestCase
     {
         $this->authenticateWithPermissions(['automation.read']);
 
+        $this->getJson('/api/automation/trigger-events')
+            ->assertOk()
+            ->assertJsonPath('data.sources.crm', 'CRM')
+            ->assertJsonPath('data.sources.linkedin', 'LinkedIn')
+            ->assertJsonPath('data.events.lead_created', 'Lead Created')
+            ->assertJsonPath('data.mappings.crm.0', 'lead_created')
+            ->assertJsonPath('data.mappings.time.0', 'stage_duration_exceeded');
+
         $this->getJson('/api/automation/actions')
             ->assertOk()
             ->assertJsonFragment(['value' => 'send_email', 'label' => 'Send Email'])

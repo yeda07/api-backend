@@ -9,9 +9,7 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionController extends Controller
 {
-    public function __construct(private readonly CommissionService $commissionService)
-    {
-    }
+    public function __construct(private readonly CommissionService $commissionService) {}
 
     public function plans(Request $request)
     {
@@ -55,6 +53,11 @@ class CommissionController extends Controller
     public function storeAssignment(Request $request)
     {
         return $this->wrap(fn () => $this->commissionService->createAssignment($request->all()), 'Asignacion de comision creada', 201);
+    }
+
+    public function storeBulkAssignments(Request $request)
+    {
+        return $this->wrap(fn () => $this->commissionService->createBulkAssignments($request->all()), 'Asignaciones de comision creadas', 201);
     }
 
     public function updateAssignment(Request $request, string $uid)

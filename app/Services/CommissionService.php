@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\CommissionAssignment;
 use App\Models\CommissionEntry;
 use App\Models\CommissionPlan;
@@ -9,6 +10,8 @@ use App\Models\CommissionRule;
 use App\Models\CommissionRun;
 use App\Models\CommissionRunItem;
 use App\Models\CommissionTarget;
+use App\Models\Contact;
+use App\Models\CrmEntity;
 use App\Models\FinancialRecord;
 use App\Models\InventoryProduct;
 use App\Models\Quotation;
@@ -27,9 +30,7 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionService
 {
-    public function __construct(private readonly FinancialOperationsService $financialOperationsService)
-    {
-    }
+    public function __construct(private readonly FinancialOperationsService $financialOperationsService) {}
 
     public function plans(array $filters = [])
     {
@@ -38,8 +39,8 @@ class CommissionService
         ])->validate();
         $query = CommissionPlan::query()->with('roles')->orderBy('name');
 
-        if (!empty($validated['search'])) {
-            $search = '%' . mb_strtolower($validated['search']) . '%';
+        if (! empty($validated['search'])) {
+            $search = '%'.mb_strtolower($validated['search']).'%';
             $query->whereRaw('LOWER(name) LIKE ?', [$search]);
         }
 
@@ -91,7 +92,7 @@ class CommissionService
         }
 
         return DB::transaction(function () use ($plan, $payload, $validated) {
-            if (!empty($payload)) {
+            if (! empty($payload)) {
                 $plan->update($payload);
             }
 
@@ -127,20 +128,20 @@ class CommissionService
         ])->validate();
         $query = CommissionAssignment::query()->with(['user.roles', 'commissionPlan.roles'])->latest('starts_at');
 
-        if (!empty($validated['user_uid'])) {
+        if (! empty($validated['user_uid'])) {
             $query->where('user_id', $this->resolveUserId($validated['user_uid']));
         }
 
-        if (!empty($validated['manager_uid'])) {
+        if (! empty($validated['manager_uid'])) {
             $query->whereIn('user_id', $this->resolveTeamUserIds($validated['manager_uid']));
         }
 
-        if (!empty($validated['team_uid'])) {
+        if (! empty($validated['team_uid'])) {
             $query->whereIn('user_id', $this->resolveTeamMemberUserIds($validated['team_uid']));
         }
 
-        if (!empty($validated['search'])) {
-            $search = '%' . mb_strtolower($validated['search']) . '%';
+        if (! empty($validated['search'])) {
+            $search = '%'.mb_strtolower($validated['search']).'%';
             $query->whereHas('user', fn ($userQuery) => $userQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
         }
 
@@ -172,6 +173,35 @@ class CommissionService
             'ends_at' => $validated['ends_at'] ?? null,
             'active' => $validated['active'] ?? true,
         ])->fresh(['user.roles', 'commissionPlan.roles']);
+    }
+
+    public function createBulkAssignments(array $data): array
+    {
+        $validated = Validator::make($data, [
+            'user_uids' => 'required_without:user_ids|array|min:1',
+            'user_uids.*' => 'uuid',
+            'user_ids' => 'required_without:user_uids|array|min:1',
+            'user_ids.*' => 'uuid',
+            'commission_plan_uid' => 'required|uuid',
+            'starts_at' => 'required|date',
+            'ends_at' => 'nullable|date|after_or_equal:starts_at',
+            'active' => 'sometimes|boolean',
+        ])->validate();
+
+        $userUids = $validated['user_uids'] ?? $validated['user_ids'];
+
+        return DB::transaction(function () use ($validated, $userUids) {
+            return collect(array_values(array_unique($userUids)))
+                ->map(fn (string $userUid) => $this->createAssignment([
+                    'user_uid' => $userUid,
+                    'commission_plan_uid' => $validated['commission_plan_uid'],
+                    'starts_at' => $validated['starts_at'],
+                    'ends_at' => $validated['ends_at'] ?? null,
+                    'active' => $validated['active'] ?? true,
+                ]))
+                ->values()
+                ->all();
+        });
     }
 
     public function updateAssignment(string $uid, array $data): CommissionAssignment
@@ -332,7 +362,7 @@ class CommissionService
             $entityType = $validated['entity_type'] ?? $quotation?->quoteable_type;
             $entityUid = $validated['entity_uid'] ?? $quotation?->quoteable?->uid;
 
-            if (!$quotation && (!$entityType || !$entityUid)) {
+            if (! $quotation && (! $entityType || ! $entityUid)) {
                 $record = $this->createStandaloneFinancialRecord($validated);
                 $entries = collect();
 
@@ -476,7 +506,7 @@ class CommissionService
 
     public function simulate(array $data): array
     {
-        if (!empty($data['plan_uid'])) {
+        if (! empty($data['plan_uid'])) {
             return $this->simulatePlan($data);
         }
 
@@ -514,22 +544,22 @@ class CommissionService
         ])->validate();
         $query = CommissionRun::query()->with(['user', 'commissionPlan.roles', 'items'])->latest('period_start');
 
-        if (!empty($validated['user_uid'])) {
+        if (! empty($validated['user_uid'])) {
             $query->where('user_id', $this->resolveUserId($validated['user_uid']));
         }
 
-        if (!empty($validated['status'])) {
+        if (! empty($validated['status'])) {
             $query->where('status', $validated['status']);
         }
 
-        if (!empty($validated['search'])) {
-            $search = '%' . mb_strtolower($validated['search']) . '%';
+        if (! empty($validated['search'])) {
+            $search = '%'.mb_strtolower($validated['search']).'%';
             $query->whereHas('user', fn ($userQuery) => $userQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
         }
 
-        if (!empty($validated['period'])) {
-            $periodStart = Carbon::createFromFormat('Y-m-d', $validated['period'] . '-01')->startOfMonth()->toDateString();
-            $periodEnd = Carbon::createFromFormat('Y-m-d', $validated['period'] . '-01')->endOfMonth()->toDateString();
+        if (! empty($validated['period'])) {
+            $periodStart = Carbon::createFromFormat('Y-m-d', $validated['period'].'-01')->startOfMonth()->toDateString();
+            $periodEnd = Carbon::createFromFormat('Y-m-d', $validated['period'].'-01')->endOfMonth()->toDateString();
 
             $query->whereDate('period_start', '<=', $periodEnd)
                 ->whereDate('period_end', '>=', $periodStart);
@@ -562,20 +592,20 @@ class CommissionService
             ->get();
 
         $lines = [
-            'Periodo: ' . $start->format('Y-m'),
-            'Comisiones: ' . $entries->count(),
-            'Base total: ' . number_format((float) $entries->sum('base_amount'), 2),
-            'Comision total: ' . number_format((float) $entries->sum('commission_amount'), 2),
-            'Generado: ' . now()->toDateTimeString(),
+            'Periodo: '.$start->format('Y-m'),
+            'Comisiones: '.$entries->count(),
+            'Base total: '.number_format((float) $entries->sum('base_amount'), 2),
+            'Comision total: '.number_format((float) $entries->sum('commission_amount'), 2),
+            'Generado: '.now()->toDateTimeString(),
             '',
         ];
 
         if ($this->booleanFilter($filters, ['include_sales_detail', 'detalle_ventas'], true)) {
             foreach ($entries->take(30) as $entry) {
-                $lines[] = ($entry->earned_at?->toDateString() ?? '-') . ' | '
-                    . ($entry->user?->name ?? 'Usuario') . ' | '
-                    . number_format((float) $entry->base_amount, 2) . ' | '
-                    . number_format((float) $entry->commission_amount, 2);
+                $lines[] = ($entry->earned_at?->toDateString() ?? '-').' | '
+                    .($entry->user?->name ?? 'Usuario').' | '
+                    .number_format((float) $entry->base_amount, 2).' | '
+                    .number_format((float) $entry->commission_amount, 2);
             }
         }
 
@@ -587,7 +617,7 @@ class CommissionService
         $normalized = str($period)->lower()->trim()->replace('_', '-')->toString();
 
         if (preg_match('/^\d{4}-\d{2}$/', $normalized)) {
-            return Carbon::createFromFormat('Y-m-d', $normalized . '-01')->startOfMonth();
+            return Carbon::createFromFormat('Y-m-d', $normalized.'-01')->startOfMonth();
         }
 
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $normalized)) {
@@ -739,7 +769,7 @@ class CommissionService
             $ratePercent = $planCalculation['applied_percent'];
             $commissionAmount = $planCalculation['commission_amount'];
 
-            if ($ratePercent <= 0 && !$planCalculation['plan']) {
+            if ($ratePercent <= 0 && ! $planCalculation['plan']) {
                 $ratePercent = (float) ($rule?->rate_percent ?? 0);
                 $commissionAmount = round($baseAmount * ($ratePercent / 100), 2);
             }
@@ -787,15 +817,15 @@ class CommissionService
 
     private function resolveCustomerType(Quotation $quotation): string
     {
-        if ($quotation->quoteable_type === \App\Models\Account::class) {
+        if ($quotation->quoteable_type === Account::class) {
             return 'B2B';
         }
 
-        if ($quotation->quoteable_type === \App\Models\Contact::class) {
+        if ($quotation->quoteable_type === Contact::class) {
             return 'B2C';
         }
 
-        if ($quotation->quoteable_type === \App\Models\CrmEntity::class) {
+        if ($quotation->quoteable_type === CrmEntity::class) {
             return $quotation->quoteable?->type ?? 'B2B';
         }
 
@@ -845,7 +875,7 @@ class CommissionService
 
         $validated = $validator->validated();
 
-        if (!empty($validated['tiers_json'])) {
+        if (! empty($validated['tiers_json'])) {
             $validated['tiers_json'] = collect($validated['tiers_json'])
                 ->map(fn (array $tier) => [
                     'uid' => $tier['uid'] ?? null,
@@ -878,7 +908,7 @@ class CommissionService
 
     private function validateTarget(array $data, bool $partial = false): array
     {
-        if (array_key_exists('goal_value', $data) && !array_key_exists('target_amount', $data)) {
+        if (array_key_exists('goal_value', $data) && ! array_key_exists('target_amount', $data)) {
             $data['target_amount'] = $data['goal_value'];
         }
 
@@ -975,19 +1005,19 @@ class CommissionService
 
     private function normalizePlanPayload(array $data, bool $partial = false): array
     {
-        if (array_key_exists('base_percentage', $data) && !array_key_exists('base_percent', $data)) {
+        if (array_key_exists('base_percentage', $data) && ! array_key_exists('base_percent', $data)) {
             $data['base_percent'] = $data['base_percentage'];
         }
 
-        if (array_key_exists('tiers', $data) && !array_key_exists('tiers_json', $data)) {
+        if (array_key_exists('tiers', $data) && ! array_key_exists('tiers_json', $data)) {
             $data['tiers_json'] = $data['tiers'];
         }
 
-        if (array_key_exists('is_active', $data) && !array_key_exists('active', $data)) {
+        if (array_key_exists('is_active', $data) && ! array_key_exists('active', $data)) {
             $data['active'] = $data['is_active'];
         }
 
-        if (!$partial && !array_key_exists('type', $data) && !empty($data)) {
+        if (! $partial && ! array_key_exists('type', $data) && ! empty($data)) {
             $data['type'] = 'sale';
         }
 
@@ -996,26 +1026,26 @@ class CommissionService
 
     private function normalizeFinancialRecordPayload(array $data): array
     {
-        if (array_key_exists('type', $data) && !array_key_exists('record_type', $data)) {
+        if (array_key_exists('type', $data) && ! array_key_exists('record_type', $data)) {
             $data['record_type'] = match ($data['type']) {
                 'sale' => 'collection_received',
                 default => $data['type'],
             };
         }
 
-        if (array_key_exists('recorded_at', $data) && !array_key_exists('paid_at', $data)) {
+        if (array_key_exists('recorded_at', $data) && ! array_key_exists('paid_at', $data)) {
             $data['paid_at'] = $data['recorded_at'];
         }
 
-        if (!array_key_exists('paid_at', $data)) {
+        if (! array_key_exists('paid_at', $data)) {
             $data['paid_at'] = now()->toDateString();
         }
 
-        if (!array_key_exists('status', $data)) {
+        if (! array_key_exists('status', $data)) {
             $data['status'] = 'paid';
         }
 
-        if (!array_key_exists('source_system', $data)) {
+        if (! array_key_exists('source_system', $data)) {
             $data['source_system'] = 'manual';
         }
 
@@ -1028,7 +1058,7 @@ class CommissionService
 
     private function simulatePlan(array $data): array
     {
-        if (!array_key_exists('total_sales', $data)
+        if (! array_key_exists('total_sales', $data)
             && (array_key_exists('accumulated_sales', $data) || array_key_exists('hypothetical_sale', $data))) {
             $data['total_sales'] = (float) ($data['accumulated_sales'] ?? 0) + (float) ($data['hypothetical_sale'] ?? 0);
         }
@@ -1065,13 +1095,13 @@ class CommissionService
 
     private function resolveProductId(?string $uid): ?int
     {
-        if (!$uid) {
+        if (! $uid) {
             return null;
         }
 
         $productId = InventoryProduct::query()->where('uid', $uid)->value('id');
 
-        if (!$productId) {
+        if (! $productId) {
             throw ValidationException::withMessages([
                 'product_uid' => ['El producto no existe o no pertenece a este tenant'],
             ]);
@@ -1082,7 +1112,7 @@ class CommissionService
 
     private function resolveQuotation(?string $uid): ?Quotation
     {
-        if (!$uid) {
+        if (! $uid) {
             return null;
         }
 
@@ -1139,7 +1169,7 @@ class CommissionService
         $visible = [$manager->getKey()];
         $pending = [$manager->getKey()];
 
-        while (!empty($pending)) {
+        while (! empty($pending)) {
             $subordinates = User::query()->whereIn('manager_id', $pending)->pluck('id')->all();
             $newIds = array_values(array_diff($subordinates, $visible));
             $visible = array_merge($visible, $newIds);
@@ -1290,7 +1320,7 @@ class CommissionService
     {
         $assignment = $this->resolveActiveAssignment($userId, $date);
 
-        if (!$assignment?->commissionPlan) {
+        if (! $assignment?->commissionPlan) {
             return [
                 'plan' => null,
                 'target' => null,
