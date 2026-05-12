@@ -24,6 +24,7 @@ class LostReason extends Model
         'details',
         'lost_at',
         'estimated_value',
+        'currency',
         'meta',
     ];
 
@@ -55,6 +56,7 @@ class LostReason extends Model
     protected $casts = [
         'lost_at' => 'date',
         'estimated_value' => 'decimal:2',
+        'currency' => 'string',
         'meta' => 'array',
     ];
 

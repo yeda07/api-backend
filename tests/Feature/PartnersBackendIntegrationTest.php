@@ -85,6 +85,22 @@ class PartnersBackendIntegrationTest extends TestCase
 
         $uid = $opportunity->json('data.uid');
 
+        $this->putJson('/api/partners/opportunities/'.$uid, [
+            'title' => 'CRM Enterprise - Gobierno CDMX actualizado',
+            'estimated_value' => 52000,
+            'currency' => 'COP',
+            'product' => 'CRM Enterprise Plus',
+            'notes' => 'Licitacion actualizada',
+            'status' => 'validated',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.title', 'CRM Enterprise - Gobierno CDMX actualizado')
+            ->assertJsonPath('data.estimated_value', 52000)
+            ->assertJsonPath('data.currency', 'COP')
+            ->assertJsonPath('data.product', 'CRM Enterprise Plus')
+            ->assertJsonPath('data.notes', 'Licitacion actualizada')
+            ->assertJsonPath('data.status', 'validated');
+
         $this->postJson('/api/partners/opportunities/validate', [
             'uids' => [$uid],
         ])

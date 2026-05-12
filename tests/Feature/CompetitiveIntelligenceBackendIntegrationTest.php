@@ -91,6 +91,7 @@ class CompetitiveIntelligenceBackendIntegrationTest extends TestCase
             'owner_user_uid' => $user->uid,
             'account_name' => 'TechMex Solutions',
             'deal_value' => 45000,
+            'currency' => 'USD',
             'lost_reason_category' => 'Precio',
             'lost_reason_detail' => 'Competidor ofrecio 30% menos',
             'closed_date' => '2026-05-01',
@@ -100,14 +101,22 @@ class CompetitiveIntelligenceBackendIntegrationTest extends TestCase
         $lostReason->assertCreated()
             ->assertJsonPath('data.account_name', 'TechMex Solutions')
             ->assertJsonPath('data.deal_value', 45000)
+            ->assertJsonPath('data.currency', 'USD')
             ->assertJsonPath('data.lost_reason_category', 'Precio')
             ->assertJsonPath('data.lost_reason_detail', 'Competidor ofrecio 30% menos')
             ->assertJsonPath('data.competitor_name', 'SAP CRM')
             ->assertJsonPath('data.sales_rep', $user->name);
 
+        $this->putJson('/api/competitive-intelligence/lost-reasons/'.$lostReason->json('data.uid'), [
+            'currency' => 'COP',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.currency', 'COP');
+
         $this->getJson('/api/competitive-intelligence/lost-reasons')
             ->assertOk()
             ->assertJsonPath('data.0.uid', $lostReason->json('data.uid'))
+            ->assertJsonPath('data.0.currency', 'COP')
             ->assertJsonPath('data.0.lost_reason_category', 'Precio');
 
         $this->getJson('/api/competitive-intelligence/lost-reasons/report')

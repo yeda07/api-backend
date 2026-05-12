@@ -86,6 +86,49 @@ class PartnerOpportunityService
         return $this->partnerOpportunityRepository->findByUid($uid);
     }
 
+    public function updateOpportunity(string $uid, array $data): PartnerOpportunity
+    {
+        $opportunity = $this->partnerOpportunityRepository->findByUid($uid);
+        $data = $this->normalizeOpportunityPayload($data);
+        $validated = $this->validate($data, true);
+        $payload = [];
+
+        if (array_key_exists('partner_uid', $validated)) {
+            $partner = $this->partnerService->getPartnerByUid($validated['partner_uid']);
+            $this->ensurePartnerActive($partner);
+            $payload['partner_id'] = $partner->getKey();
+        }
+
+        if (!empty($validated['account_uid'])) {
+            $payload['account_id'] = $this->resolveAccount($validated['account_uid'])->getKey();
+        } elseif (!empty($validated['client_name'])) {
+            $payload['account_id'] = $this->resolveOrCreateAccount($validated)->getKey();
+        }
+
+        foreach (['title', 'status', 'conflict_scope', 'amount', 'currency'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $payload[$field] = $validated[$field];
+            }
+        }
+
+        if (array_key_exists('product', $validated) || array_key_exists('notes', $validated) || array_key_exists('description', $validated)) {
+            $description = $opportunity->description ? json_decode($opportunity->description, true) : [];
+            $description = is_array($description) ? $description : ['notes' => $opportunity->description];
+            $payload['description'] = json_encode([
+                'product' => $validated['product'] ?? ($description['product'] ?? null),
+                'notes' => $validated['notes'] ?? ($validated['description'] ?? ($description['notes'] ?? null)),
+            ]);
+        }
+
+        if (array_key_exists('status', $validated)) {
+            $payload['closed_at'] = in_array($validated['status'], ['closed', 'won', 'lost'], true)
+                ? ($opportunity->closed_at ?? now())
+                : null;
+        }
+
+        return $this->partnerOpportunityRepository->update($opportunity, $payload);
+    }
+
     public function closeOpportunity(string $uid, array $data): PartnerOpportunity
     {
         $opportunity = $this->partnerOpportunityRepository->findByUid($uid);
@@ -139,15 +182,15 @@ class PartnerOpportunityService
         );
     }
 
-    private function validate(array $data): array
+    private function validate(array $data, bool $partial = false): array
     {
         $validator = Validator::make($data, [
-            'partner_uid' => 'required|uuid',
+            'partner_uid' => [$partial ? 'sometimes' : 'required', 'uuid'],
             'account_uid' => 'nullable|uuid',
-            'client_name' => 'required_without:account_uid|string|max:255',
+            'client_name' => [$partial ? 'sometimes' : 'required_without:account_uid', 'string', 'max:255'],
             'client_email' => 'nullable|email|max:255',
-            'title' => 'required|string|max:255',
-            'status' => 'sometimes|string|in:open,pending,validated,closed,won,lost',
+            'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'status' => 'sometimes|string|in:open,pending,validated,closed,won,lost,cancelled',
             'conflict_scope' => 'sometimes|string|in:global,partner',
             'amount' => 'sometimes|numeric|min:0',
             'estimated_value' => 'sometimes|numeric|min:0',
@@ -166,6 +209,10 @@ class PartnerOpportunityService
 
         if (($validated['status'] ?? null) === 'pending') {
             $validated['status'] = 'open';
+        }
+
+        if (($validated['status'] ?? null) === 'cancelled') {
+            $validated['status'] = 'closed';
         }
 
         return $validated;

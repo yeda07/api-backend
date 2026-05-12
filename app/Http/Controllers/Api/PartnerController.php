@@ -56,6 +56,11 @@ class PartnerController extends Controller
         return $this->successResponse($this->partnerOpportunityService->getOpportunity($uid));
     }
 
+    public function updateOpportunity(Request $request, string $uid)
+    {
+        return $this->wrap(fn () => $this->partnerOpportunityService->updateOpportunity($uid, $request->all()), 'Oportunidad de partner actualizada');
+    }
+
     public function validateOpportunity(Request $request)
     {
         return $this->wrap(function () use ($request) {

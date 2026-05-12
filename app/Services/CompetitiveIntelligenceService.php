@@ -224,6 +224,7 @@ class CompetitiveIntelligenceService
             'details' => $validated['details'] ?? null,
             'lost_at' => $validated['lost_at'],
             'estimated_value' => $validated['estimated_value'] ?? null,
+            'currency' => $validated['currency'] ?? null,
             'meta' => $validated['meta'] ?? null,
         ])->fresh(['competitor', 'opportunity', 'owner', 'lossable']);
     }
@@ -253,7 +254,7 @@ class CompetitiveIntelligenceService
             $payload['lossable_id'] = $entity?->getKey();
         }
 
-        foreach (['reason_type', 'summary', 'details', 'lost_at', 'estimated_value', 'meta'] as $field) {
+        foreach (['reason_type', 'summary', 'details', 'lost_at', 'estimated_value', 'currency', 'meta'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $payload[$field] = $validated[$field];
             }
@@ -311,6 +312,7 @@ class CompetitiveIntelligenceService
             'details' => 'nullable|string',
             'lost_at' => [$partial ? 'sometimes' : 'required', 'date'],
             'estimated_value' => 'nullable|numeric|min:0',
+            'currency' => 'nullable|string|max:10',
             'meta' => 'nullable|array',
         ])->validate();
     }

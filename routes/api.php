@@ -454,6 +454,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
             Route::get('/', [PartnerController::class, 'opportunities'])->middleware('permission:partners.opportunities.read');
             Route::post('/', [PartnerController::class, 'storeOpportunity'])->middleware('permission:partners.opportunities.manage');
             Route::get('/{uid}', [PartnerController::class, 'showOpportunity'])->middleware('permission:partners.opportunities.read');
+            Route::put('/{uid}', [PartnerController::class, 'updateOpportunity'])->middleware('permission:partners.opportunities.manage');
             Route::post('/validate', [PartnerController::class, 'validateOpportunity'])->middleware('permission:partners.opportunities.manage');
             Route::post('/{uid}/close', [PartnerController::class, 'closeOpportunity'])->middleware('permission:partners.opportunities.manage');
             Route::post('/{uid}/approve', [PartnerController::class, 'approveOpportunity'])->middleware('permission:partners.opportunities.manage');
