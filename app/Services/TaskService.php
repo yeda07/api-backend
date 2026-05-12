@@ -12,11 +12,26 @@ class TaskService
 {
     public function getAll(array $filters = [])
     {
-        return ApiIndex::paginateOrGet(
-            Task::query()->with(['owner', 'assignedUser', 'taskable'])->latest(),
-            $filters,
-            'tasks_page'
-        );
+        $validated = Validator::make($filters, [
+            'status' => 'nullable|string|in:pending,in_progress,completed,cancelled',
+            'search' => 'nullable|string|max:255',
+        ])->validate();
+
+        $query = Task::query()->with(['owner', 'assignedUser', 'taskable'])->latest();
+
+        if (!empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(title) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(description) LIKE ?', [$search]);
+            });
+        }
+
+        return ApiIndex::paginateOrGet($query, $filters, 'tasks_page');
     }
 
     public function getByUid(string $uid): Task

@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class AutomationService
 {
-    private const TRIGGERS = 'lead_created,lead_updated,lead_stage_changed,lead_assigned,opportunity_created,opportunity_stage_changed,deal_won,deal_lost,contact_updated,task_completed';
+    private const TRIGGERS = 'lead_created,lead_updated,lead_stage_changed,lead_assigned,lead_lost,lead_won,lead_stalled,opportunity_created,opportunity_stage_changed,deal_won,deal_lost,contact_updated,task_completed,linkedin_message,linkedin_reply,linkedin_connection,facebook_comment,facebook_message,facebook_like,stage_duration_exceeded,inactivity_days';
 
     private const TRIGGER_SOURCES = 'crm,linkedin,facebook,time';
 
@@ -175,10 +175,21 @@ class AutomationService
             'trigger_event' => 'sometimes|string|in:'.self::TRIGGERS,
             'trigger_config' => 'sometimes|array',
             'conditions' => 'sometimes|array',
-            'conditions.*.field' => 'required_with:conditions|string|max:255',
-            'conditions.*.operator' => 'required_with:conditions|string|in:equals,not_equals,contains,greater_than,less_than,in,not_in',
+            // nested conditions (frontend contract)
+            'conditions.*.uid' => 'nullable|string',
+            'conditions.*.logic' => 'nullable|string|in:AND,OR',
+            'conditions.*.conditions' => 'nullable|array',
+            'conditions.*.conditions.*.uid' => 'nullable|string',
+            'conditions.*.conditions.*.field' => 'required_with:conditions.*.conditions|string|max:255',
+            'conditions.*.conditions.*.operator' => 'required_with:conditions.*.conditions|string|in:equals,not_equals,contains,not_contains,gt,gte,lt,lte,exists,not_exists',
+            'conditions.*.conditions.*.value' => 'nullable',
+            // flat conditions (legacy support)
+            'conditions.*.field' => 'nullable|string|max:255',
+            'conditions.*.operator' => 'nullable|string|in:equals,not_equals,contains,not_contains,gt,gte,lt,lte,exists,not_exists',
             'conditions.*.value' => 'nullable',
             'actions' => [$partial ? 'sometimes' : 'required', 'array', 'min:1'],
+            'actions.*.uid' => 'nullable|string',
+            'actions.*.sequence' => 'nullable|integer',
             'actions.*.type' => 'required_with:actions|string|in:'.self::ACTIONS,
             'actions.*.config' => 'sometimes|array',
             'logic' => 'sometimes|string|in:AND,OR',
@@ -195,7 +206,7 @@ class AutomationService
             'description' => 'nullable|string',
             'conditions' => 'sometimes|array',
             'conditions.*.field' => 'required_with:conditions|string|max:255',
-            'conditions.*.operator' => 'required_with:conditions|string|in:equals,not_equals,contains,greater_than,less_than,in,not_in',
+            'conditions.*.operator' => 'required_with:conditions|string|in:equals,not_equals,contains,not_contains,gt,gte,lt,lte,exists,not_exists',
             'conditions.*.value' => 'nullable',
             'assigned_to_uid' => [$partial ? 'sometimes' : 'required_without:user_ids', 'uuid'],
             'assigned_to_name' => 'sometimes|string|max:255',
