@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Account;
 use App\Models\Partner;
 use App\Models\PartnerOpportunity;
+use App\Models\User;
 use App\Repositories\PartnerOpportunityRepository;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -199,6 +200,7 @@ class PartnerOpportunityService
             'notes' => 'nullable|string',
             'description' => 'nullable|string',
             'registered_date' => 'nullable|date',
+            'assigned_to_internal' => 'nullable|uuid',
         ]);
 
         if ($validator->fails()) {
@@ -255,6 +257,26 @@ class PartnerOpportunityService
 
         if (!array_key_exists('title', $data) && !empty($data['client_name'])) {
             $data['title'] = trim(($data['product'] ?? 'Oportunidad') . ' - ' . $data['client_name']);
+        }
+
+        if (array_key_exists('assigned_to_internal', $data)) {
+            $uid = $data['assigned_to_internal'];
+
+            if ($uid === null || $uid === '') {
+                $data['assigned_to_user_id'] = null;
+            } else {
+                $userId = User::query()->where('uid', $uid)->value('id');
+
+                if (!$userId) {
+                    throw ValidationException::withMessages([
+                        'assigned_to_internal' => ['El usuario asignado no existe o no pertenece a este tenant'],
+                    ]);
+                }
+
+                $data['assigned_to_user_id'] = $userId;
+            }
+
+            unset($data['assigned_to_internal']);
         }
 
         return $data;

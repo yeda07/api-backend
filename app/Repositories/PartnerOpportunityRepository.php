@@ -9,7 +9,7 @@ class PartnerOpportunityRepository
 {
     public function query()
     {
-        return PartnerOpportunity::query()->with(['partner', 'account', 'opportunity'])->latest();
+        return PartnerOpportunity::query()->with(['partner', 'account', 'opportunity', 'assignedToUser'])->latest();
     }
 
     public function all(array $filters = [])

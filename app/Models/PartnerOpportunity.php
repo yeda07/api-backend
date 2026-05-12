@@ -17,6 +17,7 @@ class PartnerOpportunity extends Model
         'partner_id',
         'account_id',
         'opportunity_id',
+        'assigned_to_user_id',
         'title',
         'status',
         'conflict_scope',
@@ -66,6 +67,11 @@ class PartnerOpportunity extends Model
     public function opportunity()
     {
         return $this->belongsTo(Opportunity::class);
+    }
+
+    public function assignedToUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_to_user_id');
     }
 
     public function conflicts()
@@ -132,6 +138,6 @@ class PartnerOpportunity extends Model
 
     public function getAssignedToInternalAttribute(): ?string
     {
-        return $this->opportunity?->owner?->name;
+        return $this->assignedToUser?->name;
     }
 }
