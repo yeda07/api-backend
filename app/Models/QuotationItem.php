@@ -56,15 +56,15 @@ class QuotationItem extends Model
     ];
 
     protected $casts = [
-        'unit_price' => 'decimal:2',
-        'list_unit_price' => 'decimal:2',
-        'discount_percent' => 'decimal:2',
-        'discount_amount' => 'decimal:2',
-        'net_unit_price' => 'decimal:2',
-        'unit_cost' => 'decimal:2',
-        'margin_amount' => 'decimal:2',
-        'margin_percent' => 'decimal:2',
-        'min_margin_percent' => 'decimal:2',
+        'unit_price' => 'float',
+        'list_unit_price' => 'float',
+        'discount_percent' => 'float',
+        'discount_amount' => 'float',
+        'net_unit_price' => 'float',
+        'unit_cost' => 'float',
+        'margin_amount' => 'float',
+        'margin_percent' => 'float',
+        'min_margin_percent' => 'float',
         'below_min_margin' => 'boolean',
     ];
 
@@ -147,7 +147,7 @@ class QuotationItem extends Model
 
     public function getStockSnapshotAttribute(): array
     {
-        if (!$this->product_id || !$this->warehouse_id) {
+        if (! $this->product_id || ! $this->warehouse_id) {
             return [
                 'stock_actual' => null,
                 'stock_reservado_actual' => null,

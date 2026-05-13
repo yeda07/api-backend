@@ -30,7 +30,7 @@ class SalesBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'invoiceable_type' => Account::class,
             'invoiceable_id' => $account->getKey(),
-            'invoice_number' => 'FAC-CURRENT-' . uniqid(),
+            'invoice_number' => 'FAC-CURRENT-'.uniqid(),
             'status' => 'partial',
             'currency' => 'USD',
             'total' => 1000,
@@ -43,7 +43,7 @@ class SalesBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'invoiceable_type' => Account::class,
             'invoiceable_id' => $account->getKey(),
-            'invoice_number' => 'FAC-OVERDUE-' . uniqid(),
+            'invoice_number' => 'FAC-OVERDUE-'.uniqid(),
             'status' => 'overdue',
             'currency' => 'USD',
             'total' => 200,
@@ -56,7 +56,7 @@ class SalesBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'invoiceable_type' => Account::class,
             'invoiceable_id' => $account->getKey(),
-            'invoice_number' => 'FAC-PREV-' . uniqid(),
+            'invoice_number' => 'FAC-PREV-'.uniqid(),
             'status' => 'paid',
             'currency' => 'USD',
             'total' => 600,
@@ -116,7 +116,7 @@ class SalesBackendIntegrationTest extends TestCase
 
         $uid = $created->json('data.uid');
 
-        $this->putJson('/api/finance/credit/exceptions/' . $uid, [
+        $this->putJson('/api/finance/credit/exceptions/'.$uid, [
             'credit_limit' => 175000,
             'max_days' => 75,
             'is_active' => false,
@@ -237,7 +237,7 @@ class SalesBackendIntegrationTest extends TestCase
         ]);
 
         $first->assertCreated()
-            ->assertJsonPath('data.quote_number', 'COT-' . $year . '-001');
+            ->assertJsonPath('data.quote_number', 'COT-'.$year.'-001');
 
         $second = $this->postJson('/api/quotations', [
             'title' => 'Cotizacion sin numero 2',
@@ -245,7 +245,7 @@ class SalesBackendIntegrationTest extends TestCase
         ]);
 
         $second->assertCreated()
-            ->assertJsonPath('data.quote_number', 'COT-' . $year . '-002');
+            ->assertJsonPath('data.quote_number', 'COT-'.$year.'-002');
     }
 
     public function test_quotation_show_accepts_opportunity_uid_when_quote_belongs_to_opportunity(): void
@@ -269,15 +269,128 @@ class SalesBackendIntegrationTest extends TestCase
             'owner_user_id' => $user->getKey(),
             'quoteable_type' => Opportunity::class,
             'quoteable_id' => $opportunity->getKey(),
-            'quote_number' => 'Q-OPP-' . uniqid(),
+            'quote_number' => 'Q-OPP-'.uniqid(),
             'title' => 'Cotizacion desde oportunidad',
             'status' => 'draft',
         ]);
 
-        $this->getJson('/api/quotations/' . $opportunity->uid)
+        $this->getJson('/api/quotations/'.$opportunity->uid)
             ->assertOk()
             ->assertJsonPath('data.uid', $quotation->uid)
             ->assertJsonPath('data.opportunity_uid', $opportunity->uid);
+    }
+
+    public function test_quotation_create_update_batch_items_and_opportunity_filter(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.read', 'quotations.create', 'quotations.update']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Nuevo',
+            'key' => 'new',
+            'position' => 1,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Oportunidad quotation batch',
+            'amount' => 2500,
+        ]);
+
+        $created = $this->postJson('/api/quotations', [
+            'title' => 'Cotizacion batch',
+            'status' => 'draft',
+            'currency' => 'AFN',
+            'entity_type' => 'opportunity',
+            'entity_uid' => $opportunity->uid,
+            'items' => [
+                [
+                    'description' => 'Chaqueta',
+                    'sku' => 'SKU-100-L',
+                    'quantity' => 1,
+                    'list_unit_price' => 654.99,
+                    'discount_percent' => 0,
+                ],
+                [
+                    'description' => 'Pantalon',
+                    'sku' => 'SKU-200-M',
+                    'quantity' => 2,
+                    'list_unit_price' => 50,
+                    'discount_percent' => 10,
+                ],
+            ],
+        ]);
+
+        $created->assertCreated()
+            ->assertJsonPath('data.title', 'Cotizacion batch')
+            ->assertJsonPath('data.currency', 'AFN')
+            ->assertJsonPath('data.quoteable_type', Opportunity::class)
+            ->assertJsonPath('data.quoteable_uid', $opportunity->uid)
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.description', 'Chaqueta')
+            ->assertJsonPath('data.items.0.sku', 'SKU-100-L')
+            ->assertJsonPath('data.items.0.quantity', 1)
+            ->assertJsonPath('data.items.0.list_unit_price', 654.99)
+            ->assertJsonPath('data.items.0.discount_percent', 0)
+            ->assertJsonPath('data.items.0.net_unit_price', 654.99)
+            ->assertJsonPath('data.items.0.line_total', 654.99)
+            ->assertJsonPath('data.items.0.discount_total', 0);
+
+        $quotationUid = $created->json('data.uid');
+        $firstItemUid = $created->json('data.items.0.uid');
+
+        $this->getJson('/api/quotations?opportunity_uid='.$opportunity->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $quotationUid)
+            ->assertJsonPath('data.0.quoteable_uid', $opportunity->uid)
+            ->assertJsonCount(2, 'data.0.items');
+
+        $updated = $this->putJson('/api/quotations/'.$quotationUid, [
+            'title' => 'Cotizacion actualizada',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'valid_until' => '2026-06-30',
+            'notes' => 'Notas actualizadas',
+            'items' => [
+                [
+                    'uid' => $firstItemUid,
+                    'description' => 'Producto A',
+                    'sku' => 'SKU-001',
+                    'quantity' => 2,
+                    'list_unit_price' => 100,
+                    'discount_percent' => 10,
+                ],
+                [
+                    'description' => 'Producto B',
+                    'sku' => 'SKU-002',
+                    'quantity' => 1,
+                    'list_unit_price' => 75,
+                    'discount_percent' => 0,
+                ],
+            ],
+        ]);
+
+        $updated->assertOk()
+            ->assertJsonPath('data.title', 'Cotizacion actualizada')
+            ->assertJsonPath('data.currency', 'USD')
+            ->assertJsonPath('data.notes', 'Notas actualizadas')
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.items.0.uid', $firstItemUid)
+            ->assertJsonPath('data.items.0.description', 'Producto A')
+            ->assertJsonPath('data.items.0.quantity', 2)
+            ->assertJsonPath('data.items.0.list_unit_price', 100)
+            ->assertJsonPath('data.items.0.discount_percent', 10)
+            ->assertJsonPath('data.items.0.net_unit_price', 90)
+            ->assertJsonPath('data.items.0.line_total', 180)
+            ->assertJsonPath('data.items.0.discount_total', 20)
+            ->assertJsonPath('data.items.1.description', 'Producto B');
+
+        $this->assertSame('2026-06-30', substr($updated->json('data.valid_until'), 0, 10));
+
+        $this->assertDatabaseMissing('quotation_items', [
+            'uid' => $created->json('data.items.1.uid'),
+        ]);
     }
 
     public function test_opportunity_board_supports_origin_and_product_filters(): void
@@ -331,7 +444,7 @@ class SalesBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'name' => 'Cliente Ventas',
-            'document' => 'SALES-' . uniqid(),
+            'document' => 'SALES-'.uniqid(),
         ]);
     }
 
@@ -357,14 +470,14 @@ class SalesBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Sales Owner',
-            'email' => 'sales-owner+' . uniqid() . '@example.test',
+            'email' => 'sales-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
         $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
         $user->permissions()->sync($permissionIds);
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }
