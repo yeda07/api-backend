@@ -6,6 +6,8 @@ use App\Models\Account;
 use App\Models\Activity;
 use App\Models\Contact;
 use App\Models\Permission;
+use App\Models\Project;
+use App\Models\ProjectMilestone;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +31,7 @@ class AgendaBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'name' => 'TechMex Solutions',
-            'document' => 'DOC-' . uniqid(),
+            'document' => 'DOC-'.uniqid(),
         ]);
         $contact = Contact::query()->create([
             'tenant_id' => $user->tenant_id,
@@ -66,7 +68,7 @@ class AgendaBackendIntegrationTest extends TestCase
 
         $activityUid = $response->json('data.uid');
 
-        $this->putJson('/api/activities/' . $activityUid, [
+        $this->putJson('/api/activities/'.$activityUid, [
             'type' => 'email',
             'status' => 'cancelled',
             'priority' => 'low',
@@ -76,7 +78,7 @@ class AgendaBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.status', 'cancelled')
             ->assertJsonPath('data.priority', 'low');
 
-        $this->deleteJson('/api/activities/' . $activityUid)->assertOk();
+        $this->deleteJson('/api/activities/'.$activityUid)->assertOk();
     }
 
     public function test_activity_range_accepts_start_and_end_aliases(): void
@@ -108,6 +110,52 @@ class AgendaBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.uid', $included->uid);
     }
 
+    public function test_schedule_endpoint_merges_agenda_and_project_items(): void
+    {
+        $user = $this->authenticateWithPermissions(['activities.read']);
+        $activity = Activity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'type' => 'meeting',
+            'title' => 'Demo agenda unificada',
+            'status' => 'pending',
+            'priority' => 'medium',
+            'scheduled_at' => '2026-05-10 10:00:00',
+        ]);
+        $account = Account::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'name' => 'Cliente Proyecto Agenda',
+            'document' => 'AGENDA-'.uniqid(),
+        ]);
+        $project = Project::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'account_id' => $account->getKey(),
+            'name' => 'Proyecto Agenda',
+            'status' => 'active',
+        ]);
+        $milestone = ProjectMilestone::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'project_id' => $project->getKey(),
+            'name' => 'Hito agenda unificada',
+            'status' => 'in_progress',
+            'due_date' => '2026-05-20',
+        ]);
+
+        $this->getJson('/api/schedule?search=agenda&page=1&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('meta.pagination.total', 2)
+            ->assertJsonPath('data.0.uid', $activity->uid)
+            ->assertJsonPath('data.0.source', 'agenda')
+            ->assertJsonPath('data.1.uid', $milestone->uid)
+            ->assertJsonPath('data.1.source', 'project');
+
+        $this->getJson('/api/schedule?source=project&status=in_progress')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $milestone->uid);
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
@@ -130,14 +178,14 @@ class AgendaBackendIntegrationTest extends TestCase
         $user = User::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Agenda Owner',
-            'email' => 'agenda-owner+' . uniqid() . '@example.test',
+            'email' => 'agenda-owner+'.uniqid().'@example.test',
             'password' => bcrypt('secret123'),
         ]);
 
         $permissionIds = Permission::query()->whereIn('key', $permissionKeys)->pluck('id')->all();
         $user->permissions()->sync($permissionIds);
 
-        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+        Sanctum::actingAs($user, ['access:full', 'tenant:'.$tenant->uid]);
 
         return $user;
     }

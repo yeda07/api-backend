@@ -361,6 +361,52 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.name', 'Bogota');
     }
 
+    public function test_static_status_and_priority_endpoints_return_supported_values(): void
+    {
+        $this->authenticateWithPermissions([
+            'projects.read',
+            'finance.read',
+            'quotations.read',
+            'tasks.read',
+            'users.manage',
+        ]);
+
+        $this->getJson('/api/projects/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'pending')
+            ->assertJsonPath('data.7.value', 'cancelled');
+
+        $this->getJson('/api/milestones/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'pending')
+            ->assertJsonPath('data.3.value', 'completed');
+
+        $this->getJson('/api/invoices/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'draft')
+            ->assertJsonPath('data.4.value', 'overdue');
+
+        $this->getJson('/api/quotations/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'draft')
+            ->assertJsonPath('data.4.value', 'cancelled');
+
+        $this->getJson('/api/tasks/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'pending')
+            ->assertJsonPath('data.3.value', 'cancelled');
+
+        $this->getJson('/api/tasks/priorities')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'low')
+            ->assertJsonPath('data.3.value', 'urgent');
+
+        $this->getJson('/api/users/statuses')
+            ->assertOk()
+            ->assertJsonPath('data.0.value', 'ACTIVO')
+            ->assertJsonPath('data.1.value', 'INACTIVO');
+    }
+
     public function test_custom_fields_index_returns_totals_by_module(): void
     {
         $this->authenticateWithPermissions(['custom-fields.manage']);

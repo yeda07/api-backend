@@ -40,9 +40,11 @@ use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\RelationController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\SegmentController;
 use App\Http\Controllers\Api\SettingsController;
+use App\Http\Controllers\Api\StaticOptionController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TeamController;
@@ -85,6 +87,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::post('/2fa/recovery-codes/regenerate', [AuthController::class, 'regenerateRecoveryCodes']);
 
     Route::get('/users', [UserController::class, 'index'])->middleware('permission:users.manage');
+    Route::get('/users/statuses', [StaticOptionController::class, 'userStatuses'])->middleware('permission:users.manage');
     Route::post('/users', [UserController::class, 'store'])->middleware('permission:users.manage');
     Route::get('/users/{uid}', [UserController::class, 'show'])->middleware('permission:users.manage');
     Route::put('/users/{uid}', [UserController::class, 'update'])->middleware('permission:users.manage');
@@ -158,6 +161,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('tasks')->group(function () {
+        Route::get('/statuses', [StaticOptionController::class, 'taskStatuses'])->middleware('permission:tasks.read');
+        Route::get('/priorities', [StaticOptionController::class, 'taskPriorities'])->middleware('permission:tasks.read');
         Route::get('/', [TaskController::class, 'index'])->middleware('permission:tasks.read');
         Route::get('/{uid}', [TaskController::class, 'show'])->middleware('permission:tasks.read');
         Route::post('/', [TaskController::class, 'store'])->middleware('permission:tasks.create');
@@ -283,6 +288,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::prefix('quotations')->group(function () {
+        Route::get('/statuses', [StaticOptionController::class, 'quotationStatuses'])->middleware('permission:quotations.read');
         Route::get('/', [QuotationController::class, 'index'])->middleware('permission:quotations.read');
         Route::get('/{uid}', [QuotationController::class, 'show'])->middleware('permission:quotations.read');
         Route::get('/{uid}/pdf', [QuotationController::class, 'downloadPdf'])->middleware('permission:quotations.read');
@@ -476,6 +482,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
 
     Route::prefix('projects')->group(function () {
         Route::get('/resource-roles', [ProjectController::class, 'resourceRoles'])->middleware('permission:projects.read');
+        Route::get('/statuses', [StaticOptionController::class, 'projectStatuses'])->middleware('permission:projects.read');
         Route::get('/', [ProjectController::class, 'index'])->middleware('permission:projects.read');
         Route::post('/', [ProjectController::class, 'store'])->middleware('permission:projects.manage');
         Route::get('/{uid}', [ProjectController::class, 'show'])->middleware('permission:projects.read');
@@ -489,6 +496,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::put('/milestones/{uid}', [ProjectController::class, 'updateMilestone'])->middleware('permission:projects.manage');
+    Route::get('/milestones/statuses', [StaticOptionController::class, 'milestoneStatuses'])->middleware('permission:projects.read');
 
     Route::prefix('finance')->group(function () {
         Route::get('/records', [FinancialOperationsController::class, 'index'])->middleware('permission:finance.read');
@@ -513,6 +521,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     });
 
     Route::get('/invoices', [FinancialOperationsController::class, 'invoices'])->middleware('permission:finance.read');
+    Route::get('/invoices/statuses', [StaticOptionController::class, 'invoiceStatuses'])->middleware('permission:finance.read');
     Route::get('/invoices/{uid}', [FinancialOperationsController::class, 'showInvoice'])->middleware('permission:finance.read');
 
     Route::prefix('currency')->group(function () {
@@ -531,6 +540,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::post('/search', [SearchController::class, 'search'])->middleware('permission:search.use');
     Route::post('/search/export', [SearchController::class, 'export'])->middleware('permission:search.use');
     Route::get('/dashboard/core', [DashboardController::class, 'core'])->middleware('permission:dashboard.read');
+    Route::get('/schedule', [ScheduleController::class, 'index'])->middleware('permission:activities.read');
 
     Route::prefix('custom-fields')->group(function () {
         Route::get('/modules', [CustomFieldController::class, 'modules'])->middleware('permission:custom-fields.manage');
