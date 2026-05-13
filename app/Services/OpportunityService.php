@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Opportunity;
-use App\Models\OpportunityStage;
 use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CrmEntity;
+use App\Models\Opportunity;
+use App\Models\OpportunityStage;
 use App\Models\User;
 use App\Support\ApiIndex;
 use Illuminate\Http\UploadedFile;
@@ -20,9 +20,7 @@ class OpportunityService
     public function __construct(
         private readonly ProjectService $projectService,
         private readonly ExportService $exportService
-    )
-    {
-    }
+    ) {}
 
     public function stages()
     {
@@ -68,15 +66,15 @@ class OpportunityService
 
         $query = Opportunity::query()
             ->with(['stage', 'owner', 'opportunityable'])
-            ->when(!empty($validated['stage_uid']), function ($query) use ($validated) {
+            ->when(! empty($validated['stage_uid']), function ($query) use ($validated) {
                 $stageId = OpportunityStage::query()->where('uid', $validated['stage_uid'])->value('id');
                 $query->where('stage_id', $stageId ?: 0);
             })
-            ->when(!empty($validated['owner_user_uid']), function ($query) use ($validated) {
+            ->when(! empty($validated['owner_user_uid']), function ($query) use ($validated) {
                 $ownerId = User::query()->where('uid', $validated['owner_user_uid'])->value('id');
                 $query->where('owner_user_id', $ownerId ?: 0);
             })
-            ->when(!empty($validated['search']), fn ($query) => $this->applyOpportunitySearch($query, $validated['search']))
+            ->when(! empty($validated['search']), fn ($query) => $this->applyOpportunitySearch($query, $validated['search']))
             ->orderByDesc('created_at');
 
         return ApiIndex::paginateOrGet($query, $filters, 'opportunities_page');
@@ -115,6 +113,7 @@ class OpportunityService
                 'opportunityable_type' => $entity ? get_class($entity) : null,
                 'opportunityable_id' => $entity?->getKey(),
                 'title' => $validated['title'],
+                'email' => $validated['email'] ?? null,
                 'amount' => $validated['amount'] ?? 0,
                 'currency' => $validated['currency'] ?? null,
                 'expected_close_date' => $validated['expected_close_date'] ?? null,
@@ -139,7 +138,7 @@ class OpportunityService
         return DB::transaction(function () use ($opportunity, $validated) {
             $payload = [];
 
-            foreach (['title', 'amount', 'currency', 'expected_close_date', 'description'] as $field) {
+            foreach (['title', 'email', 'amount', 'currency', 'expected_close_date', 'description'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $payload[$field] = $validated[$field];
                 }
@@ -227,6 +226,7 @@ class OpportunityService
             'amount' => '',
             'currency' => 'COP',
             'expected_close_date' => '2026-05-31',
+            'email' => '',
             'description' => '',
             'stage_uid' => '',
             'account_uid' => '',
@@ -248,15 +248,15 @@ class OpportunityService
         $stages = OpportunityStage::query()->orderBy('position')->get();
         $opportunityQuery = Opportunity::query()->with(['stage', 'owner', 'opportunityable']);
 
-        if (!empty($validated['search'])) {
+        if (! empty($validated['search'])) {
             $this->applyOpportunitySearch($opportunityQuery, $validated['search']);
         }
 
-        if (!empty($validated['origin'])) {
+        if (! empty($validated['origin'])) {
             $this->applyOpportunityOriginFilter($opportunityQuery, $validated['origin']);
         }
 
-        if (!empty($validated['product'])) {
+        if (! empty($validated['product'])) {
             $this->applyOpportunityProductFilter($opportunityQuery, $validated['product']);
         }
 
@@ -290,22 +290,23 @@ class OpportunityService
     {
         $query->where(function ($builder) use ($search) {
             $builder
-                ->where('title', 'like', '%' . $search . '%')
-                ->orWhere('description', 'like', '%' . $search . '%')
+                ->where('title', 'like', '%'.$search.'%')
+                ->orWhere('email', 'like', '%'.$search.'%')
+                ->orWhere('description', 'like', '%'.$search.'%')
                 ->orWhereHasMorph('opportunityable', [Account::class], function ($entityQuery) use ($search) {
                     $entityQuery
-                        ->where('name', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%')
-                        ->orWhere('document', 'like', '%' . $search . '%');
+                        ->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%')
+                        ->orWhere('document', 'like', '%'.$search.'%');
                 })
                 ->orWhereHasMorph('opportunityable', [Contact::class], function ($entityQuery) use ($search) {
                     $entityQuery
-                        ->where('first_name', 'like', '%' . $search . '%')
-                        ->orWhere('last_name', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%');
+                        ->where('first_name', 'like', '%'.$search.'%')
+                        ->orWhere('last_name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%');
                 })
                 ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($search) {
-                    $entityQuery->where('type', 'like', '%' . $search . '%');
+                    $entityQuery->where('type', 'like', '%'.$search.'%');
                 });
         });
     }
@@ -314,7 +315,7 @@ class OpportunityService
     {
         $query->where(function ($builder) use ($origin) {
             $builder
-                ->whereRaw('LOWER(description) LIKE ?', ['%' . mb_strtolower($origin) . '%'])
+                ->whereRaw('LOWER(description) LIKE ?', ['%'.mb_strtolower($origin).'%'])
                 ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($origin) {
                     $entityQuery->where(function ($crmQuery) use ($origin) {
                         $crmQuery
@@ -327,7 +328,7 @@ class OpportunityService
 
     private function applyOpportunityProductFilter($query, string $product): void
     {
-        $search = '%' . mb_strtolower($product) . '%';
+        $search = '%'.mb_strtolower($product).'%';
 
         $query->where(function ($builder) use ($product, $search) {
             $builder
@@ -377,7 +378,7 @@ class OpportunityService
     {
         $stageUid = $row['stage_uid'] ?? null;
 
-        if (!$stageUid && !empty($row['stage_key'])) {
+        if (! $stageUid && ! empty($row['stage_key'])) {
             $stageUid = OpportunityStage::query()->where('key', $row['stage_key'])->value('uid');
         }
 
@@ -388,13 +389,14 @@ class OpportunityService
             'amount' => $row['amount'] ?? 0,
             'currency' => $row['currency'] ?? null,
             'expected_close_date' => $row['expected_close_date'] ?? null,
+            'email' => $row['email'] ?? $row['lead_email'] ?? null,
             'description' => $row['description'] ?? $row['notes'] ?? null,
         ];
 
-        if (!empty($row['account_uid'])) {
+        if (! empty($row['account_uid'])) {
             $payload['entity_type'] = 'account';
             $payload['entity_uid'] = $row['account_uid'];
-        } elseif (!empty($row['contact_uid'])) {
+        } elseif (! empty($row['contact_uid'])) {
             $payload['entity_type'] = 'contact';
             $payload['entity_uid'] = $row['contact_uid'];
         }
@@ -425,7 +427,7 @@ class OpportunityService
     {
         $handle = fopen($file->getRealPath(), 'r');
 
-        if (!$handle) {
+        if (! $handle) {
             return [];
         }
 
@@ -435,6 +437,7 @@ class OpportunityService
         while (($data = fgetcsv($handle)) !== false) {
             if ($headers === null) {
                 $headers = $this->normalizeImportHeaders($data);
+
                 continue;
             }
 
@@ -448,7 +451,7 @@ class OpportunityService
 
     private function readXlsxRows(UploadedFile $file): array
     {
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
 
         if ($zip->open($file->getRealPath()) !== true) {
             throw ValidationException::withMessages([
@@ -460,7 +463,7 @@ class OpportunityService
         $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
         $zip->close();
 
-        if (!$sheetXml) {
+        if (! $sheetXml) {
             return [];
         }
 
@@ -491,6 +494,7 @@ class OpportunityService
 
             if ($headers === null) {
                 $headers = $this->normalizeImportHeaders($values);
+
                 continue;
             }
 
@@ -504,7 +508,7 @@ class OpportunityService
     {
         $xml = $zip->getFromName('xl/sharedStrings.xml');
 
-        if (!$xml) {
+        if (! $xml) {
             return [];
         }
 
@@ -574,6 +578,7 @@ class OpportunityService
             'entity_type' => 'nullable|string',
             'entity_uid' => 'nullable|uuid',
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'email' => 'nullable|email|max:255',
             'amount' => 'sometimes|numeric|min:0',
             'currency' => 'nullable|string|max:10',
             'expected_close_date' => 'nullable|date',
@@ -586,7 +591,7 @@ class OpportunityService
 
         $validated = $validator->validated();
 
-        if (!empty($validated['entity_type']) xor !empty($validated['entity_uid'])) {
+        if (! empty($validated['entity_type']) xor ! empty($validated['entity_uid'])) {
             throw ValidationException::withMessages([
                 'entity_uid' => ['Debes enviar entity_type y entity_uid juntos'],
             ]);
@@ -602,13 +607,13 @@ class OpportunityService
 
     private function resolveEntity(?string $type, ?string $uid)
     {
-        if (!$type && !$uid) {
+        if (! $type && ! $uid) {
             return null;
         }
 
         $entity = find_entity_by_uid($type, $uid);
 
-        if (!$entity) {
+        if (! $entity) {
             throw ValidationException::withMessages([
                 'entity_uid' => ['La entidad comercial no existe o no es visible'],
             ]);
@@ -619,13 +624,13 @@ class OpportunityService
 
     private function resolveOwnerUserId(?string $uid, ?int $fallback = null): ?int
     {
-        if (!$uid) {
+        if (! $uid) {
             return $fallback ?? auth()->id();
         }
 
         $userId = User::query()->where('uid', $uid)->value('id');
 
-        if (!$userId) {
+        if (! $userId) {
             throw ValidationException::withMessages([
                 'owner_user_uid' => ['El usuario no existe o no pertenece a este tenant'],
             ]);

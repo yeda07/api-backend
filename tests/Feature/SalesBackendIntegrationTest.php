@@ -393,6 +393,51 @@ class SalesBackendIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_opportunity_create_show_and_update_support_email(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'opportunities.manage']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Nuevo',
+            'key' => 'new',
+            'position' => 1,
+        ]);
+
+        $created = $this->postJson('/api/opportunities', [
+            'title' => 'TechNova S.A.',
+            'amount' => 15000000,
+            'stage_uid' => $stage->uid,
+            'expected_close_date' => '2026-06-30',
+            'description' => 'Lead desde formulario',
+            'currency' => 'COP',
+            'email' => 'contacto@technova.com',
+        ]);
+
+        $created->assertCreated()
+            ->assertJsonPath('data.title', 'TechNova S.A.')
+            ->assertJsonPath('data.email', 'contacto@technova.com');
+
+        $uid = $created->json('data.uid');
+
+        $this->getJson('/api/opportunities/'.$uid)
+            ->assertOk()
+            ->assertJsonPath('data.uid', $uid)
+            ->assertJsonPath('data.email', 'contacto@technova.com');
+
+        $this->putJson('/api/opportunities/'.$uid, [
+            'title' => 'TechNova S.A. actualizada',
+            'email' => 'nuevo@technova.com',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.title', 'TechNova S.A. actualizada')
+            ->assertJsonPath('data.email', 'nuevo@technova.com');
+
+        $this->assertDatabaseHas('opportunities', [
+            'uid' => $uid,
+            'email' => 'nuevo@technova.com',
+        ]);
+    }
+
     public function test_opportunity_board_supports_origin_and_product_filters(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read']);

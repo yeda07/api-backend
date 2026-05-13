@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Opportunity extends Model
 {
-    use HasPublicUid, HasTenantRelation, TenantScope, AppliesRowLevelSecurity;
+    use AppliesRowLevelSecurity, HasPublicUid, HasTenantRelation, TenantScope;
 
     protected $fillable = [
         'uid',
@@ -20,6 +20,7 @@ class Opportunity extends Model
         'opportunityable_type',
         'opportunityable_id',
         'title',
+        'email',
         'amount',
         'currency',
         'expected_close_date',
@@ -37,6 +38,7 @@ class Opportunity extends Model
     ];
 
     protected $appends = [
+        'email',
         'owner_user_uid',
         'stage_uid',
         'stage_name',
@@ -106,6 +108,11 @@ class Opportunity extends Model
     public function getOpportunityableUidAttribute()
     {
         return $this->opportunityable?->uid;
+    }
+
+    public function getEmailAttribute()
+    {
+        return $this->attributes['email'] ?? null;
     }
 
     public function resolveDefaultOwnerUserId(): ?int
