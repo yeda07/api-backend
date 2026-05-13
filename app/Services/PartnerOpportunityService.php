@@ -25,8 +25,7 @@ class PartnerOpportunityService
         private readonly PartnerOpportunityRepository $partnerOpportunityRepository,
         private readonly PartnerService $partnerService,
         private readonly ConflictService $conflictService
-    ) {
-    }
+    ) {}
 
     public function statuses(): array
     {
@@ -74,6 +73,7 @@ class PartnerOpportunityService
             'conflict_scope' => $scope,
             'amount' => $validated['amount'] ?? 0,
             'currency' => $validated['currency'] ?? null,
+            'assigned_to_user_id' => $this->resolveInternalAssigneeId($validated['assigned_to_internal'] ?? null),
             'description' => json_encode([
                 'product' => $validated['product'] ?? null,
                 'notes' => $validated['notes'] ?? ($validated['description'] ?? null),
@@ -100,9 +100,9 @@ class PartnerOpportunityService
             $payload['partner_id'] = $partner->getKey();
         }
 
-        if (!empty($validated['account_uid'])) {
+        if (! empty($validated['account_uid'])) {
             $payload['account_id'] = $this->resolveAccount($validated['account_uid'])->getKey();
-        } elseif (!empty($validated['client_name'])) {
+        } elseif (! empty($validated['client_name'])) {
             $payload['account_id'] = $this->resolveOrCreateAccount($validated)->getKey();
         }
 
@@ -110,6 +110,10 @@ class PartnerOpportunityService
             if (array_key_exists($field, $validated)) {
                 $payload[$field] = $validated[$field];
             }
+        }
+
+        if (array_key_exists('assigned_to_internal', $validated)) {
+            $payload['assigned_to_user_id'] = $this->resolveInternalAssigneeId($validated['assigned_to_internal']);
         }
 
         if (array_key_exists('product', $validated) || array_key_exists('notes', $validated) || array_key_exists('description', $validated)) {
@@ -201,6 +205,7 @@ class PartnerOpportunityService
             'description' => 'nullable|string',
             'registered_date' => 'nullable|date',
             'assigned_to_internal' => 'nullable|uuid',
+            'assigned_to_internal_uid' => 'nullable|uuid',
         ]);
 
         if ($validator->fails()) {
@@ -236,59 +241,62 @@ class PartnerOpportunityService
 
     private function stableUid(string $key): string
     {
-        $hash = md5('partner-opportunity-status:' . $key);
+        $hash = md5('partner-opportunity-status:'.$key);
 
         return substr($hash, 0, 8)
-            . '-' . substr($hash, 8, 4)
-            . '-' . substr($hash, 12, 4)
-            . '-' . substr($hash, 16, 4)
-            . '-' . substr($hash, 20, 12);
+            .'-'.substr($hash, 8, 4)
+            .'-'.substr($hash, 12, 4)
+            .'-'.substr($hash, 16, 4)
+            .'-'.substr($hash, 20, 12);
     }
 
     private function normalizeOpportunityPayload(array $data): array
     {
-        if (array_key_exists('estimated_value', $data) && !array_key_exists('amount', $data)) {
+        if (array_key_exists('estimated_value', $data) && ! array_key_exists('amount', $data)) {
             $data['amount'] = $data['estimated_value'];
+        }
+
+        if (array_key_exists('assigned_to_internal_uid', $data) && ! array_key_exists('assigned_to_internal', $data)) {
+            $data['assigned_to_internal'] = $data['assigned_to_internal_uid'];
         }
 
         if (array_key_exists('partner_name', $data)) {
             unset($data['partner_name']);
         }
 
-        if (!array_key_exists('title', $data) && !empty($data['client_name'])) {
-            $data['title'] = trim(($data['product'] ?? 'Oportunidad') . ' - ' . $data['client_name']);
+        if (! array_key_exists('title', $data) && ! empty($data['client_name'])) {
+            $data['title'] = trim(($data['product'] ?? 'Oportunidad').' - '.$data['client_name']);
         }
 
-        if (array_key_exists('assigned_to_internal', $data)) {
-            $uid = $data['assigned_to_internal'];
-
-            if ($uid === null || $uid === '') {
-                $data['assigned_to_user_id'] = null;
-            } else {
-                $userId = User::query()->where('uid', $uid)->value('id');
-
-                if (!$userId) {
-                    throw ValidationException::withMessages([
-                        'assigned_to_internal' => ['El usuario asignado no existe o no pertenece a este tenant'],
-                    ]);
-                }
-
-                $data['assigned_to_user_id'] = $userId;
-            }
-
-            unset($data['assigned_to_internal']);
-        }
+        unset($data['assigned_to_internal_uid']);
 
         return $data;
     }
 
+    private function resolveInternalAssigneeId(?string $uid): ?int
+    {
+        if ($uid === null || $uid === '') {
+            return null;
+        }
+
+        $userId = User::query()->where('uid', $uid)->value('id');
+
+        if (! $userId) {
+            throw ValidationException::withMessages([
+                'assigned_to_internal_uid' => ['El usuario asignado no existe o no pertenece a este tenant'],
+            ]);
+        }
+
+        return $userId;
+    }
+
     private function resolveOrCreateAccount(array $validated): Account
     {
-        if (!empty($validated['account_uid'])) {
+        if (! empty($validated['account_uid'])) {
             return $this->resolveAccount($validated['account_uid']);
         }
 
-        $document = 'PARTNER-' . substr(sha1(($validated['client_email'] ?? '') . $validated['client_name']), 0, 16);
+        $document = 'PARTNER-'.substr(sha1(($validated['client_email'] ?? '').$validated['client_name']), 0, 16);
 
         return Account::query()->firstOrCreate(
             ['tenant_id' => auth()->user()->tenant_id, 'document' => $document],
@@ -303,7 +311,7 @@ class PartnerOpportunityService
     {
         $account = Account::query()->where('uid', $uid)->first();
 
-        if (!$account) {
+        if (! $account) {
             throw ValidationException::withMessages([
                 'account_uid' => ['La cuenta no existe o no es visible para este tenant'],
             ]);

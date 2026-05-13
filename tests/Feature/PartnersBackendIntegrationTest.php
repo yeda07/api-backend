@@ -49,10 +49,16 @@ class PartnersBackendIntegrationTest extends TestCase
 
     public function test_partner_opportunities_validate_batch_and_close_without_body(): void
     {
-        $this->authenticateWithPermissions([
+        $owner = $this->authenticateWithPermissions([
             'partners.manage',
             'partners.opportunities.read',
             'partners.opportunities.manage',
+        ]);
+        $assignee = User::query()->create([
+            'tenant_id' => $owner->tenant_id,
+            'name' => 'Asignado Partner',
+            'email' => 'asignado-partner+'.uniqid().'@example.test',
+            'password' => bcrypt('secret123'),
         ]);
 
         $partnerUid = $this->postJson('/api/partners', [
@@ -70,6 +76,7 @@ class PartnersBackendIntegrationTest extends TestCase
             'estimated_value' => 45000,
             'currency' => 'USD',
             'registered_date' => '2026-05-07',
+            'assigned_to_internal_uid' => $assignee->uid,
             'notes' => 'Licitacion publica 2026-0042',
         ]);
 
@@ -81,6 +88,8 @@ class PartnersBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.product', 'CRM Enterprise')
             ->assertJsonPath('data.estimated_value', 45000)
             ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.assigned_to_internal_uid', $assignee->uid)
+            ->assertJsonPath('data.assigned_to_internal', 'Asignado Partner')
             ->assertJsonPath('data.notes', 'Licitacion publica 2026-0042');
 
         $uid = $opportunity->json('data.uid');
@@ -92,6 +101,7 @@ class PartnersBackendIntegrationTest extends TestCase
             'product' => 'CRM Enterprise Plus',
             'notes' => 'Licitacion actualizada',
             'status' => 'validated',
+            'assigned_to_internal_uid' => null,
         ])
             ->assertOk()
             ->assertJsonPath('data.title', 'CRM Enterprise - Gobierno CDMX actualizado')
@@ -99,6 +109,8 @@ class PartnersBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.currency', 'COP')
             ->assertJsonPath('data.product', 'CRM Enterprise Plus')
             ->assertJsonPath('data.notes', 'Licitacion actualizada')
+            ->assertJsonPath('data.assigned_to_internal_uid', null)
+            ->assertJsonPath('data.assigned_to_internal', null)
             ->assertJsonPath('data.status', 'validated');
 
         $this->postJson('/api/partners/opportunities/validate', [

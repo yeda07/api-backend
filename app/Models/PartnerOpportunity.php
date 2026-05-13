@@ -47,6 +47,7 @@ class PartnerOpportunity extends Model
         'registered_date',
         'notes',
         'assigned_to_internal',
+        'assigned_to_internal_uid',
     ];
 
     protected $casts = [
@@ -139,5 +140,10 @@ class PartnerOpportunity extends Model
     public function getAssignedToInternalAttribute(): ?string
     {
         return $this->assignedToUser?->name;
+    }
+
+    public function getAssignedToInternalUidAttribute(): ?string
+    {
+        return $this->assignedToUser?->uid;
     }
 }

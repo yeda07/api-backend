@@ -11,9 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class SettingsController extends Controller
 {
-    public function __construct(private readonly PlatformInitService $platformInitService)
-    {
-    }
+    public function __construct(private readonly PlatformInitService $platformInitService) {}
 
     public function localization(Request $request)
     {
@@ -39,6 +37,30 @@ class SettingsController extends Controller
                 ['value' => 'en-US', 'label' => 'Inglés (Estados Unidos)'],
             ],
         ]);
+    }
+
+    public function countries()
+    {
+        return $this->successResponse(
+            collect($this->countryCityOptions())
+                ->keys()
+                ->map(fn (string $country) => ['name' => $country])
+                ->values()
+                ->all()
+        );
+    }
+
+    public function cities(Request $request)
+    {
+        $country = $request->query('country');
+        $search = mb_strtolower((string) $request->query('search', ''));
+        $cities = collect($this->countryCityOptions()[$country] ?? [])
+            ->when($search !== '', fn ($items) => $items->filter(fn (string $city) => str_contains(mb_strtolower($city), $search)))
+            ->values()
+            ->map(fn (string $city) => ['name' => $city])
+            ->all();
+
+        return $this->successResponse($cities);
     }
 
     public function updateLocalization(Request $request)
@@ -130,6 +152,18 @@ class SettingsController extends Controller
             ['code' => 'PEN', 'label' => 'Sol peruano', 'symbol' => 'S/'],
             ['code' => 'ARS', 'label' => 'Peso argentino', 'symbol' => '$'],
             ['code' => 'CLP', 'label' => 'Peso chileno', 'symbol' => '$'],
+        ];
+    }
+
+    private function countryCityOptions(): array
+    {
+        return [
+            'Argentina' => ['Buenos Aires', 'Cordoba', 'Rosario', 'Mendoza'],
+            'Chile' => ['Santiago', 'Valparaiso', 'Concepcion', 'La Serena'],
+            'Colombia' => ['Bogota', 'Medellin', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga'],
+            'Mexico' => ['Ciudad de Mexico', 'Guadalajara', 'Monterrey', 'Puebla', 'Queretaro'],
+            'Peru' => ['Lima', 'Arequipa', 'Trujillo', 'Cusco'],
+            'United States' => ['New York', 'Miami', 'Los Angeles', 'Chicago', 'Houston'],
         ];
     }
 }

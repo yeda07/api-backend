@@ -16,11 +16,11 @@ class PartnerOpportunityRepository
     {
         return ApiIndex::paginateOrGet(
             $this->query()
-                ->when(!empty($filters['partner_uid']), function ($query) use ($filters) {
+                ->when(! empty($filters['partner_uid']), function ($query) use ($filters) {
                     $query->whereHas('partner', fn ($builder) => $builder->where('uid', $filters['partner_uid']));
                 })
-                ->when(!empty($filters['search']), function ($query) use ($filters) {
-                    $search = '%' . mb_strtolower($filters['search']) . '%';
+                ->when(! empty($filters['search']), function ($query) use ($filters) {
+                    $search = '%'.mb_strtolower($filters['search']).'%';
                     $query->where(function ($searchQuery) use ($search) {
                         $searchQuery->whereRaw('LOWER(title) LIKE ?', [$search])
                             ->orWhereRaw('LOWER(description) LIKE ?', [$search])
@@ -28,8 +28,8 @@ class PartnerOpportunityRepository
                             ->orWhereHas('account', fn ($builder) => $builder->whereRaw('LOWER(name) LIKE ?', [$search]));
                     });
                 })
-                ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-                ->when(!empty($filters['account_uid']), function ($query) use ($filters) {
+                ->when(! empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+                ->when(! empty($filters['account_uid']), function ($query) use ($filters) {
                     $query->whereHas('account', fn ($builder) => $builder->where('uid', $filters['account_uid']));
                 }),
             $filters,
@@ -52,13 +52,13 @@ class PartnerOpportunityRepository
 
     public function create(array $data): PartnerOpportunity
     {
-        return PartnerOpportunity::query()->create($data)->fresh(['partner', 'account', 'opportunity']);
+        return PartnerOpportunity::query()->create($data)->fresh(['partner', 'account', 'opportunity', 'assignedToUser']);
     }
 
     public function update(PartnerOpportunity $opportunity, array $data): PartnerOpportunity
     {
         $opportunity->update($data);
 
-        return $opportunity->fresh(['partner', 'account', 'opportunity']);
+        return $opportunity->fresh(['partner', 'account', 'opportunity', 'assignedToUser']);
     }
 }

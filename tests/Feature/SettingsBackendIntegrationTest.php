@@ -345,6 +345,22 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.currencies.2.code', 'EUR');
     }
 
+    public function test_settings_countries_and_cities_endpoints_feed_contact_selects(): void
+    {
+        $this->authenticateWithPermissions([]);
+
+        $this->getJson('/api/settings/countries')
+            ->assertOk()
+            ->assertJsonPath('data.0.name', 'Argentina')
+            ->assertJsonFragment(['name' => 'Colombia'])
+            ->assertJsonFragment(['name' => 'Mexico']);
+
+        $this->getJson('/api/settings/cities?country=Colombia&search=Bog')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Bogota');
+    }
+
     public function test_custom_fields_index_returns_totals_by_module(): void
     {
         $this->authenticateWithPermissions(['custom-fields.manage']);

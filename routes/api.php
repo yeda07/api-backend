@@ -544,6 +544,8 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
     Route::prefix('settings')->group(function () {
         Route::get('/localization', [SettingsController::class, 'localization']);
         Route::get('/localization/options', [SettingsController::class, 'localizationOptions']);
+        Route::get('/countries', [SettingsController::class, 'countries']);
+        Route::get('/cities', [SettingsController::class, 'cities']);
         Route::put('/localization', [SettingsController::class, 'updateLocalization'])->middleware('permission:settings.manage');
     });
 
