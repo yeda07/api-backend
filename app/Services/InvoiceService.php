@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
-use App\Support\ApiIndex;
-use App\Models\Invoice;
-use App\Models\InventoryReservation;
-use App\Models\Quotation;
 use App\Models\Account;
+use App\Models\InventoryReservation;
+use App\Models\Invoice;
+use App\Models\Quotation;
+use App\Models\Tenant;
+use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -19,8 +20,7 @@ class InvoiceService
         private readonly FinancialOperationsService $financialOperationsService,
         private readonly DocumentValidationService $documentValidationService,
         private readonly ExportService $exportService
-    ) {
-    }
+    ) {}
 
     public function list(array $filters = [])
     {
@@ -34,22 +34,22 @@ class InvoiceService
 
         $query = Invoice::query()->with(['quotation', 'invoiceable', 'payments'])->latest();
 
-        if (!empty($validated['entity_type']) || !empty($validated['entity_uid'])) {
+        if (! empty($validated['entity_type']) || ! empty($validated['entity_uid'])) {
             $entity = $this->resolveEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
             $query->where('invoiceable_type', get_class($entity))
                 ->where('invoiceable_id', $entity->getKey());
         }
 
-        if (!empty($validated['quotation_uid'])) {
+        if (! empty($validated['quotation_uid'])) {
             $query->where('quotation_id', $this->resolveQuotation($validated['quotation_uid'])->getKey());
         }
 
-        if (!empty($validated['status'])) {
+        if (! empty($validated['status'])) {
             $query->where('status', $validated['status']);
         }
 
-        if (!empty($validated['search'])) {
-            $search = '%' . mb_strtolower($validated['search']) . '%';
+        if (! empty($validated['search'])) {
+            $search = '%'.mb_strtolower($validated['search']).'%';
             $query->where(function ($builder) use ($search) {
                 $builder
                     ->whereRaw('LOWER(invoice_number) LIKE ?', [$search])
@@ -81,7 +81,6 @@ class InvoiceService
     {
         $validated = Validator::make($data, [
             'quotation_uid' => 'required|uuid',
-            'invoice_number' => 'required|string|max:255',
             'currency' => 'required|string|max:10',
             'exchange_rate' => 'sometimes|numeric|min:0.000001',
             'due_date' => 'nullable|date',
@@ -92,7 +91,7 @@ class InvoiceService
             $quotation = Quotation::query()->with(['items.product', 'items.warehouse', 'quoteable'])->where('uid', $validated['quotation_uid'])->firstOrFail();
             $entity = $quotation->quoteable;
 
-            if (!$entity) {
+            if (! $entity) {
                 throw ValidationException::withMessages([
                     'quotation_uid' => ['La cotizacion no tiene cliente asociado'],
                 ]);
@@ -108,7 +107,7 @@ class InvoiceService
                     continue;
                 }
 
-                if (!$item->product_id || !$item->warehouse_id) {
+                if (! $item->product_id || ! $item->warehouse_id) {
                     throw ValidationException::withMessages([
                         'quotation_uid' => ['Todos los items deben tener producto y bodega para facturar'],
                     ]);
@@ -121,6 +120,8 @@ class InvoiceService
                 }
             }
 
+            $invoiceNumber = $this->generateInvoiceNumber($quotation->tenant_id);
+
             $exchangeRate = (float) ($validated['exchange_rate'] ?? $quotation->exchange_rate ?? 1);
             $invoiceTotal = round((float) $quotation->total * $exchangeRate, 2);
             $invoiceSubtotal = round((float) $quotation->subtotal * $exchangeRate, 2);
@@ -130,7 +131,7 @@ class InvoiceService
                 'quotation_id' => $quotation->getKey(),
                 'invoiceable_type' => get_class($entity),
                 'invoiceable_id' => $entity->getKey(),
-                'invoice_number' => $validated['invoice_number'],
+                'invoice_number' => $invoiceNumber,
                 'status' => $validated['status'] ?? 'issued',
                 'quote_currency' => $quotation->currency,
                 'exchange_rate' => $exchangeRate,
@@ -205,9 +206,9 @@ class InvoiceService
         $filters = $validated['filters'] ?? [];
         $rows = Invoice::query()
             ->with(['quotation', 'invoiceable', 'payments'])
-            ->when(!empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-            ->when(!empty($filters['date_from']), fn ($query) => $query->whereDate('issued_at', '>=', $filters['date_from']))
-            ->when(!empty($filters['date_to']), fn ($query) => $query->whereDate('issued_at', '<=', $filters['date_to']))
+            ->when(! empty($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+            ->when(! empty($filters['date_from']), fn ($query) => $query->whereDate('issued_at', '>=', $filters['date_from']))
+            ->when(! empty($filters['date_to']), fn ($query) => $query->whereDate('issued_at', '<=', $filters['date_to']))
             ->latest('issued_at')
             ->limit(50000)
             ->get()
@@ -277,7 +278,7 @@ class InvoiceService
 
     private function resolveEntity(?string $type, ?string $uid)
     {
-        if (!$type || !$uid) {
+        if (! $type || ! $uid) {
             throw ValidationException::withMessages([
                 'entity_uid' => ['Debes enviar entity_type y entity_uid'],
             ]);
@@ -285,7 +286,7 @@ class InvoiceService
 
         $entity = find_entity_by_uid($type, $uid);
 
-        if (!$entity) {
+        if (! $entity) {
             throw ValidationException::withMessages([
                 'entity_uid' => ['La entidad no existe o no es visible'],
             ]);
@@ -297,5 +298,36 @@ class InvoiceService
     private function resolveQuotation(string $uid): Quotation
     {
         return Quotation::query()->where('uid', $uid)->firstOrFail();
+    }
+
+    private function generateInvoiceNumber(int $tenantId): string
+    {
+        Tenant::query()->whereKey($tenantId)->lockForUpdate()->firstOrFail();
+
+        $prefix = 'INV-'.now()->format('Y').'-';
+        $lastNumber = Invoice::query()
+            ->where('tenant_id', $tenantId)
+            ->where('invoice_number', 'like', $prefix.'%')
+            ->lockForUpdate()
+            ->orderByDesc('invoice_number')
+            ->value('invoice_number');
+
+        $nextSequence = 1;
+
+        if ($lastNumber && preg_match('/^'.preg_quote($prefix, '/').'(\d+)$/', $lastNumber, $matches)) {
+            $nextSequence = ((int) $matches[1]) + 1;
+        }
+
+        do {
+            $invoiceNumber = $prefix.str_pad((string) $nextSequence, 4, '0', STR_PAD_LEFT);
+            $nextSequence++;
+        } while (
+            Invoice::query()
+                ->where('tenant_id', $tenantId)
+                ->where('invoice_number', $invoiceNumber)
+                ->exists()
+        );
+
+        return $invoiceNumber;
     }
 }

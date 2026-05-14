@@ -6,13 +6,18 @@ use App\Models\Account;
 use App\Models\CrmEntity;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
+use App\Models\InventoryProduct;
+use App\Models\InventoryReservation;
+use App\Models\InventoryStock;
 use App\Models\Invoice;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\Permission;
 use App\Models\Quotation;
+use App\Models\QuotationItem;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -224,6 +229,95 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.invoice_number', 'INV-ENTERPRISE-001');
+    }
+
+    public function test_invoice_number_is_generated_by_backend_when_converting_quotation(): void
+    {
+        $user = $this->authenticateWithPermissions(['finance.read', 'finance.manage']);
+        $account = $this->account($user);
+        $year = now()->format('Y');
+
+        Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'invoiceable_type' => Account::class,
+            'invoiceable_id' => $account->getKey(),
+            'invoice_number' => 'INV-'.$year.'-0041',
+            'status' => 'issued',
+            'currency' => 'ARS',
+            'total' => 100,
+            'outstanding_total' => 100,
+        ]);
+
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-INVOICE-'.uniqid(),
+            'title' => 'Cotizacion a facturar',
+            'status' => 'approved',
+            'currency' => 'ARS',
+        ]);
+        $warehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega facturacion',
+            'code' => 'INV-'.uniqid(),
+        ]);
+        $product = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'PROD-INV-'.uniqid(),
+            'name' => 'Producto facturable',
+            'is_active' => true,
+        ]);
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 5,
+            'reserved_stock' => 1,
+        ]);
+        $item = QuotationItem::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'sku' => $product->sku,
+            'description' => 'Producto facturable',
+            'quantity' => 1,
+            'reserved_quantity' => 1,
+            'list_unit_price' => 200,
+            'discount_percent' => 0,
+            'discount_amount' => 0,
+            'net_unit_price' => 200,
+            'unit_price' => 200,
+        ]);
+        InventoryReservation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'reserved_by_user_id' => $user->getKey(),
+            'source_type' => 'quotation_item',
+            'source_uid' => $item->uid,
+            'quantity' => 1,
+            'status' => 'active',
+        ]);
+
+        $created = $this->postJson('/api/finance/invoices', [
+            'quotation_uid' => $quotation->uid,
+            'invoice_number' => 'INV-FRONTEND-SHOULD-BE-IGNORED',
+            'currency' => 'ARS',
+        ]);
+
+        $created->assertCreated()
+            ->assertJsonPath('data.invoice_number', 'INV-'.$year.'-0042')
+            ->assertJsonPath('data.currency', 'ARS')
+            ->assertJsonPath('data.total', '200.00')
+            ->assertJsonPath('data.quotation_uid', $quotation->uid);
+
+        $this->assertDatabaseMissing('invoices', [
+            'tenant_id' => $user->tenant_id,
+            'invoice_number' => 'INV-FRONTEND-SHOULD-BE-IGNORED',
+        ]);
     }
 
     public function test_quotation_create_auto_generates_quote_number(): void
