@@ -31,7 +31,7 @@ class TrackRequests
 
     private function shouldLog(Request $request): bool
     {
-        if (!filter_var(env('LOG_DB_REQUESTS', true), FILTER_VALIDATE_BOOLEAN)) {
+        if (! config('performance.log_db_requests')) {
             return false;
         }
 

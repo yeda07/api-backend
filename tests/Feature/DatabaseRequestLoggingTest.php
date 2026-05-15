@@ -17,6 +17,7 @@ class DatabaseRequestLoggingTest extends TestCase
     public function test_api_requests_are_saved_to_system_logs(): void
     {
         config(['app.env' => 'testing']);
+        config(['performance.log_db_requests' => true]);
 
         $tenant = Tenant::query()->create([
             'name' => 'Tenant Logs',

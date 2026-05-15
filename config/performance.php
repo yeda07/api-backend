@@ -6,4 +6,5 @@ return [
     'max_per_page' => (int) env('API_MAX_PER_PAGE', 100),
     'rate_limit_per_minute' => (int) env('API_RATE_LIMIT_PER_MINUTE', 240),
     'guest_rate_limit_per_minute' => (int) env('API_GUEST_RATE_LIMIT_PER_MINUTE', 60),
+    'log_db_requests' => filter_var(env('LOG_DB_REQUESTS', false), FILTER_VALIDATE_BOOLEAN),
 ];
