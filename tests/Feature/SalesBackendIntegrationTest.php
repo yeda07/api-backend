@@ -342,6 +342,57 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.quote_number', 'COT-'.$year.'-002');
     }
 
+    public function test_catalog_services_store_default_pricing_and_prefill_quotation_items(): void
+    {
+        $user = $this->authenticateWithPermissions([
+            'products.read',
+            'products.manage',
+            'quotations.read',
+            'quotations.update',
+        ]);
+
+        $service = $this->postJson('/api/products', [
+            'name' => 'Implementacion CRM',
+            'type' => 'service',
+            'sku' => 'SERV-CRM-001',
+            'description' => 'Servicio profesional',
+            'default_price' => 1200,
+            'default_discount_percent' => 10,
+        ]);
+
+        $serviceUid = $service
+            ->assertCreated()
+            ->assertJsonPath('data.default_price', 1200)
+            ->assertJsonPath('data.default_discount_percent', 10)
+            ->json('data.uid');
+
+        $this->getJson('/api/products/'.$serviceUid)
+            ->assertOk()
+            ->assertJsonPath('data.default_price', 1200)
+            ->assertJsonPath('data.default_discount_percent', 10);
+
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quote_number' => 'Q-SERVICE-'.uniqid(),
+            'title' => 'Cotizacion servicio',
+            'status' => 'draft',
+            'currency' => 'COP',
+        ]);
+
+        $this->postJson('/api/quotations/'.$quotation->uid.'/items', [
+            'catalog_product_uid' => $serviceUid,
+            'quantity' => 2,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.description', 'Implementacion CRM')
+            ->assertJsonPath('data.list_unit_price', 1200)
+            ->assertJsonPath('data.discount_percent', 10)
+            ->assertJsonPath('data.discount_amount', 120)
+            ->assertJsonPath('data.net_unit_price', 1080)
+            ->assertJsonPath('data.line_total', 2160);
+    }
+
     public function test_quotation_show_accepts_opportunity_uid_when_quote_belongs_to_opportunity(): void
     {
         $user = $this->authenticateWithPermissions(['quotations.read']);

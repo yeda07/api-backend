@@ -188,8 +188,9 @@ class QuotationService
                 $product,
                 (int) $validated['quantity'],
                 $validated['unit_price'] ?? null,
-                $validated['discount_percent'] ?? 0,
-                $validated['discount_amount'] ?? null
+                $validated['discount_percent'] ?? (float) ($catalogProduct?->default_discount_percent ?? 0),
+                $validated['discount_amount'] ?? null,
+                $catalogProduct?->default_price
             );
 
             $item = QuotationItem::query()->create([
@@ -276,7 +277,8 @@ class QuotationService
                     $quantity,
                     $validated['unit_price'] ?? null,
                     $validated['discount_percent'] ?? (float) $item->discount_percent,
-                    $validated['discount_amount'] ?? null
+                    $validated['discount_amount'] ?? null,
+                    $catalogProduct?->default_price
                 );
 
                 $payload = array_merge($payload, [
@@ -708,9 +710,10 @@ class QuotationService
         int $quantity,
         ?float $manualUnitPrice,
         float $discountPercent,
-        ?float $manualDiscountAmount
+        ?float $manualDiscountAmount,
+        ?float $fallbackUnitPrice = null
     ): array {
-        $listPrice = $manualUnitPrice ?? 0;
+        $listPrice = $manualUnitPrice ?? $fallbackUnitPrice ?? 0;
         $minMarginPercent = 0;
         $unitCost = (float) ($product?->cost_price ?? 0);
 
@@ -785,8 +788,9 @@ class QuotationService
                 $linkedInventoryProduct,
                 (int) $sourceItem->quantity,
                 null,
-                0,
-                null
+                (float) ($requiredProduct->default_discount_percent ?? 0),
+                null,
+                $requiredProduct->default_price
             );
 
             QuotationItem::query()->create([

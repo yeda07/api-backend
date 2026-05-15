@@ -14,8 +14,7 @@ class ProductService
         private readonly ProductRepository $products,
         private readonly ProductVersionService $productVersionService,
         private readonly DependencyService $dependencyService
-    ) {
-    }
+    ) {}
 
     public function index(array $filters = [])
     {
@@ -33,15 +32,17 @@ class ProductService
         $this->ensureUniqueSku($validated['sku']);
 
         $product = $this->products->create([
-            'inventory_product_id' => !empty($validated['inventory_product_uid']) ? $this->resolveInventoryProduct($validated['inventory_product_uid'])->getKey() : null,
+            'inventory_product_id' => ! empty($validated['inventory_product_uid']) ? $this->resolveInventoryProduct($validated['inventory_product_uid'])->getKey() : null,
             'name' => $validated['name'],
             'type' => $validated['type'],
             'sku' => $validated['sku'],
             'description' => $validated['description'] ?? null,
             'status' => $validated['status'] ?? 'active',
+            'default_price' => $validated['default_price'] ?? null,
+            'default_discount_percent' => $validated['default_discount_percent'] ?? null,
         ]);
 
-        if (!empty($validated['initial_version'])) {
+        if (! empty($validated['initial_version'])) {
             $this->productVersionService->createVersion($product, [
                 'version' => $validated['initial_version'],
                 'release_date' => $validated['initial_release_date'] ?? null,
@@ -126,6 +127,8 @@ class ProductService
             'sku' => [$partial ? 'sometimes' : 'required', 'string', 'max:100'],
             'description' => 'nullable|string',
             'status' => 'sometimes|string|in:active,inactive',
+            'default_price' => 'nullable|numeric|min:0',
+            'default_discount_percent' => 'sometimes|numeric|min:0|max:100',
             'inventory_product_uid' => 'nullable|uuid',
             'initial_version' => 'nullable|string|max:50',
             'initial_release_date' => 'nullable|date',

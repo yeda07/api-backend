@@ -20,6 +20,8 @@ class Product extends Model
         'sku',
         'description',
         'status',
+        'default_price',
+        'default_discount_percent',
     ];
 
     protected $hidden = [
@@ -30,6 +32,11 @@ class Product extends Model
 
     protected $appends = [
         'inventory_product_uid',
+    ];
+
+    protected $casts = [
+        'default_price' => 'float',
+        'default_discount_percent' => 'float',
     ];
 
     public function inventoryProduct()
@@ -61,5 +68,24 @@ class Product extends Model
     {
         return $this->inventoryProduct?->uid;
     }
-}
 
+    public function getDefaultPriceAttribute($value): ?float
+    {
+        if ($value !== null) {
+            return round((float) $value, 2);
+        }
+
+        $inventoryPrice = $this->inventoryProduct?->sale_price;
+
+        return $inventoryPrice !== null ? round((float) $inventoryPrice, 2) : null;
+    }
+
+    public function getDefaultDiscountPercentAttribute($value): float
+    {
+        if ($value !== null) {
+            return round((float) $value, 2);
+        }
+
+        return round((float) ($this->inventoryProduct?->discount_percent ?? 0), 2);
+    }
+}
