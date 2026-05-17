@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Support\ApiIndex;
+use App\Models\Account;
 use App\Models\Activity;
 use App\Models\Contact;
 use App\Models\User;
@@ -33,7 +34,7 @@ class ActivityService
         ])->validate();
 
         $query = Activity::query()
-            ->with(['owner', 'assignedUser', 'activityable'])
+            ->with(['owner', 'assignedUser'])
             ->latest('scheduled_at');
 
         if (!empty($validated['entity_type']) || !empty($validated['entity_uid'])) {
@@ -84,14 +85,20 @@ class ActivityService
         if ($withoutPagination) {
             $limit = min(max((int) ($filters['per_page'] ?? 25), 1), 100);
 
-            return $query->limit($limit)->get();
+            return $query->limit($limit)->get()
+                ->map(fn (Activity $activity) => $this->serializeActivityIndex($activity))
+                ->values();
         }
 
-        return ApiIndex::paginateOrGet(
+        $result = ApiIndex::paginateOrGet(
             $query,
             $filters,
             'activities_page'
         );
+
+        return method_exists($result, 'through')
+            ? $result->through(fn (Activity $activity) => $this->serializeActivityIndex($activity))
+            : $result->map(fn (Activity $activity) => $this->serializeActivityIndex($activity))->values();
     }
 
     public function getByUid(string $uid): Activity
@@ -317,5 +324,98 @@ class ActivityService
             ->where('status', 'pending')
             ->where('scheduled_at', '<', now())
             ->update(['status' => 'overdue']);
+    }
+
+    private function serializeActivityIndex(Activity $activity): array
+    {
+        $activityableUid = $this->resolveMorphUid($activity->activityable_type, $activity->activityable_id);
+
+        return [
+            'uid' => $activity->uid,
+            'type' => $activity->type,
+            'title' => $activity->title,
+            'description' => $activity->description,
+            'status' => $activity->status,
+            'priority' => $activity->priority,
+            'scheduled_at' => $activity->scheduled_at,
+            'completed_at' => $activity->completed_at,
+            'owner_user_uid' => $activity->owner?->uid,
+            'owner_user_name' => $activity->owner?->name,
+            'assigned_user_uid' => $activity->assignedUser?->uid,
+            'assigned_to_uid' => $activity->assignedUser?->uid,
+            'assigned_to_name' => $activity->assignedUser?->name,
+            'activityable_type' => $activity->activityable_type,
+            'activityable_uid' => $activityableUid,
+            'contact_uid' => $activity->activityable_type === Contact::class ? $activityableUid : null,
+            'contact_name' => $this->resolveContactName($activity),
+            'account_uid' => $this->resolveActivityAccountUid($activity),
+            'account_name' => $this->resolveActivityAccountName($activity),
+            'created_at' => $activity->created_at,
+            'updated_at' => $activity->updated_at,
+        ];
+    }
+
+    private function resolveMorphUid(?string $class, ?int $id): ?string
+    {
+        if (! $class || ! $id || ! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
+            return null;
+        }
+
+        return $class::withoutGlobalScopes()->whereKey($id)->value('uid');
+    }
+
+    private function resolveContactName(Activity $activity): ?string
+    {
+        if ($activity->activityable_type !== Contact::class || ! $activity->activityable_id) {
+            return null;
+        }
+
+        $contact = Contact::withoutGlobalScopes()->whereKey($activity->activityable_id)->first(['first_name', 'last_name']);
+
+        return $contact ? trim($contact->first_name.' '.$contact->last_name) : null;
+    }
+
+    private function resolveActivityAccountUid(Activity $activity): ?string
+    {
+        if (! $activity->activityable_id) {
+            return null;
+        }
+
+        if ($activity->activityable_type === Account::class) {
+            return Account::withoutGlobalScopes()->whereKey($activity->activityable_id)->value('uid');
+        }
+
+        if ($activity->activityable_type === Contact::class) {
+            return Contact::withoutGlobalScopes()
+                ->whereKey($activity->activityable_id)
+                ->with('account')
+                ->first()
+                ?->account
+                ?->uid;
+        }
+
+        return null;
+    }
+
+    private function resolveActivityAccountName(Activity $activity): ?string
+    {
+        if (! $activity->activityable_id) {
+            return null;
+        }
+
+        if ($activity->activityable_type === Account::class) {
+            return Account::withoutGlobalScopes()->whereKey($activity->activityable_id)->value('name');
+        }
+
+        if ($activity->activityable_type === Contact::class) {
+            return Contact::withoutGlobalScopes()
+                ->whereKey($activity->activityable_id)
+                ->with('account')
+                ->first()
+                ?->account
+                ?->name;
+        }
+
+        return null;
     }
 }

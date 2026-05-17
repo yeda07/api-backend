@@ -65,7 +65,7 @@ class OpportunityService
         ])->validate();
 
         $query = Opportunity::query()
-            ->with(['stage', 'owner', 'opportunityable'])
+            ->with(['stage', 'owner'])
             ->when(! empty($validated['stage_uid']), function ($query) use ($validated) {
                 $stageId = OpportunityStage::query()->where('uid', $validated['stage_uid'])->value('id');
                 $query->where('stage_id', $stageId ?: 0);
@@ -77,7 +77,9 @@ class OpportunityService
             ->when(! empty($validated['search']), fn ($query) => $this->applyOpportunitySearch($query, $validated['search']))
             ->orderByDesc('created_at');
 
-        return ApiIndex::paginateOrGet($query, $filters, 'opportunities_page');
+        $result = ApiIndex::paginateOrGet($query, $filters, 'opportunities_page');
+
+        return $this->mapOpportunityIndexResult($result);
     }
 
     public function getOpportunity(string $uid): Opportunity
@@ -246,7 +248,7 @@ class OpportunityService
         ])->validate();
 
         $stages = OpportunityStage::query()->orderBy('position')->get();
-        $opportunityQuery = Opportunity::query()->with(['stage', 'owner', 'opportunityable']);
+        $opportunityQuery = Opportunity::query()->with(['stage', 'owner']);
 
         if (! empty($validated['search'])) {
             $this->applyOpportunitySearch($opportunityQuery, $validated['search']);
@@ -261,7 +263,8 @@ class OpportunityService
         }
 
         $result = ApiIndex::paginateOrGet($opportunityQuery->latest(), $filters, 'opportunities_board_page');
-        $items = collect(method_exists($result, 'items') ? $result->items() : $result);
+        $items = collect(method_exists($result, 'items') ? $result->items() : $result)
+            ->map(fn (Opportunity $opportunity) => $this->serializeOpportunityIndex($opportunity));
         $opportunities = $items->groupBy('stage_id');
 
         $payload = [
@@ -272,7 +275,7 @@ class OpportunityService
                     'stage' => $stage,
                     'summary' => [
                         'count' => $items->count(),
-                        'amount' => round((float) $items->sum(fn ($opportunity) => (float) $opportunity->amount), 2),
+                        'amount' => round((float) $items->sum(fn (array $opportunity) => (float) $opportunity['amount']), 2),
                     ],
                     'items' => $items,
                 ];
@@ -284,6 +287,64 @@ class OpportunityService
         }
 
         return $payload;
+    }
+
+    private function mapOpportunityIndexResult($result)
+    {
+        if (method_exists($result, 'through')) {
+            return $result->through(fn (Opportunity $opportunity) => $this->serializeOpportunityIndex($opportunity));
+        }
+
+        return collect($result)
+            ->map(fn (Opportunity $opportunity) => $this->serializeOpportunityIndex($opportunity))
+            ->values();
+    }
+
+    private function serializeOpportunityIndex(Opportunity $opportunity): array
+    {
+        return [
+            'uid' => $opportunity->uid,
+            'title' => $opportunity->title,
+            'email' => $opportunity->email,
+            'amount' => round((float) $opportunity->amount, 2),
+            'currency' => $opportunity->currency,
+            'expected_close_date' => $opportunity->expected_close_date,
+            'description' => $opportunity->description,
+            'stage_id' => $opportunity->stage_id,
+            'stage_uid' => $opportunity->stage?->uid,
+            'stage_name' => $opportunity->stage?->name,
+            'stage' => $opportunity->stage ? [
+                'uid' => $opportunity->stage->uid,
+                'name' => $opportunity->stage->name,
+                'key' => $opportunity->stage->key,
+                'position' => $opportunity->stage->position,
+                'probability' => $opportunity->stage->probability,
+                'color' => $opportunity->stage->color,
+                'is_won' => $opportunity->stage->is_won,
+                'is_lost' => $opportunity->stage->is_lost,
+            ] : null,
+            'owner_user_uid' => $opportunity->owner?->uid,
+            'owner' => $opportunity->owner ? [
+                'uid' => $opportunity->owner->uid,
+                'name' => $opportunity->owner->name,
+                'email' => $opportunity->owner->email,
+            ] : null,
+            'opportunityable_type' => $opportunity->opportunityable_type,
+            'opportunityable_uid' => $this->resolveMorphUid($opportunity->opportunityable_type, $opportunity->opportunityable_id),
+            'won_at' => $opportunity->won_at,
+            'lost_at' => $opportunity->lost_at,
+            'created_at' => $opportunity->created_at,
+            'updated_at' => $opportunity->updated_at,
+        ];
+    }
+
+    private function resolveMorphUid(?string $class, ?int $id): ?string
+    {
+        if (! $class || ! $id || ! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
+            return null;
+        }
+
+        return $class::withoutGlobalScopes()->whereKey($id)->value('uid');
     }
 
     private function applyOpportunitySearch($query, string $search): void

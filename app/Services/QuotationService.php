@@ -40,7 +40,7 @@ class QuotationService
         ])->validate();
 
         $query = Quotation::query()
-            ->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])
+            ->with(['priceBook', 'items.product', 'items.catalogProduct', 'items.warehouse'])
             ->latest();
 
         if (! empty($validated['status'])) {
@@ -65,11 +65,13 @@ class QuotationService
             });
         }
 
-        return ApiIndex::paginateOrGet(
+        $result = ApiIndex::paginateOrGet(
             $query,
             $filters,
             'quotations_page'
         );
+
+        return $this->mapQuotationIndexResult($result);
     }
 
     public function getByUid(string $uid): Quotation
@@ -415,6 +417,108 @@ class QuotationService
         }
 
         return $validated;
+    }
+
+    private function mapQuotationIndexResult($result)
+    {
+        if (method_exists($result, 'through')) {
+            return $result->through(fn (Quotation $quotation) => $this->serializeQuotationIndex($quotation));
+        }
+
+        return collect($result)
+            ->map(fn (Quotation $quotation) => $this->serializeQuotationIndex($quotation))
+            ->values();
+    }
+
+    private function serializeQuotationIndex(Quotation $quotation): array
+    {
+        $items = $quotation->items->map(fn (QuotationItem $item) => $this->serializeQuotationItemIndex($item))->values();
+        $subtotal = $items->sum(fn (array $item) => $item['list_line_total']);
+        $discountTotal = $items->sum(fn (array $item) => $item['discount_total']);
+        $total = $items->sum(fn (array $item) => $item['line_total']);
+
+        return [
+            'uid' => $quotation->uid,
+            'quote_number' => $quotation->quote_number,
+            'title' => $quotation->title,
+            'status' => $quotation->status,
+            'currency' => $quotation->currency,
+            'exchange_rate' => (float) $quotation->exchange_rate,
+            'local_currency' => $quotation->local_currency,
+            'valid_until' => $quotation->valid_until,
+            'notes' => $quotation->notes,
+            'owner_user_uid' => $this->resolveModelUid(\App\Models\User::class, $quotation->owner_user_id),
+            'created_by_user_uid' => $this->resolveModelUid(\App\Models\User::class, $quotation->created_by_user_id),
+            'price_book_uid' => $quotation->priceBook?->uid,
+            'quoteable_type' => $quotation->quoteable_type,
+            'quoteable_uid' => $this->resolveModelUid($quotation->quoteable_type, $quotation->quoteable_id),
+            'opportunity_uid' => $quotation->quoteable_type === Opportunity::class
+                ? $this->resolveModelUid(Opportunity::class, $quotation->quoteable_id)
+                : null,
+            'client_name' => $this->resolveQuoteableName($quotation),
+            'subtotal' => round((float) $subtotal, 2),
+            'discount_total' => round((float) $discountTotal, 2),
+            'total' => round((float) $total, 2),
+            'reserved_items_count' => 0,
+            'reservation_indicator' => 'not_reserved',
+            'items' => $items,
+            'created_at' => $quotation->created_at,
+            'updated_at' => $quotation->updated_at,
+        ];
+    }
+
+    private function serializeQuotationItemIndex(QuotationItem $item): array
+    {
+        $listUnitPrice = (float) $item->list_unit_price;
+        $discountAmount = (float) $item->discount_amount;
+        $netUnitPrice = (float) $item->net_unit_price;
+        $quantity = (int) $item->quantity;
+
+        return [
+            'uid' => $item->uid,
+            'product_uid' => $item->product?->uid,
+            'catalog_product_uid' => $item->catalogProduct?->uid,
+            'warehouse_uid' => $item->warehouse?->uid,
+            'sku' => $item->sku,
+            'description' => $item->description,
+            'quantity' => $quantity,
+            'list_unit_price' => $listUnitPrice,
+            'discount_percent' => (float) $item->discount_percent,
+            'discount_amount' => $discountAmount,
+            'net_unit_price' => $netUnitPrice,
+            'unit_price' => (float) $item->unit_price,
+            'unit_cost' => (float) $item->unit_cost,
+            'margin_amount' => (float) $item->margin_amount,
+            'margin_percent' => (float) $item->margin_percent,
+            'min_margin_percent' => (float) $item->min_margin_percent,
+            'below_min_margin' => (bool) $item->below_min_margin,
+            'line_total' => round($netUnitPrice * $quantity, 2),
+            'list_line_total' => round($listUnitPrice * $quantity, 2),
+            'discount_total' => round($discountAmount * $quantity, 2),
+        ];
+    }
+
+    private function resolveModelUid(?string $class, ?int $id): ?string
+    {
+        if (! $class || ! $id || ! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
+            return null;
+        }
+
+        return $class::withoutGlobalScopes()->whereKey($id)->value('uid');
+    }
+
+    private function resolveQuoteableName(Quotation $quotation): ?string
+    {
+        if (! $quotation->quoteable_type || ! $quotation->quoteable_id || ! is_subclass_of($quotation->quoteable_type, \Illuminate\Database\Eloquent\Model::class)) {
+            return $quotation->title ?? $quotation->quote_number;
+        }
+
+        $quoteable = $quotation->quoteable_type::withoutGlobalScopes()->whereKey($quotation->quoteable_id)->first();
+
+        return $quoteable?->display_name
+            ?? $quoteable?->name
+            ?? $quotation->title
+            ?? $quotation->quote_number;
     }
 
     private function validateItem(array $data, bool $partial = false): array
