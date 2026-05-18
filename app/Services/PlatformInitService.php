@@ -95,10 +95,20 @@ class PlatformInitService
         ],
     ];
 
+    public function __construct(private readonly PlanPermissionService $planPermissionService)
+    {
+    }
+
     public function init(User $user): array
     {
         $user->loadMissing(['tenant.plan', 'tenant.currency', 'roles', 'permissions']);
-        $effectivePermissionKeys = $user->effectivePermissions()->pluck('key')->values()->all();
+        $effectivePermissions = $user->effectivePermissions();
+
+        if (! $user->is_platform_admin && $user->tenant) {
+            $effectivePermissions = $this->planPermissionService->filterPermissionsForTenant($effectivePermissions, $user->tenant);
+        }
+
+        $effectivePermissionKeys = $effectivePermissions->pluck('key')->values()->all();
         $role = $user->roles->first()?->key ?? ($user->is_platform_admin ? 'platform-admin' : 'user');
 
         return [

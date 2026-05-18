@@ -142,6 +142,48 @@ class PlatformGeneralIntegrationTest extends TestCase
         $this->assertSame(['read', 'manage'], $catalog['permissions']);
     }
 
+    public function test_auth_init_and_permission_middleware_filter_modules_by_active_plan(): void
+    {
+        Permission::query()->firstOrCreate(
+            ['key' => 'inventory.read'],
+            ['module' => 'inventory', 'action' => 'read', 'description' => 'inventory.read']
+        );
+        Permission::query()->firstOrCreate(
+            ['key' => 'opportunities.read'],
+            ['module' => 'opportunities', 'action' => 'read', 'description' => 'opportunities.read']
+        );
+
+        $plan = Plan::query()->create([
+            'name' => 'Inventory Only',
+            'price' => 49,
+            'status' => 'active',
+            'features' => [
+                'modules' => ['inventario'],
+            ],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Plan Filter',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, ['inventory.read', 'opportunities.read']);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $response = $this->getJson('/api/auth/init')->assertOk();
+        $modules = collect($response->json('data.modules'));
+
+        $this->assertTrue($modules->firstWhere('key', 'inventory')['enabled']);
+        $this->assertFalse($modules->firstWhere('key', 'sales')['enabled']);
+        $this->assertContains('inventory.read', $response->json('data.permissions.effective'));
+        $this->assertNotContains('opportunities.read', $response->json('data.permissions.effective'));
+
+        $this->getJson('/api/opportunities')
+            ->assertForbidden()
+            ->assertJsonPath('message', 'No autorizado por el plan activo');
+    }
+
     public function test_localization_endpoint_returns_frontend_fields(): void
     {
         $currency = Currency::query()->create([
