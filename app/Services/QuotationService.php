@@ -7,6 +7,7 @@ use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\InventoryProduct;
 use App\Models\InventoryReservation;
+use App\Models\InventoryStock;
 use App\Models\Opportunity;
 use App\Models\PriceBook;
 use App\Models\Product;
@@ -854,26 +855,15 @@ class QuotationService
                 continue;
             }
 
+            $product = $this->resolveInventoryProductForReservation($item);
+
             $pendingQuantity = max(0, (int) $item->quantity - (int) $item->reserved_quantity);
 
             if ($pendingQuantity === 0) {
                 continue;
             }
 
-            if (! $item->product_id || ! $item->warehouse_id) {
-                throw ValidationException::withMessages([
-                    'quotation' => ['Todos los items deben tener producto y bodega para aprobar y reservar stock'],
-                ]);
-            }
-
-            $this->inventoryService->reserveStock([
-                'product_uid' => $item->product_uid,
-                'warehouse_uid' => $item->warehouse_uid,
-                'quantity' => $pendingQuantity,
-                'source_type' => 'quotation_item',
-                'source_uid' => $item->uid,
-                'comment' => 'Reserva automatica por aprobacion de cotizacion',
-            ]);
+            $this->reserveItemAcrossWarehouses($item, $product, $pendingQuantity);
         }
     }
 
@@ -883,7 +873,85 @@ class QuotationService
             return false;
         }
 
-        return (bool) $item->product_id;
+        return true;
+    }
+
+    private function resolveInventoryProductForReservation(QuotationItem $item): InventoryProduct
+    {
+        $product = $item->product ?? $item->catalogProduct?->inventoryProduct;
+
+        if (! $product) {
+            throw ValidationException::withMessages([
+                'quotation' => [
+                    'El item "'.$item->description.'" no tiene producto de inventario asociado al catalogo comercial',
+                ],
+            ]);
+        }
+
+        if (! $item->product_id) {
+            $item->forceFill(['product_id' => $product->getKey()])->save();
+            $item->setRelation('product', $product);
+        }
+
+        return $product;
+    }
+
+    private function reserveItemAcrossWarehouses(QuotationItem $item, InventoryProduct $product, int $quantity): void
+    {
+        $stocks = InventoryStock::query()
+            ->with('warehouse')
+            ->where('product_id', $product->getKey())
+            ->get()
+            ->map(fn (InventoryStock $stock) => [
+                'stock' => $stock,
+                'available' => max(0, (int) $stock->physical_stock - (int) $stock->reserved_stock),
+                'preferred' => $item->warehouse_id && $stock->warehouse_id === $item->warehouse_id,
+            ])
+            ->filter(fn (array $row) => $row['available'] > 0)
+            ->sortBy([
+                ['preferred', 'desc'],
+                ['available', 'desc'],
+            ])
+            ->values();
+
+        $available = (int) $stocks->sum('available');
+
+        if ($available < $quantity) {
+            throw ValidationException::withMessages([
+                'quotation' => [
+                    'Stock insuficiente para '.$product->name.': disponible '.$available.', requerido '.$quantity,
+                ],
+            ]);
+        }
+
+        $remaining = $quantity;
+        $firstWarehouseId = null;
+
+        foreach ($stocks as $row) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            /** @var InventoryStock $stock */
+            $stock = $row['stock'];
+            $reservedQuantity = min($remaining, $row['available']);
+
+            $this->inventoryService->reserveStock([
+                'product_uid' => $product->uid,
+                'warehouse_uid' => $stock->warehouse?->uid,
+                'quantity' => $reservedQuantity,
+                'source_type' => 'quotation_item',
+                'source_uid' => $item->uid,
+                'comment' => 'Reserva automatica por aprobacion de cotizacion',
+            ]);
+
+            $firstWarehouseId ??= $stock->warehouse_id;
+            $remaining -= $reservedQuantity;
+        }
+
+        if (! $item->warehouse_id && $firstWarehouseId) {
+            $item->forceFill(['warehouse_id' => $firstWarehouseId])->save();
+        }
     }
 
     private function syncRequiredDependencies(Quotation $quotation, Product $catalogProduct, QuotationItem $sourceItem): void

@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use App\Models\Tenant;
@@ -440,6 +441,98 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.quotation_uid', $quotation->uid)
             ->assertJsonPath('data.total', '900.00');
+    }
+
+    public function test_approving_quotation_resolves_catalog_product_and_allocates_stock(): void
+    {
+        $user = $this->authenticateWithPermissions([
+            'quotations.update',
+            'finance.manage',
+        ]);
+        $account = $this->account($user);
+        $inventoryProduct = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'INV-CRM-ALLOC',
+            'name' => 'Licencia CRM',
+            'cost_price' => 100,
+            'sale_price' => 200,
+            'is_active' => true,
+        ]);
+        $catalogProduct = Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'inventory_product_id' => $inventoryProduct->getKey(),
+            'name' => 'CRM Comercial',
+            'type' => 'product',
+            'sku' => 'CAT-CRM-ALLOC',
+            'status' => 'active',
+        ]);
+        $firstWarehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Norte',
+            'code' => 'NORTE',
+        ]);
+        $secondWarehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Sur',
+            'code' => 'SUR',
+        ]);
+
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $inventoryProduct->getKey(),
+            'warehouse_id' => $firstWarehouse->getKey(),
+            'physical_stock' => 7,
+            'reserved_stock' => 0,
+        ]);
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $inventoryProduct->getKey(),
+            'warehouse_id' => $secondWarehouse->getKey(),
+            'physical_stock' => 5,
+            'reserved_stock' => 0,
+        ]);
+
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-ALLOC-'.uniqid(),
+            'title' => 'Cotizacion asignacion automatica',
+            'status' => 'draft',
+            'currency' => 'COP',
+        ]);
+        $item = QuotationItem::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'catalog_product_id' => $catalogProduct->getKey(),
+            'sku' => 'CAT-CRM-ALLOC',
+            'description' => 'CRM Comercial',
+            'quantity' => 10,
+            'list_unit_price' => 200,
+            'discount_percent' => 0,
+            'discount_amount' => 0,
+            'net_unit_price' => 200,
+            'unit_price' => 200,
+            'unit_cost' => 100,
+        ]);
+
+        $this->putJson('/api/quotations/'.$quotation->uid, [
+            'status' => 'approved',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $item->refresh();
+        $this->assertSame($inventoryProduct->getKey(), $item->product_id);
+        $this->assertSame($firstWarehouse->getKey(), $item->warehouse_id);
+        $this->assertSame(10, (int) InventoryReservation::query()->where('source_uid', $item->uid)->where('status', 'active')->sum('quantity'));
+        $this->assertSame([7, 3], InventoryReservation::query()->where('source_uid', $item->uid)->orderByDesc('quantity')->pluck('quantity')->all());
+
+        $this->postJson('/api/finance/invoices', [
+            'quotation_uid' => $quotation->uid,
+            'currency' => 'COP',
+        ])->assertCreated();
     }
 
     public function test_quotation_show_accepts_opportunity_uid_when_quote_belongs_to_opportunity(): void

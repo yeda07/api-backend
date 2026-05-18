@@ -35,6 +35,7 @@ class PlatformInitService
         ],
         'sales' => [
             ['key' => 'pipeline', 'label' => 'Pipeline', 'permissions' => ['opportunities.read', 'opportunities.manage']],
+            ['key' => 'catalog', 'label' => 'Catalogo Comercial', 'permissions' => ['products.read', 'products.manage']],
             ['key' => 'finance-dashboard', 'label' => 'Dashboard Financiero', 'permissions' => ['finance.read']],
             ['key' => 'quotations', 'label' => 'Cotizaciones', 'permissions' => ['quotations.read', 'quotations.create', 'quotations.update']],
             ['key' => 'invoices', 'label' => 'Facturas', 'permissions' => ['finance.read', 'finance.manage']],

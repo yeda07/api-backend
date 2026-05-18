@@ -119,6 +119,29 @@ class PlatformGeneralIntegrationTest extends TestCase
         $this->assertContains('admin.dashboard.read', $response->json('data.permissions.effective'));
     }
 
+    public function test_auth_init_includes_sales_catalog_item(): void
+    {
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Catalog',
+            'status' => 'active',
+            'is_active' => true,
+        ]);
+        $user = $this->tenantUser($tenant, [
+            'products.read',
+            'products.manage',
+        ]);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $response = $this->getJson('/api/auth/init')->assertOk();
+        $sales = collect($response->json('data.modules'))->firstWhere('key', 'sales');
+        $catalog = collect($sales['items'])->firstWhere('key', 'catalog');
+
+        $this->assertSame('Catalogo Comercial', $catalog['label']);
+        $this->assertTrue($catalog['enabled']);
+        $this->assertSame(['read', 'manage'], $catalog['permissions']);
+    }
+
     public function test_localization_endpoint_returns_frontend_fields(): void
     {
         $currency = Currency::query()->create([

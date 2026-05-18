@@ -342,6 +342,6 @@ class InvoiceService
             return false;
         }
 
-        return (bool) $item->product_id;
+        return true;
     }
 }
