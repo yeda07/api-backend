@@ -103,7 +103,7 @@ class ExportService
     private function xlsxWorksheet(array $headers, Collection $rows): string
     {
         $sheetRows = [
-            $this->xlsxRow(1, $headers),
+            $this->xlsxRow(1, $headers, 1),
         ];
 
         foreach ($rows->values() as $index => $row) {
@@ -119,37 +119,55 @@ class ExportService
             .'<dimension ref="A1:'.$lastColumn.$lastRow.'"/>'
             .'<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
             .'<sheetFormatPr defaultRowHeight="15"/>'
+            .'<cols>'.$this->xlsxColumns($headers, $rows).'</cols>'
             .'<sheetData>'.implode('', $sheetRows).'</sheetData>'
             .'<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>'
             .'</worksheet>';
     }
 
-    private function xlsxRow(int $rowNumber, array $values): string
+    private function xlsxRow(int $rowNumber, array $values, ?int $style = null): string
     {
         $cells = [];
 
         foreach (array_values($values) as $index => $value) {
-            $cells[] = $this->xlsxCell($this->xlsxColumnName($index + 1).$rowNumber, $value);
+            $cells[] = $this->xlsxCell($this->xlsxColumnName($index + 1).$rowNumber, $value, $style);
         }
 
         return '<row r="'.$rowNumber.'">'.implode('', $cells).'</row>';
     }
 
-    private function xlsxCell(string $reference, mixed $value): string
+    private function xlsxCell(string $reference, mixed $value, ?int $style = null): string
     {
+        $styleAttribute = $style !== null ? ' s="'.$style.'"' : '';
+
         if ($value === null || $value === '') {
-            return '<c r="'.$reference.'" t="inlineStr"><is><t></t></is></c>';
+            return '<c r="'.$reference.'"'.$styleAttribute.' t="inlineStr"><is><t></t></is></c>';
         }
 
         if (is_bool($value)) {
-            return '<c r="'.$reference.'" t="b"><v>'.($value ? '1' : '0').'</v></c>';
+            return '<c r="'.$reference.'"'.$styleAttribute.' t="b"><v>'.($value ? '1' : '0').'</v></c>';
         }
 
         if (is_int($value) || is_float($value)) {
-            return '<c r="'.$reference.'"><v>'.$value.'</v></c>';
+            return '<c r="'.$reference.'"'.$styleAttribute.'><v>'.$value.'</v></c>';
         }
 
-        return '<c r="'.$reference.'" t="inlineStr"><is><t>'.$this->xml((string) $value).'</t></is></c>';
+        return '<c r="'.$reference.'"'.$styleAttribute.' t="inlineStr"><is><t>'.$this->xml((string) $value).'</t></is></c>';
+    }
+
+    private function xlsxColumns(array $headers, Collection $rows): string
+    {
+        return collect($headers)
+            ->map(function (string $header, int $index) use ($rows) {
+                $lengths = $rows
+                    ->map(fn (array $row) => mb_strlen((string) ($row[$header] ?? '')))
+                    ->push(mb_strlen($header));
+                $width = min(42, max(12, $lengths->max() + 2));
+                $column = $index + 1;
+
+                return '<col min="'.$column.'" max="'.$column.'" width="'.$width.'" customWidth="1"/>';
+            })
+            ->implode('');
     }
 
     private function xlsxColumnName(int $number): string
@@ -211,11 +229,11 @@ class ExportService
     {
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            .'<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
-            .'<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
-            .'<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+            .'<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/><color rgb="FFFFFFFF"/></font></fonts>'
+            .'<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/><bgColor indexed="64"/></patternFill></fill></fills>'
+            .'<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD9E2F3"/></left><right style="thin"><color rgb="FFD9E2F3"/></right><top style="thin"><color rgb="FFD9E2F3"/></top><bottom style="thin"><color rgb="FFD9E2F3"/></bottom><diagonal/></border></borders>'
             .'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-            .'<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+            .'<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="1" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs>'
             .'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
             .'</styleSheet>';
     }

@@ -224,16 +224,12 @@ class OpportunityService
     public function template()
     {
         return $this->exportService->file('opportunities-import-template', [[
-            'title' => '',
-            'amount' => '',
-            'currency' => 'COP',
-            'expected_close_date' => '2026-05-31',
-            'email' => '',
-            'description' => '',
-            'stage_uid' => '',
-            'account_uid' => '',
-            'contact_uid' => '',
-            'owner_user_uid' => '',
+            'titulo' => 'TechNova S.A.',
+            'monto' => 15000000,
+            'moneda' => 'COP',
+            'fecha_cierre_esperada' => '2026-06-30',
+            'email' => 'contacto@technova.com',
+            'descripcion' => 'Cliente interesado en implementacion CRM',
         ]], [
             'format' => 'excel',
         ]);
@@ -446,12 +442,12 @@ class OpportunityService
         $payload = [
             'stage_uid' => $stageUid ?: $defaultStageUid,
             'owner_user_uid' => $row['owner_user_uid'] ?? null,
-            'title' => $row['title'] ?? $row['lead_name'] ?? $row['name'] ?? null,
-            'amount' => $row['amount'] ?? 0,
-            'currency' => $row['currency'] ?? null,
-            'expected_close_date' => $row['expected_close_date'] ?? null,
-            'email' => $row['email'] ?? $row['lead_email'] ?? null,
-            'description' => $row['description'] ?? $row['notes'] ?? null,
+            'title' => $row['title'] ?? $row['titulo'] ?? $row['lead_name'] ?? $row['nombre'] ?? $row['name'] ?? null,
+            'amount' => $row['amount'] ?? $row['monto'] ?? $row['valor'] ?? 0,
+            'currency' => $row['currency'] ?? $row['moneda'] ?? null,
+            'expected_close_date' => $row['expected_close_date'] ?? $row['fecha_cierre_esperada'] ?? $row['fecha_cierre'] ?? null,
+            'email' => $row['email'] ?? $row['correo'] ?? $row['lead_email'] ?? null,
+            'description' => $row['description'] ?? $row['descripcion'] ?? $row['notas'] ?? $row['notes'] ?? null,
         ];
 
         if (! empty($row['account_uid'])) {
