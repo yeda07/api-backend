@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\InventoryReservation;
 use App\Models\Invoice;
 use App\Models\Quotation;
+use App\Models\QuotationItem;
 use App\Models\Tenant;
 use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
@@ -88,7 +89,7 @@ class InvoiceService
         ])->validate();
 
         return DB::transaction(function () use ($validated) {
-            $quotation = Quotation::query()->with(['items.product', 'items.warehouse', 'quoteable'])->where('uid', $validated['quotation_uid'])->firstOrFail();
+            $quotation = Quotation::query()->with(['items.product', 'items.catalogProduct', 'items.warehouse', 'quoteable'])->where('uid', $validated['quotation_uid'])->firstOrFail();
             $entity = $quotation->quoteable;
 
             if (! $entity) {
@@ -104,6 +105,10 @@ class InvoiceService
 
             foreach ($quotation->items as $item) {
                 if ($item->quantity <= 0) {
+                    continue;
+                }
+
+                if (! $this->itemRequiresStockReservation($item)) {
                     continue;
                 }
 
@@ -329,5 +334,14 @@ class InvoiceService
         );
 
         return $invoiceNumber;
+    }
+
+    private function itemRequiresStockReservation(QuotationItem $item): bool
+    {
+        if ($item->catalogProduct?->type === 'service') {
+            return false;
+        }
+
+        return (bool) $item->product_id;
     }
 }

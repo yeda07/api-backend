@@ -850,6 +850,10 @@ class QuotationService
     private function reservePendingQuotationStock(Quotation $quotation): void
     {
         foreach ($quotation->items()->with(['product', 'catalogProduct', 'warehouse'])->get() as $item) {
+            if (! $this->itemRequiresStockReservation($item)) {
+                continue;
+            }
+
             $pendingQuantity = max(0, (int) $item->quantity - (int) $item->reserved_quantity);
 
             if ($pendingQuantity === 0) {
@@ -871,6 +875,15 @@ class QuotationService
                 'comment' => 'Reserva automatica por aprobacion de cotizacion',
             ]);
         }
+    }
+
+    private function itemRequiresStockReservation(QuotationItem $item): bool
+    {
+        if ($item->catalogProduct?->type === 'service') {
+            return false;
+        }
+
+        return (bool) $item->product_id;
     }
 
     private function syncRequiredDependencies(Quotation $quotation, Product $catalogProduct, QuotationItem $sourceItem): void

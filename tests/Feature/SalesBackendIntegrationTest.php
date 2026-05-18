@@ -393,6 +393,55 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.line_total', 2160);
     }
 
+    public function test_service_items_do_not_require_stock_to_approve_or_invoice(): void
+    {
+        $user = $this->authenticateWithPermissions([
+            'products.manage',
+            'quotations.update',
+            'finance.manage',
+        ]);
+        $account = $this->account($user);
+
+        $serviceUid = $this->postJson('/api/products', [
+            'name' => 'Consultoria comercial',
+            'type' => 'service',
+            'sku' => 'SERV-CONSULT',
+            'default_price' => 900,
+        ])
+            ->assertCreated()
+            ->json('data.uid');
+
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-SERVICE-APPROVE-'.uniqid(),
+            'title' => 'Cotizacion solo servicio',
+            'status' => 'draft',
+            'currency' => 'COP',
+        ]);
+
+        $this->postJson('/api/quotations/'.$quotation->uid.'/items', [
+            'catalog_product_uid' => $serviceUid,
+            'quantity' => 1,
+        ])->assertCreated();
+
+        $this->putJson('/api/quotations/'.$quotation->uid, [
+            'status' => 'approved',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $this->postJson('/api/finance/invoices', [
+            'quotation_uid' => $quotation->uid,
+            'currency' => 'COP',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.quotation_uid', $quotation->uid)
+            ->assertJsonPath('data.total', '900.00');
+    }
+
     public function test_quotation_show_accepts_opportunity_uid_when_quote_belongs_to_opportunity(): void
     {
         $user = $this->authenticateWithPermissions(['quotations.read']);
