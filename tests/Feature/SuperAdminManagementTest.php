@@ -57,9 +57,17 @@ class SuperAdminManagementTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.key', 'ventas')
             ->assertJsonPath('data.0.label', 'Ventas')
-            ->assertJsonPath('data.2.key', 'rh')
-            ->assertJsonPath('data.4.key', 'multi-currency')
-            ->assertJsonPath('data.5.key', 'api-publica');
+            ->assertJsonFragment(['key' => 'crm', 'label' => 'CRM'])
+            ->assertJsonFragment(['key' => 'proyectos', 'label' => 'Proyectos'])
+            ->assertJsonFragment(['key' => 'rh', 'label' => 'Incentivos y Comisiones'])
+            ->assertJsonFragment(['key' => 'partners', 'label' => 'Canales & Partners'])
+            ->assertJsonFragment(['key' => 'inteligencia-competitiva', 'label' => 'Inteligencia Competitiva'])
+            ->assertJsonFragment(['key' => 'automatizacion', 'label' => 'Automatizacion'])
+            ->assertJsonFragment(['key' => 'tareas', 'label' => 'Tareas'])
+            ->assertJsonFragment(['key' => 'gastos', 'label' => 'Gastos'])
+            ->assertJsonFragment(['key' => 'compras', 'label' => 'Compras'])
+            ->assertJsonFragment(['key' => 'multi-currency', 'label' => 'Multi-currency'])
+            ->assertJsonFragment(['key' => 'api-publica', 'label' => 'API Publica']);
     }
 
     public function test_plan_delete_deactivates_when_tenants_are_attached(): void
