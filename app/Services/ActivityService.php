@@ -108,6 +108,11 @@ class ActivityService
         return Activity::query()->with(['owner', 'assignedUser', 'activityable'])->where('uid', $uid)->firstOrFail();
     }
 
+    public function getByUidPayload(string $uid): array
+    {
+        return $this->serializeActivityIndex($this->getByUid($uid));
+    }
+
     public function getByDateRange(string $from, string $to)
     {
         $this->syncOverdueStatuses();
@@ -116,7 +121,9 @@ class ActivityService
             ->with(['owner', 'assignedUser', 'activityable'])
             ->whereBetween('scheduled_at', [$from, $to])
             ->orderBy('scheduled_at')
-            ->get();
+            ->get()
+            ->map(fn (Activity $activity) => $this->serializeActivityIndex($activity))
+            ->values();
     }
 
     public function create(array $data): Activity
@@ -126,6 +133,11 @@ class ActivityService
         $payload = $this->normalizePayload($validated);
 
         return Activity::query()->create($payload)->fresh(['owner', 'assignedUser', 'activityable']);
+    }
+
+    public function createPayload(array $data): array
+    {
+        return $this->serializeActivityIndex($this->create($data));
     }
 
     public function update(string $uid, array $data): Activity
@@ -148,6 +160,11 @@ class ActivityService
         }
 
         return $activity;
+    }
+
+    public function updatePayload(string $uid, array $data): array
+    {
+        return $this->serializeActivityIndex($this->update($uid, $data));
     }
 
     public function delete(string $uid): void

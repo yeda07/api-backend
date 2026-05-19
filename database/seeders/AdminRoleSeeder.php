@@ -15,6 +15,7 @@ class AdminRoleSeeder extends Seeder
         $superAdminRole = AdminRole::query()->firstOrCreate(
             ['key' => 'superadmin'],
             [
+                'uid' => (string) Str::uuid(),
                 'name' => 'Superadmin',
                 'description' => 'Acceso total a la plataforma',
                 'is_system' => true,
@@ -31,6 +32,7 @@ class AdminRoleSeeder extends Seeder
         $supportRole = AdminRole::query()->firstOrCreate(
             ['key' => 'support'],
             [
+                'uid' => (string) Str::uuid(),
                 'name' => 'Soporte',
                 'description' => 'Soporte técnico: gestión de tenants y telemetría',
                 'is_system' => true,

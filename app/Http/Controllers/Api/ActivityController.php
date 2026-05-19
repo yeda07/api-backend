@@ -20,7 +20,7 @@ class ActivityController extends Controller
 
     public function show(string $uid)
     {
-        return $this->successResponse($this->activityService->getByUid($uid));
+        return $this->successResponse($this->activityService->getByUidPayload($uid));
     }
 
     public function byRange(Request $request)
@@ -53,7 +53,7 @@ class ActivityController extends Controller
     public function store(Request $request)
     {
         try {
-            return $this->successResponse($this->activityService->create($request->all()), 201, 'Actividad creada');
+            return $this->successResponse($this->activityService->createPayload($request->all()), 201, 'Actividad creada');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
@@ -64,7 +64,7 @@ class ActivityController extends Controller
     public function update(Request $request, string $uid)
     {
         try {
-            return $this->successResponse($this->activityService->update($uid, $request->all()), 200, 'Actividad actualizada');
+            return $this->successResponse($this->activityService->updatePayload($uid, $request->all()), 200, 'Actividad actualizada');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
