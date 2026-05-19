@@ -441,6 +441,36 @@ class SalesBackendIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_catalog_products_support_search_by_name_and_sku(): void
+    {
+        $user = $this->authenticateWithPermissions(['products.read']);
+
+        Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Camisa Ejecutiva',
+            'type' => 'product',
+            'sku' => 'CAM-26-001',
+            'status' => 'active',
+        ]);
+        Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Consultoria CRM',
+            'type' => 'service',
+            'sku' => 'SERV-CRM',
+            'status' => 'active',
+        ]);
+
+        $this->getJson('/api/products?search=camisa')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.sku', 'CAM-26-001');
+
+        $this->getJson('/api/products?search=serv-crm')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'Consultoria CRM');
+    }
+
     public function test_service_items_do_not_require_stock_to_approve_or_invoice(): void
     {
         $user = $this->authenticateWithPermissions([

@@ -16,6 +16,16 @@ class ProductRepository
     {
         $query = $this->query()->orderBy('name');
 
+        if (!empty($filters['search'])) {
+            $search = '%'.mb_strtolower((string) $filters['search']).'%';
+
+            $query->where(function ($builder) use ($search) {
+                $builder
+                    ->whereRaw('LOWER(name) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(sku) LIKE ?', [$search]);
+            });
+        }
+
         if (!empty($filters['type'])) {
             $query->where('type', $filters['type']);
         }
