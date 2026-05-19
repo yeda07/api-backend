@@ -101,7 +101,7 @@ class PlatformInitService
 
     public function init(User $user): array
     {
-        $user->loadMissing(['tenant.plan', 'tenant.currency', 'roles', 'permissions']);
+        $user->loadMissing(['tenant.plan', 'tenant.currency', 'roles', 'permissions', 'adminRoles']);
         $effectivePermissions = $user->effectivePermissions();
 
         if (! $user->is_platform_admin && $user->tenant) {
@@ -111,6 +111,20 @@ class PlatformInitService
         $effectivePermissionKeys = $effectivePermissions->pluck('key')->values()->all();
         $role = $user->roles->first()?->key ?? ($user->is_platform_admin ? 'platform-admin' : 'user');
 
+        // Si es superadmin, incluir permisos de admin_roles
+        $adminRolesData = [];
+        $adminPermissions = [];
+        if ($user->is_platform_admin && $user->tenant_id === null) {
+            $adminRolesData = $user->adminRoles->map(fn ($r) => [
+                'uid' => $r->uid,
+                'name' => $r->name,
+                'key' => $r->key,
+                'is_system' => $r->is_system,
+            ])->values()->all();
+
+            $adminPermissions = $user->effectiveAdminPermissions()->pluck('key')->values()->all();
+        }
+
         return [
             'user' => [
                 'uid' => $user->uid,
@@ -119,6 +133,7 @@ class PlatformInitService
                 'role' => $role,
                 'is_platform_admin' => (bool) $user->is_platform_admin,
                 'avatar_url' => $user->avatar_url,
+                'admin_roles' => $adminRolesData,
             ],
             'tenant' => [
                 'uid' => $user->tenant?->uid,
@@ -129,6 +144,7 @@ class PlatformInitService
             'modules' => $this->modules($effectivePermissionKeys, (bool) $user->is_platform_admin),
             'localization' => $this->localization($user),
             'permissions' => $this->permissionsPayload($effectivePermissionKeys),
+            'admin_permissions' => $adminPermissions,
         ];
     }
 
