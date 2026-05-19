@@ -145,6 +145,10 @@ class MissingBackendItemsIntegrationTest extends TestCase
         $this->assertNotFalse($zip->locateName('[Content_Types].xml'));
         $this->assertNotFalse($zip->locateName('xl/workbook.xml'));
         $this->assertNotFalse($zip->locateName('xl/worksheets/sheet1.xml'));
+        $styles = $zip->getFromName('xl/styles.xml');
+        $this->assertIsString($styles);
+        $this->assertStringContainsString('patternType="gray125"', $styles);
+        $this->assertStringContainsString('fillId="2"', $styles);
         $zip->close();
         unlink($path);
     }
