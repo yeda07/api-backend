@@ -24,6 +24,8 @@ return [
 
     'key' => env('APP_KEY'),
 
+    'super_admin_email' => env('SUPER_ADMIN_EMAIL', 'admin@vende-mas.com.co'),
+
     'providers' => [
 
         /*

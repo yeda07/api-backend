@@ -29,14 +29,16 @@ class EnsureUserHasPermission
         }
 
         if (!$user->hasPermissionTo($permission)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No autorizado',
-                'data' => null,
-                'errors' => [
-                    'permission' => ["No tienes el permiso requerido: {$permission}"],
-                ],
-            ], 403);
+            if (!$user->is_platform_admin || !$user->hasAdminPermissionTo($permission)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado',
+                    'data' => null,
+                    'errors' => [
+                        'permission' => ["No tienes el permiso requerido: {$permission}"],
+                    ],
+                ], 403);
+            }
         }
 
         if (! $user->is_platform_admin && $user->tenant) {

@@ -40,6 +40,8 @@ use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\RelationController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\AdminPlatformRoleController;
+use App\Http\Controllers\Api\AdminPlatformUserController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\SegmentController;
@@ -626,5 +628,21 @@ Route::middleware(['auth:sanctum', 'full.access', 'platform.admin'])->prefix('ad
         Route::put('/alerts/{uid}', [AdminTelemetryController::class, 'updateAlert'])->middleware('permission:admin.alerts.manage');
         Route::post('/alerts/{uid}/toggle', [AdminTelemetryController::class, 'toggleAlert'])->middleware('permission:admin.alerts.manage');
         Route::delete('/alerts/{uid}', [AdminTelemetryController::class, 'destroyAlert'])->middleware('permission:admin.alerts.manage');
+    });
+
+    Route::prefix('platform')->group(function () {
+        Route::get('/roles', [AdminPlatformRoleController::class, 'index'])->middleware('platform.permission:admin.tenants.manage');
+        Route::post('/roles', [AdminPlatformRoleController::class, 'store'])->middleware('platform.permission:admin.tenants.manage');
+        Route::get('/roles/permissions', [AdminPlatformRoleController::class, 'permissions'])->middleware('platform.permission:admin.tenants.manage');
+        Route::get('/roles/{uid}', [AdminPlatformRoleController::class, 'show'])->middleware('platform.permission:admin.tenants.manage');
+        Route::put('/roles/{uid}', [AdminPlatformRoleController::class, 'update'])->middleware('platform.permission:admin.tenants.manage');
+        Route::delete('/roles/{uid}', [AdminPlatformRoleController::class, 'destroy'])->middleware('platform.permission:admin.tenants.manage');
+
+        Route::get('/users', [AdminPlatformUserController::class, 'index'])->middleware('platform.permission:admin.tenants.manage');
+        Route::post('/users', [AdminPlatformUserController::class, 'store'])->middleware('platform.permission:admin.tenants.manage');
+        Route::get('/users/{uid}', [AdminPlatformUserController::class, 'show'])->middleware('platform.permission:admin.tenants.manage');
+        Route::put('/users/{uid}', [AdminPlatformUserController::class, 'update'])->middleware('platform.permission:admin.tenants.manage');
+        Route::post('/users/{uid}/roles', [AdminPlatformUserController::class, 'assignRole'])->middleware('platform.permission:admin.tenants.manage');
+        Route::delete('/users/{uid}/roles/{roleUid}', [AdminPlatformUserController::class, 'removeRole'])->middleware('platform.permission:admin.tenants.manage');
     });
 });
