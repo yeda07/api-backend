@@ -76,10 +76,11 @@ class ProductService
         return $this->products->update($product, $payload);
     }
 
-    public function delete(string $uid): void
+    public function delete(string $uid): Product
     {
         $product = $this->show($uid);
-        $this->products->delete($product);
+
+        return $this->products->deactivate($product);
     }
 
     public function createVersion(string $productUid, array $data)

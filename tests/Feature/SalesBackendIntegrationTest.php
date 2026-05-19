@@ -394,6 +394,53 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.line_total', 2160);
     }
 
+    public function test_catalog_product_delete_deactivates_without_breaking_quotation_history(): void
+    {
+        $user = $this->authenticateWithPermissions(['products.manage']);
+        $catalogProduct = Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Servicio Historico',
+            'type' => 'service',
+            'sku' => 'SERV-HIST',
+            'status' => 'active',
+        ]);
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quote_number' => 'Q-HIST-'.uniqid(),
+            'title' => 'Cotizacion historica',
+            'status' => 'draft',
+            'currency' => 'COP',
+        ]);
+        $item = QuotationItem::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'catalog_product_id' => $catalogProduct->getKey(),
+            'sku' => 'SERV-HIST',
+            'description' => 'Servicio Historico',
+            'quantity' => 1,
+            'list_unit_price' => 100,
+            'discount_percent' => 0,
+            'discount_amount' => 0,
+            'net_unit_price' => 100,
+            'unit_price' => 100,
+        ]);
+
+        $this->deleteJson('/api/products/'.$catalogProduct->uid)
+            ->assertOk()
+            ->assertJsonPath('message', 'Producto desactivado')
+            ->assertJsonPath('data.status', 'inactive');
+
+        $this->assertDatabaseHas('products', [
+            'id' => $catalogProduct->getKey(),
+            'status' => 'inactive',
+        ]);
+        $this->assertDatabaseHas('quotation_items', [
+            'id' => $item->getKey(),
+            'catalog_product_id' => $catalogProduct->getKey(),
+        ]);
+    }
+
     public function test_service_items_do_not_require_stock_to_approve_or_invoice(): void
     {
         $user = $this->authenticateWithPermissions([
@@ -533,6 +580,76 @@ class SalesBackendIntegrationTest extends TestCase
             'quotation_uid' => $quotation->uid,
             'currency' => 'COP',
         ])->assertCreated();
+    }
+
+    public function test_approving_quotation_hydrates_legacy_item_product_links_by_sku(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.update']);
+        $account = $this->account($user);
+        $inventoryProduct = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'CAM-26-001',
+            'name' => 'Camisa',
+            'cost_price' => 5000,
+            'sale_price' => 20000,
+            'discount_percent' => 5,
+            'is_active' => true,
+        ]);
+        $catalogProduct = Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'inventory_product_id' => $inventoryProduct->getKey(),
+            'name' => 'Camisa',
+            'type' => 'product',
+            'sku' => 'CAM-26-001',
+            'status' => 'active',
+        ]);
+        $warehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega Principal',
+            'code' => 'MAIN',
+        ]);
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $inventoryProduct->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'physical_stock' => 106,
+            'reserved_stock' => 0,
+        ]);
+
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-CAM-'.uniqid(),
+            'title' => 'Cotizacion camisa',
+            'status' => 'draft',
+            'currency' => 'COP',
+        ]);
+        $item = QuotationItem::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'sku' => 'CAM-26-001',
+            'description' => 'Camisa',
+            'quantity' => 1,
+            'list_unit_price' => 20000,
+            'discount_percent' => 5,
+            'discount_amount' => 1000,
+            'net_unit_price' => 19000,
+            'unit_price' => 19000,
+            'unit_cost' => 5000,
+        ]);
+
+        $this->putJson('/api/quotations/'.$quotation->uid, [
+            'status' => 'approved',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'approved');
+
+        $item->refresh();
+        $this->assertSame($catalogProduct->getKey(), $item->catalog_product_id);
+        $this->assertSame($inventoryProduct->getKey(), $item->product_id);
+        $this->assertSame($warehouse->getKey(), $item->warehouse_id);
     }
 
     public function test_quotation_show_accepts_opportunity_uid_when_quote_belongs_to_opportunity(): void

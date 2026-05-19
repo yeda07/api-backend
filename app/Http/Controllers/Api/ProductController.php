@@ -55,9 +55,9 @@ class ProductController extends Controller
     public function destroy(string $uid)
     {
         try {
-            $this->productService->delete($uid);
+            $product = $this->productService->delete($uid);
 
-            return $this->successResponse(null, 200, 'Producto eliminado');
+            return $this->successResponse($product, 200, 'Producto desactivado');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {

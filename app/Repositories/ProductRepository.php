@@ -48,4 +48,11 @@ class ProductRepository
     {
         $product->delete();
     }
+
+    public function deactivate(Product $product): Product
+    {
+        $product->update(['status' => 'inactive']);
+
+        return $product->fresh(['inventoryProduct', 'versions']);
+    }
 }

@@ -851,6 +851,8 @@ class QuotationService
     private function reservePendingQuotationStock(Quotation $quotation): void
     {
         foreach ($quotation->items()->with(['product', 'catalogProduct', 'warehouse'])->get() as $item) {
+            $this->hydrateItemProductLinks($item);
+
             if (! $this->itemRequiresStockReservation($item)) {
                 continue;
             }
@@ -894,6 +896,52 @@ class QuotationService
         }
 
         return $product;
+    }
+
+    private function hydrateItemProductLinks(QuotationItem $item): void
+    {
+        $catalogProduct = $item->catalogProduct;
+        $product = $item->product;
+
+        if (! $catalogProduct && $item->sku) {
+            $catalogProduct = Product::query()
+                ->with('inventoryProduct')
+                ->where('sku', $item->sku)
+                ->first();
+
+            if ($catalogProduct) {
+                $item->setRelation('catalogProduct', $catalogProduct);
+            }
+        }
+
+        if (! $product && $catalogProduct?->inventoryProduct) {
+            $product = $catalogProduct->inventoryProduct;
+            $item->setRelation('product', $product);
+        }
+
+        if (! $product && $item->sku) {
+            $product = InventoryProduct::query()
+                ->where('sku', $item->sku)
+                ->first();
+
+            if ($product) {
+                $item->setRelation('product', $product);
+            }
+        }
+
+        $payload = [];
+
+        if (! $item->catalog_product_id && $catalogProduct) {
+            $payload['catalog_product_id'] = $catalogProduct->getKey();
+        }
+
+        if (! $item->product_id && $product) {
+            $payload['product_id'] = $product->getKey();
+        }
+
+        if ($payload !== []) {
+            $item->forceFill($payload)->save();
+        }
     }
 
     private function reserveItemAcrossWarehouses(QuotationItem $item, InventoryProduct $product, int $quantity): void
