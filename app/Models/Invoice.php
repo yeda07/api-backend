@@ -6,6 +6,7 @@ use App\Models\Traits\HasPublicUid;
 use App\Models\Traits\HasTenantRelation;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Invoice extends Model
 {
@@ -36,12 +37,16 @@ class Invoice extends Model
         'id',
         'tenant_id',
         'quotation_id',
+        'invoiceable_type',
         'invoiceable_id',
     ];
 
     protected $appends = [
         'quotation_uid',
         'invoiceable_uid',
+        'entity_type',
+        'entity_label',
+        'entity_uid',
     ];
 
     protected $casts = [
@@ -80,5 +85,41 @@ class Invoice extends Model
     public function getInvoiceableUidAttribute()
     {
         return $this->invoiceable?->uid;
+    }
+
+    public function getEntityTypeAttribute(): ?string
+    {
+        return $this->normalizeInvoiceableType($this->invoiceable_type);
+    }
+
+    public function getEntityLabelAttribute(): ?string
+    {
+        return match ($this->entity_type) {
+            'account' => 'Cuenta',
+            'contact' => 'Contacto',
+            'crm_entity' => 'Entidad CRM',
+            'opportunity' => 'Oportunidad',
+            'tenant' => 'Tenant',
+            null => null,
+            default => Str::headline(str_replace(['_', '-'], ' ', $this->entity_type)),
+        };
+    }
+
+    public function getEntityUidAttribute(): ?string
+    {
+        return $this->invoiceable_uid;
+    }
+
+    private function normalizeInvoiceableType(?string $type): ?string
+    {
+        return match ($type) {
+            Account::class => 'account',
+            Contact::class => 'contact',
+            CrmEntity::class => 'crm_entity',
+            Opportunity::class => 'opportunity',
+            Tenant::class => 'tenant',
+            null, '' => null,
+            default => Str::of(class_basename($type))->snake()->toString(),
+        };
     }
 }

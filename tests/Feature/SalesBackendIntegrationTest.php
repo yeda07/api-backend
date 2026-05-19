@@ -321,6 +321,47 @@ class SalesBackendIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_invoice_show_returns_normalized_entity_fields(): void
+    {
+        $user = $this->authenticateWithPermissions(['finance.read']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Facturable',
+            'key' => 'facturable-'.uniqid(),
+            'position' => 1,
+            'probability' => 50,
+        ]);
+
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Oportunidad facturada',
+            'amount' => 1000,
+            'currency' => 'COP',
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'invoiceable_type' => Opportunity::class,
+            'invoiceable_id' => $opportunity->getKey(),
+            'invoice_number' => 'INV-ENTITY-'.uniqid(),
+            'status' => 'issued',
+            'currency' => 'COP',
+            'total' => 1000,
+            'outstanding_total' => 1000,
+        ]);
+
+        $response = $this->getJson('/api/invoices/'.$invoice->uid)
+            ->assertOk()
+            ->assertJsonPath('data.entity_type', 'opportunity')
+            ->assertJsonPath('data.entity_label', 'Oportunidad')
+            ->assertJsonPath('data.entity_uid', $opportunity->uid)
+            ->assertJsonPath('data.invoiceable_uid', $opportunity->uid);
+
+        $this->assertArrayNotHasKey('invoiceable_type', $response->json('data'));
+    }
+
     public function test_quotation_create_auto_generates_quote_number(): void
     {
         $this->authenticateWithPermissions(['quotations.create']);
