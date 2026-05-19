@@ -15,6 +15,8 @@ class TaskService
         $validated = Validator::make($filters, [
             'status' => 'nullable|string|in:pending,in_progress,completed,cancelled',
             'search' => 'nullable|string|max:255',
+            'taskable_type' => 'nullable|string',
+            'taskable_uid' => 'nullable|uuid',
         ])->validate();
 
         $query = Task::query()->with(['owner', 'assignedUser', 'taskable'])->latest();
@@ -29,6 +31,25 @@ class TaskService
                 $q->whereRaw('LOWER(title) LIKE ?', [$search])
                   ->orWhereRaw('LOWER(description) LIKE ?', [$search]);
             });
+        }
+
+        if (!empty($validated['taskable_type']) || !empty($validated['taskable_uid'])) {
+            if (empty($validated['taskable_type']) || empty($validated['taskable_uid'])) {
+                throw ValidationException::withMessages([
+                    'taskable_uid' => ['Debes enviar taskable_type y taskable_uid juntos'],
+                ]);
+            }
+
+            $entity = find_entity_by_uid($validated['taskable_type'], $validated['taskable_uid']);
+
+            if (!$entity) {
+                throw ValidationException::withMessages([
+                    'taskable_uid' => ['La entidad relacionada no existe o no es visible'],
+                ]);
+            }
+
+            $query->where('taskable_type', get_class($entity))
+                ->where('taskable_id', $entity->getKey());
         }
 
         return ApiIndex::paginateOrGet($query, $filters, 'tasks_page');

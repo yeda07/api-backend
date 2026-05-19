@@ -440,6 +440,10 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/', [OpportunityController::class, 'index'])->middleware('permission:opportunities.read');
         Route::post('/', [OpportunityController::class, 'store'])->middleware('permission:opportunities.manage');
         Route::get('/{uid}', [OpportunityController::class, 'show'])->middleware('permission:opportunities.read');
+        Route::post('/{uid}/won', [OpportunityController::class, 'markWon'])->middleware('permission:opportunities.manage');
+        Route::post('/{uid}/lost', [OpportunityController::class, 'markLost'])->middleware('permission:opportunities.manage');
+        Route::get('/{uid}/tasks', [OpportunityController::class, 'tasks'])->middleware('permission:tasks.read');
+        Route::post('/{uid}/tasks', [OpportunityController::class, 'storeTask'])->middleware('permission:tasks.create');
         Route::get('/{uid}/activities', [OpportunityController::class, 'activities'])->middleware('permission:activities.read');
         Route::post('/{uid}/activities', [OpportunityController::class, 'storeActivity'])->middleware('permission:activities.create');
         Route::put('/{uid}/activities/{activityUid}', [OpportunityController::class, 'updateActivity'])->middleware('permission:activities.update');

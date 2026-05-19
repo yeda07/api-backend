@@ -276,6 +276,7 @@ class QuotationPdfService
             'draft' => 'Borrador',
             'sent' => 'Enviada',
             'approved' => 'Aprobada',
+            'invoiced' => 'Facturada',
             'rejected' => 'Rechazada',
             'cancelled' => 'Cancelada',
             default => ucfirst($status),

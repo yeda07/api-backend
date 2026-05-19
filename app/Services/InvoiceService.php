@@ -153,6 +153,8 @@ class InvoiceService
                 ],
             ]);
 
+            $quotation->update(['status' => 'invoiced']);
+
             foreach ($quotation->items as $item) {
                 $reservations = InventoryReservation::query()
                     ->where('source_type', 'quotation_item')

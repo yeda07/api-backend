@@ -46,6 +46,7 @@ class ReportService
 
         $statusCounts = [
             'Aprobadas' => $quotations->whereIn('status', ['approved', 'accepted', 'won'])->count(),
+            'Facturadas' => $quotations->whereIn('status', ['invoiced'])->count(),
             'Enviadas' => $quotations->whereIn('status', ['sent', 'pending'])->count(),
             'Borrador' => $quotations->whereIn('status', ['draft'])->count(),
             'Rechazadas' => $quotations->whereIn('status', ['rejected', 'lost'])->count(),
@@ -413,6 +414,7 @@ class ReportService
     {
         return match ($status) {
             'approved', 'accepted', 'won' => ['label' => 'Aprobada', 'color' => 'success'],
+            'invoiced' => ['label' => 'Facturada', 'color' => 'success'],
             'sent', 'pending' => ['label' => 'Enviada', 'color' => 'info'],
             'rejected', 'lost' => ['label' => 'Rechazada', 'color' => 'error'],
             'draft' => ['label' => 'Borrador', 'color' => 'default'],

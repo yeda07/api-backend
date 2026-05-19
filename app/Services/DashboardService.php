@@ -232,7 +232,7 @@ class DashboardService
     private function dashboardQuotationStatus(string $status): string
     {
         return match ($status) {
-            'approved' => 'approved',
+            'approved', 'invoiced' => 'approved',
             'rejected', 'cancelled' => 'rejected',
             'draft' => 'review',
             default => 'pending',

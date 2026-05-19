@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\ActivityService;
 use App\Services\OpportunityService;
+use App\Services\TaskService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -12,7 +13,8 @@ class OpportunityController extends Controller
 {
     public function __construct(
         private readonly OpportunityService $opportunityService,
-        private readonly ActivityService $activityService
+        private readonly ActivityService $activityService,
+        private readonly TaskService $taskService
     ) {
     }
 
@@ -104,6 +106,28 @@ class OpportunityController extends Controller
         }
     }
 
+    public function markWon(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->opportunityService->markWon($uid, $request->all()), 200, 'Oportunidad marcada como ganada');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function markLost(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->opportunityService->markLost($uid, $request->all()), 200, 'Oportunidad marcada como perdida');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
     public function destroy(string $uid)
     {
         try {
@@ -121,6 +145,32 @@ class OpportunityController extends Controller
             'entity_type' => 'opportunity',
             'entity_uid' => $uid,
         ])));
+    }
+
+    public function tasks(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->taskService->getAll(array_merge($request->query(), [
+                'taskable_type' => 'opportunity',
+                'taskable_uid' => $uid,
+            ])));
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        }
+    }
+
+    public function storeTask(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse($this->taskService->create(array_merge($request->all(), [
+                'taskable_type' => 'opportunity',
+                'taskable_uid' => $uid,
+            ])), 201, 'Tarea creada');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
     }
 
     public function storeActivity(Request $request, string $uid)

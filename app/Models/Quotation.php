@@ -83,6 +83,11 @@ class Quotation extends Model
         return $this->hasMany(QuotationItem::class);
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
     public function getOwnerUserUidAttribute()
     {
         return $this->owner?->uid

@@ -47,6 +47,8 @@ class Invoice extends Model
         'entity_type',
         'entity_label',
         'entity_uid',
+        'client_name',
+        'client_email',
     ];
 
     protected $casts = [
@@ -110,6 +112,31 @@ class Invoice extends Model
         return $this->invoiceable_uid;
     }
 
+    public function getClientNameAttribute(): ?string
+    {
+        $invoiceable = $this->resolveInvoiceable();
+
+        return $invoiceable?->display_name
+            ?? $invoiceable?->name
+            ?? $invoiceable?->title
+            ?? $this->invoice_number;
+    }
+
+    public function getClientEmailAttribute(): ?string
+    {
+        $invoiceable = $this->resolveInvoiceable();
+
+        $email = $invoiceable?->email ?? null;
+
+        if ($email) {
+            return $email;
+        }
+
+        $profileData = $invoiceable?->profile_data ?? null;
+
+        return is_array($profileData) ? ($profileData['email'] ?? null) : null;
+    }
+
     private function normalizeInvoiceableType(?string $type): ?string
     {
         return match ($type) {
@@ -121,5 +148,20 @@ class Invoice extends Model
             null, '' => null,
             default => Str::of(class_basename($type))->snake()->toString(),
         };
+    }
+
+    private function resolveInvoiceable(): ?Model
+    {
+        if ($this->relationLoaded('invoiceable')) {
+            return $this->invoiceable;
+        }
+
+        $type = $this->invoiceable_type;
+
+        if (! $type || ! $this->invoiceable_id || ! is_subclass_of($type, Model::class)) {
+            return null;
+        }
+
+        return $type::withoutGlobalScopes()->whereKey($this->invoiceable_id)->first();
     }
 }

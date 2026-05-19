@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\Competitor;
 use App\Models\CrmEntity;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
@@ -14,8 +15,10 @@ use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\Permission;
 use App\Models\Product;
+use App\Models\Project;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -317,10 +320,49 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.total', '200.00')
             ->assertJsonPath('data.quotation_uid', $quotation->uid);
 
+        $this->assertDatabaseHas('quotations', [
+            'id' => $quotation->getKey(),
+            'status' => 'invoiced',
+        ]);
+
         $this->assertDatabaseMissing('invoices', [
             'tenant_id' => $user->tenant_id,
             'invoice_number' => 'INV-FRONTEND-SHOULD-BE-IGNORED',
         ]);
+    }
+
+    public function test_converted_quotation_cannot_be_marked_cancelled_by_legacy_frontend_flow(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.update']);
+        $account = $this->account($user);
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-INVOICED-'.uniqid(),
+            'title' => 'Cotizacion facturada',
+            'status' => 'approved',
+            'currency' => 'COP',
+        ]);
+
+        Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'invoiceable_type' => Account::class,
+            'invoiceable_id' => $account->getKey(),
+            'invoice_number' => 'INV-LEGACY-'.uniqid(),
+            'status' => 'issued',
+            'currency' => 'COP',
+            'total' => 100,
+            'outstanding_total' => 100,
+        ]);
+
+        $this->putJson('/api/quotations/'.$quotation->uid, [
+            'status' => 'cancelled',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'invoiced');
     }
 
     public function test_invoice_show_returns_normalized_entity_fields(): void
@@ -339,6 +381,7 @@ class SalesBackendIntegrationTest extends TestCase
             'owner_user_id' => $user->getKey(),
             'stage_id' => $stage->getKey(),
             'title' => 'Oportunidad facturada',
+            'email' => 'lead-facturado@example.test',
             'amount' => 1000,
             'currency' => 'COP',
         ]);
@@ -359,7 +402,9 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.entity_type', 'opportunity')
             ->assertJsonPath('data.entity_label', 'Oportunidad')
             ->assertJsonPath('data.entity_uid', $opportunity->uid)
-            ->assertJsonPath('data.invoiceable_uid', $opportunity->uid);
+            ->assertJsonPath('data.invoiceable_uid', $opportunity->uid)
+            ->assertJsonPath('data.client_name', 'Oportunidad facturada')
+            ->assertJsonPath('data.client_email', 'lead-facturado@example.test');
 
         $this->assertArrayNotHasKey('invoiceable_type', $response->json('data'));
     }
@@ -1037,6 +1082,134 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.stages.0.summary.count', 1)
             ->assertJsonPath('data.stages.0.items.0.title', 'CRM Enterprise');
+    }
+
+    public function test_opportunity_can_be_marked_won_without_dragging_to_stage(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'opportunities.manage', 'projects.manage', 'activities.create']);
+        $account = $this->account($user);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Negociacion',
+            'key' => 'negociacion-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 70,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'opportunityable_type' => Account::class,
+            'opportunityable_id' => $account->getKey(),
+            'title' => 'Cierre directo',
+            'amount' => 3000,
+            'currency' => 'COP',
+        ]);
+
+        $this->postJson('/api/opportunities/'.$opportunity->uid.'/won', [
+            'comment' => 'Cliente aprobo por llamada.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.opportunity.uid', $opportunity->uid)
+            ->assertJsonPath('data.opportunity.stage_uid', $stage->uid);
+
+        $this->assertDatabaseHas('opportunities', [
+            'id' => $opportunity->getKey(),
+            'lost_at' => null,
+        ]);
+        $this->assertDatabaseHas('projects', [
+            'opportunity_id' => $opportunity->getKey(),
+        ]);
+        $this->assertDatabaseHas('activities', [
+            'activityable_type' => Opportunity::class,
+            'activityable_id' => $opportunity->getKey(),
+            'type' => 'note',
+            'title' => 'Oportunidad marcada como ganada',
+        ]);
+    }
+
+    public function test_opportunity_can_be_marked_lost_with_competitive_reasons(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'opportunities.manage', 'competitive-intelligence.manage']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Negociacion',
+            'key' => 'negociacion-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 70,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Perdida directa',
+            'amount' => 5000,
+            'currency' => 'COP',
+        ]);
+        $competitor = Competitor::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Competidor X',
+            'key' => 'competidor-x-'.uniqid(),
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/opportunities/'.$opportunity->uid.'/lost', [
+            'lost_reasons' => [
+                [
+                    'category' => 'Precio',
+                    'competitor_uid' => $competitor->uid,
+                    'detail' => 'Ofrecieron mejor precio.',
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.opportunity.uid', $opportunity->uid)
+            ->assertJsonPath('data.lost_reasons.0.competitor_uid', $competitor->uid)
+            ->assertJsonPath('data.lost_reasons.0.lost_reason_category', 'Precio')
+            ->assertJsonPath('data.lost_reasons.0.lost_reason_detail', 'Ofrecieron mejor precio.');
+
+        $this->assertDatabaseHas('lost_reasons', [
+            'opportunity_id' => $opportunity->getKey(),
+            'competitor_id' => $competitor->getKey(),
+            'reason_type' => 'price',
+        ]);
+    }
+
+    public function test_opportunity_tasks_shortcut_reuses_generic_tasks(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'tasks.read', 'tasks.create']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Seguimiento',
+            'key' => 'seguimiento-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 30,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Con checklist',
+            'amount' => 1000,
+        ]);
+        Task::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'title' => 'Otra tarea',
+            'status' => 'pending',
+        ]);
+
+        $created = $this->postJson('/api/opportunities/'.$opportunity->uid.'/tasks', [
+            'title' => 'Enviar propuesta',
+            'priority' => 'high',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.taskable_uid', $opportunity->uid);
+
+        $this->getJson('/api/opportunities/'.$opportunity->uid.'/tasks')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $created->json('data.uid'));
     }
 
     private function account(User $user): Account

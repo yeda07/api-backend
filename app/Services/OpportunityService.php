@@ -19,7 +19,9 @@ class OpportunityService
 {
     public function __construct(
         private readonly ProjectService $projectService,
-        private readonly ExportService $exportService
+        private readonly ExportService $exportService,
+        private readonly CompetitiveIntelligenceService $competitiveIntelligenceService,
+        private readonly ActivityService $activityService
     ) {}
 
     public function stages()
@@ -173,6 +175,121 @@ class OpportunityService
 
             return $opportunity;
         });
+    }
+
+    public function markWon(string $uid, array $data = []): array
+    {
+        $validated = Validator::make($data, [
+            'notes' => 'nullable|string|max:2000',
+            'comment' => 'nullable|string|max:2000',
+        ])->validate();
+
+        return DB::transaction(function () use ($uid, $validated) {
+            $opportunity = $this->getOpportunity($uid);
+            $opportunity->update([
+                'won_at' => now(),
+                'lost_at' => null,
+            ]);
+
+            $project = $this->projectService->createFromOpportunityModel($opportunity->fresh(['opportunityable']), quietIfNoAccount: true);
+            $note = $validated['notes'] ?? $validated['comment'] ?? null;
+
+            if ($note) {
+                $this->activityService->create([
+                    'type' => 'note',
+                    'title' => 'Oportunidad marcada como ganada',
+                    'description' => $note,
+                    'status' => 'completed',
+                    'scheduled_at' => now()->toDateTimeString(),
+                    'entity_type' => 'opportunity',
+                    'entity_uid' => $opportunity->uid,
+                ]);
+            }
+
+            return [
+                'opportunity' => $opportunity->fresh(['stage', 'owner', 'opportunityable', 'project']),
+                'project' => $project,
+            ];
+        });
+    }
+
+    public function markLost(string $uid, array $data = []): array
+    {
+        $validated = Validator::make($data, [
+            'lost_reasons' => 'nullable|array',
+            'lost_reasons.*.category' => 'nullable|string|max:255',
+            'lost_reasons.*.reason_type' => 'nullable|string',
+            'lost_reasons.*.competitor_uid' => 'nullable|uuid',
+            'lost_reasons.*.detail' => 'nullable|string',
+            'lost_reasons.*.details' => 'nullable|string',
+            'lost_reasons.*.summary' => 'nullable|string|max:255',
+            'reasons' => 'nullable|array',
+            'reasons.*.category' => 'nullable|string|max:255',
+            'reasons.*.reason_type' => 'nullable|string',
+            'reasons.*.competitor_uid' => 'nullable|uuid',
+            'reasons.*.detail' => 'nullable|string',
+            'reasons.*.details' => 'nullable|string',
+            'reasons.*.summary' => 'nullable|string|max:255',
+            'notes' => 'nullable|string|max:2000',
+            'comment' => 'nullable|string|max:2000',
+        ])->validate();
+
+        return DB::transaction(function () use ($uid, $validated) {
+            $opportunity = $this->getOpportunity($uid);
+            $opportunity->update([
+                'won_at' => null,
+                'lost_at' => now(),
+            ]);
+
+            $reasons = $validated['lost_reasons'] ?? $validated['reasons'] ?? [];
+            $createdReasons = collect($reasons)
+                ->map(fn (array $reason) => $this->competitiveIntelligenceService->createLostReason(
+                    $this->lostReasonPayload($opportunity, $reason)
+                ))
+                ->values();
+
+            $note = $validated['notes'] ?? $validated['comment'] ?? null;
+
+            if ($note) {
+                $this->activityService->create([
+                    'type' => 'note',
+                    'title' => 'Oportunidad marcada como perdida',
+                    'description' => $note,
+                    'status' => 'completed',
+                    'scheduled_at' => now()->toDateTimeString(),
+                    'entity_type' => 'opportunity',
+                    'entity_uid' => $opportunity->uid,
+                ]);
+            }
+
+            return [
+                'opportunity' => $opportunity->fresh(['stage', 'owner', 'opportunityable', 'lostReasons.competitor']),
+                'lost_reasons' => $createdReasons,
+            ];
+        });
+    }
+
+    private function lostReasonPayload(Opportunity $opportunity, array $reason): array
+    {
+        $details = $reason['detail'] ?? $reason['details'] ?? null;
+        $category = $reason['category'] ?? null;
+
+        $payload = [
+            'opportunity_uid' => $opportunity->uid,
+            'lost_reason_category' => $category,
+            'competitor_uid' => $reason['competitor_uid'] ?? null,
+            'lost_reason_detail' => $details,
+            'summary' => $reason['summary'] ?? $details ?? $category ?? 'Oportunidad perdida',
+            'lost_at' => now()->toDateString(),
+            'estimated_value' => $opportunity->amount,
+            'currency' => $opportunity->currency,
+        ];
+
+        if (! empty($reason['reason_type']) || ! $category) {
+            $payload['reason_type'] = $reason['reason_type'] ?? 'other';
+        }
+
+        return array_filter($payload, fn ($value) => $value !== null && $value !== '');
     }
 
     public function deleteOpportunity(string $uid): void

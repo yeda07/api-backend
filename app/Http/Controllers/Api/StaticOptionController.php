@@ -47,6 +47,7 @@ class StaticOptionController extends Controller
             'draft' => 'Borrador',
             'sent' => 'Enviada',
             'approved' => 'Aprobada',
+            'invoiced' => 'Facturada',
             'rejected' => 'Rechazada',
             'cancelled' => 'Cancelada',
         ]));

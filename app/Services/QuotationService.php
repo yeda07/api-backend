@@ -36,7 +36,7 @@ class QuotationService
     {
         $validated = Validator::make($filters, [
             'search' => 'nullable|string|max:255',
-            'status' => 'nullable|string|in:draft,sent,approved,rejected,cancelled',
+            'status' => 'nullable|string|in:draft,sent,approved,rejected,cancelled,invoiced',
             'opportunity_uid' => 'nullable|uuid',
         ])->validate();
 
@@ -142,6 +142,10 @@ class QuotationService
                 $payload['quoteable_type'] = $quoteable ? get_class($quoteable) : null;
                 $payload['quoteable_id'] = $quoteable?->getKey();
                 $payload['owner_user_id'] = $quoteable?->owner_user_id ?? $quotation->owner_user_id;
+            }
+
+            if (($payload['status'] ?? null) === 'cancelled' && $quotation->invoices()->exists()) {
+                $payload['status'] = 'invoiced';
             }
 
             if ($payload !== []) {
@@ -384,7 +388,7 @@ class QuotationService
         $validator = Validator::make($data, [
             'quote_number' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:255'],
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
-            'status' => 'sometimes|string|in:draft,sent,approved,rejected,cancelled',
+            'status' => 'sometimes|string|in:draft,sent,approved,rejected,cancelled,invoiced',
             'currency' => 'nullable|string|max:10',
             'exchange_rate' => 'sometimes|numeric|min:0.000001',
             'local_currency' => 'nullable|string|max:10',

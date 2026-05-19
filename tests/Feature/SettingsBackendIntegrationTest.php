@@ -389,7 +389,8 @@ class SettingsBackendIntegrationTest extends TestCase
         $this->getJson('/api/quotations/statuses')
             ->assertOk()
             ->assertJsonPath('data.0.value', 'draft')
-            ->assertJsonPath('data.4.value', 'cancelled');
+            ->assertJsonPath('data.3.value', 'invoiced')
+            ->assertJsonPath('data.5.value', 'cancelled');
 
         $this->getJson('/api/tasks/statuses')
             ->assertOk()
