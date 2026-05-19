@@ -33,7 +33,9 @@ class InvoiceService
             'search' => 'nullable|string|max:255',
         ])->validate();
 
-        $query = Invoice::query()->with(['quotation', 'invoiceable', 'payments'])->latest();
+        $query = Invoice::query()
+            ->with(['quotation:id,uid', 'invoiceable'])
+            ->latest();
 
         if (! empty($validated['entity_type']) || ! empty($validated['entity_uid'])) {
             $entity = $this->resolveEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
@@ -59,7 +61,9 @@ class InvoiceService
             });
         }
 
-        return ApiIndex::paginateOrGet($query, $filters, 'invoices_page');
+        return $this->mapInvoiceIndexResult(
+            ApiIndex::paginateOrGet($query, $filters, 'invoices_page')
+        );
     }
 
     public function getByUid(string $uid): Invoice
@@ -281,6 +285,45 @@ class InvoiceService
                 'updated_invoices' => $updated,
             ];
         });
+    }
+
+    private function mapInvoiceIndexResult($result)
+    {
+        if (method_exists($result, 'through')) {
+            return $result->through(fn (Invoice $invoice) => $this->serializeInvoiceIndex($invoice));
+        }
+
+        return collect($result)
+            ->map(fn (Invoice $invoice) => $this->serializeInvoiceIndex($invoice))
+            ->values();
+    }
+
+    private function serializeInvoiceIndex(Invoice $invoice): array
+    {
+        return [
+            'uid' => $invoice->uid,
+            'quotation_uid' => $invoice->quotation?->uid,
+            'invoiceable_uid' => $invoice->invoiceable_uid,
+            'entity_type' => $invoice->entity_type,
+            'entity_label' => $invoice->entity_label,
+            'entity_uid' => $invoice->entity_uid,
+            'client_name' => $invoice->client_name,
+            'client_email' => $invoice->client_email,
+            'invoice_number' => $invoice->invoice_number,
+            'status' => $invoice->status,
+            'quote_currency' => $invoice->quote_currency,
+            'exchange_rate' => (float) $invoice->exchange_rate,
+            'currency' => $invoice->currency,
+            'subtotal' => (float) $invoice->subtotal,
+            'discount_total' => (float) $invoice->discount_total,
+            'total' => (float) $invoice->total,
+            'paid_total' => (float) $invoice->paid_total,
+            'outstanding_total' => (float) $invoice->outstanding_total,
+            'issued_at' => $invoice->issued_at,
+            'due_date' => $invoice->due_date,
+            'created_at' => $invoice->created_at,
+            'updated_at' => $invoice->updated_at,
+        ];
     }
 
     private function resolveEntity(?string $type, ?string $uid)
