@@ -3,10 +3,17 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\Activity;
 use App\Models\Contact;
 use App\Models\CrmEntity;
+use App\Models\Invoice;
+use App\Models\LostReason;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
+use App\Models\Project;
+use App\Models\Quotation;
+use App\Models\QuotationItem;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Support\ApiIndex;
 use Illuminate\Http\UploadedFile;
@@ -103,6 +110,11 @@ class OpportunityService
             ->firstOrFail();
     }
 
+    public function getOpportunityDetail(string $uid): array
+    {
+        return $this->serializeOpportunityDetail($this->getOpportunity($uid));
+    }
+
     public function createOpportunity(array $data): Opportunity
     {
         $validated = $this->validateOpportunity($data);
@@ -185,7 +197,7 @@ class OpportunityService
         ])->validate();
 
         return DB::transaction(function () use ($uid, $validated) {
-            $opportunity = $this->getOpportunity($uid);
+            $opportunity = Opportunity::query()->where('uid', $uid)->firstOrFail();
             $stage = $this->resolveOutcomeStage($opportunity, 'won');
             $opportunity->update([
                 'stage_id' => $stage?->getKey() ?? $opportunity->stage_id,
@@ -209,8 +221,8 @@ class OpportunityService
             }
 
             return [
-                'opportunity' => $opportunity->fresh(['stage', 'owner', 'opportunityable', 'project']),
-                'project' => $project,
+                'opportunity' => $this->getOpportunityDetail($opportunity->uid),
+                'project' => $project ? $this->serializeProject($project->fresh(['account', 'assignedUser'])) : null,
             ];
         });
     }
@@ -237,7 +249,7 @@ class OpportunityService
         ])->validate();
 
         return DB::transaction(function () use ($uid, $validated) {
-            $opportunity = $this->getOpportunity($uid);
+            $opportunity = Opportunity::query()->where('uid', $uid)->firstOrFail();
             $stage = $this->resolveOutcomeStage($opportunity, 'lost');
             $opportunity->update([
                 'stage_id' => $stage?->getKey() ?? $opportunity->stage_id,
@@ -267,8 +279,10 @@ class OpportunityService
             }
 
             return [
-                'opportunity' => $opportunity->fresh(['stage', 'owner', 'opportunityable', 'lostReasons.competitor']),
-                'lost_reasons' => $createdReasons,
+                'opportunity' => $this->getOpportunityDetail($opportunity->uid),
+                'lost_reasons' => $createdReasons
+                    ->map(fn (LostReason $reason) => $this->serializeLostReason($reason->fresh(['competitor'])))
+                    ->values(),
             ];
         });
     }
@@ -453,6 +467,154 @@ class OpportunityService
             'created_at' => $opportunity->created_at,
             'updated_at' => $opportunity->updated_at,
         ];
+    }
+
+    private function serializeOpportunityDetail(Opportunity $opportunity): array
+    {
+        return array_merge($this->serializeOpportunityIndex($opportunity), [
+            'opportunityable_uid' => $this->resolveMorphUid($opportunity->opportunityable_type, $opportunity->opportunityable_id),
+            'opportunityable_type' => $this->normalizeMorphType($opportunity->opportunityable_type),
+            'opportunityable_label' => $this->resolveEntityLabel($opportunity->opportunityable),
+            'project' => $opportunity->project ? $this->serializeProject($opportunity->project) : null,
+            'lost_reasons' => $opportunity->lostReasons
+                ->map(fn (LostReason $reason) => $this->serializeLostReason($reason))
+                ->values(),
+            'activities' => $opportunity->activities
+                ->map(fn (Activity $activity) => $this->serializeActivity($activity))
+                ->values(),
+            'quotations' => $opportunity->quotations
+                ->map(fn (Quotation $quotation) => $this->serializeQuotation($quotation))
+                ->values(),
+        ]);
+    }
+
+    private function serializeProject(Project $project): array
+    {
+        return [
+            'uid' => $project->uid,
+            'name' => $project->name,
+            'description' => $project->description,
+            'status' => $project->status,
+            'priority' => $project->priority,
+            'start_date' => $project->start_date,
+            'end_date' => $project->end_date,
+            'account_uid' => $project->account?->uid,
+            'client_uid' => $project->account?->uid,
+            'client_name' => $project->account?->name,
+            'opportunity_uid' => $this->resolveMorphUid(Opportunity::class, $project->opportunity_id),
+            'invoice_uid' => $this->resolveMorphUid(Invoice::class, $project->invoice_id),
+            'assigned_to_uid' => $project->assignedUser?->uid,
+            'assigned_to_name' => $project->assignedUser?->name,
+            'estimated_hours' => round((float) $project->estimated_hours, 2),
+            'actual_hours' => round((float) $project->actual_hours, 2),
+            'created_at' => $project->created_at,
+            'updated_at' => $project->updated_at,
+        ];
+    }
+
+    private function serializeLostReason(LostReason $reason): array
+    {
+        return [
+            'uid' => $reason->uid,
+            'competitor_uid' => $reason->competitor?->uid,
+            'competitor_name' => $reason->competitor?->name,
+            'reason_type' => $reason->reason_type,
+            'summary' => $reason->summary,
+            'details' => $reason->details,
+            'lost_at' => $reason->lost_at,
+            'estimated_value' => round((float) $reason->estimated_value, 2),
+            'currency' => $reason->currency,
+            'lost_reason_category' => $reason->lost_reason_category,
+            'lost_reason_detail' => $reason->lost_reason_detail,
+            'created_at' => $reason->created_at,
+            'updated_at' => $reason->updated_at,
+        ];
+    }
+
+    private function serializeActivity(Activity $activity): array
+    {
+        return [
+            'uid' => $activity->uid,
+            'type' => $activity->type,
+            'title' => $activity->title,
+            'description' => $activity->description,
+            'status' => $activity->status,
+            'priority' => $activity->priority,
+            'scheduled_at' => $activity->scheduled_at,
+            'completed_at' => $activity->completed_at,
+            'owner_user_uid' => $activity->owner?->uid,
+            'owner_user_name' => $activity->owner?->name,
+            'assigned_user_uid' => $activity->assignedUser?->uid,
+            'assigned_to_uid' => $activity->assignedUser?->uid,
+            'assigned_to_name' => $activity->assignedUser?->name,
+            'created_at' => $activity->created_at,
+            'updated_at' => $activity->updated_at,
+        ];
+    }
+
+    private function serializeQuotation(Quotation $quotation): array
+    {
+        return [
+            'uid' => $quotation->uid,
+            'quote_number' => $quotation->quote_number,
+            'title' => $quotation->title,
+            'status' => $quotation->status,
+            'currency' => $quotation->currency,
+            'exchange_rate' => $quotation->exchange_rate,
+            'local_currency' => $quotation->local_currency,
+            'valid_until' => $quotation->valid_until,
+            'notes' => $quotation->notes,
+            'subtotal' => round((float) $quotation->subtotal, 2),
+            'discount_total' => round((float) $quotation->discount_total, 2),
+            'total' => round((float) $quotation->total, 2),
+            'items' => $quotation->items
+                ->map(fn (QuotationItem $item) => $this->serializeQuotationItem($item))
+                ->values(),
+            'created_at' => $quotation->created_at,
+            'updated_at' => $quotation->updated_at,
+        ];
+    }
+
+    private function serializeQuotationItem(QuotationItem $item): array
+    {
+        return [
+            'uid' => $item->uid,
+            'product_uid' => $item->product?->uid,
+            'catalog_product_uid' => $item->catalogProduct?->uid,
+            'warehouse_uid' => $item->warehouse?->uid,
+            'sku' => $item->sku,
+            'description' => $item->description,
+            'quantity' => $item->quantity,
+            'list_unit_price' => round((float) $item->list_unit_price, 2),
+            'discount_percent' => round((float) $item->discount_percent, 2),
+            'discount_amount' => round((float) $item->discount_amount, 2),
+            'net_unit_price' => round((float) $item->net_unit_price, 2),
+            'line_total' => round((float) $item->line_total, 2),
+            'discount_total' => round((float) $item->discount_total, 2),
+            'reserved_quantity' => $item->reserved_quantity,
+            'reservation_indicator' => $item->reservation_indicator,
+        ];
+    }
+
+    private function normalizeMorphType(?string $type): ?string
+    {
+        return match ($type) {
+            Account::class => 'account',
+            Contact::class => 'contact',
+            CrmEntity::class => 'crm_entity',
+            Opportunity::class => 'opportunity',
+            Tenant::class => 'tenant',
+            null, '' => null,
+            default => str(class_basename($type))->snake()->toString(),
+        };
+    }
+
+    private function resolveEntityLabel($entity): ?string
+    {
+        return $entity?->display_name
+            ?? $entity?->name
+            ?? $entity?->title
+            ?? null;
     }
 
     private function resolveMorphUid(?string $class, ?int $id): ?string

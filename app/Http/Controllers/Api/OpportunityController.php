@@ -92,7 +92,7 @@ class OpportunityController extends Controller
 
     public function show(string $uid)
     {
-        return $this->successResponse($this->opportunityService->getOpportunity($uid));
+        return $this->successResponse($this->opportunityService->getOpportunityDetail($uid));
     }
 
     public function update(Request $request, string $uid)
