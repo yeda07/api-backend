@@ -193,7 +193,7 @@ class QuotationPdfService
     {
         return $this->line(42, 56, 570, 56, '0.82 0.88 0.94')
             . $this->text(42, 38, 'Gracias por su confianza. Esta cotizacion esta sujeta a disponibilidad y condiciones comerciales.', 7.6, 'F2', '0.45 0.50 0.58')
-            . $this->text(42, 26, 'Archivo generado por Vende Mas API', 7.2, 'F2', '0.45 0.50 0.58');
+            . $this->text(42, 26, 'Archivo generado por Vende Mas ', 7.2, 'F2', '0.45 0.50 0.58');
     }
 
     private function panel(int $x, int $y, int $width, int $height, string $title): string
