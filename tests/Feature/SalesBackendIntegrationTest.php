@@ -1095,6 +1095,14 @@ class SalesBackendIntegrationTest extends TestCase
             'position' => 1,
             'probability_percent' => 70,
         ]);
+        $wonStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Ganado',
+            'key' => 'ganado-'.uniqid(),
+            'position' => 99,
+            'probability_percent' => 100,
+            'is_won' => true,
+        ]);
         $opportunity = Opportunity::query()->create([
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
@@ -1111,12 +1119,19 @@ class SalesBackendIntegrationTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.opportunity.uid', $opportunity->uid)
-            ->assertJsonPath('data.opportunity.stage_uid', $stage->uid);
+            ->assertJsonPath('data.opportunity.stage_uid', $wonStage->uid);
 
         $this->assertDatabaseHas('opportunities', [
             'id' => $opportunity->getKey(),
+            'stage_id' => $wonStage->getKey(),
             'lost_at' => null,
         ]);
+        $this->assertNotNull($opportunity->fresh()->won_at);
+        $this->getJson('/api/opportunities')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $opportunity->uid)
+            ->assertJsonPath('data.0.stage_uid', $wonStage->uid);
+        $this->assertNotNull($this->getJson('/api/opportunities')->json('data.0.won_at'));
         $this->assertDatabaseHas('projects', [
             'opportunity_id' => $opportunity->getKey(),
         ]);
@@ -1137,6 +1152,14 @@ class SalesBackendIntegrationTest extends TestCase
             'key' => 'negociacion-'.uniqid(),
             'position' => 1,
             'probability_percent' => 70,
+        ]);
+        $lostStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Perdido',
+            'key' => 'perdido-'.uniqid(),
+            'position' => 100,
+            'probability_percent' => 0,
+            'is_lost' => true,
         ]);
         $opportunity = Opportunity::query()->create([
             'tenant_id' => $user->tenant_id,
@@ -1164,10 +1187,22 @@ class SalesBackendIntegrationTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.opportunity.uid', $opportunity->uid)
+            ->assertJsonPath('data.opportunity.stage_uid', $lostStage->uid)
             ->assertJsonPath('data.lost_reasons.0.competitor_uid', $competitor->uid)
             ->assertJsonPath('data.lost_reasons.0.lost_reason_category', 'Precio')
             ->assertJsonPath('data.lost_reasons.0.lost_reason_detail', 'Ofrecieron mejor precio.');
 
+        $this->assertDatabaseHas('opportunities', [
+            'id' => $opportunity->getKey(),
+            'stage_id' => $lostStage->getKey(),
+            'won_at' => null,
+        ]);
+        $this->assertNotNull($opportunity->fresh()->lost_at);
+        $this->getJson('/api/opportunities')
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $opportunity->uid)
+            ->assertJsonPath('data.0.stage_uid', $lostStage->uid);
+        $this->assertNotNull($this->getJson('/api/opportunities')->json('data.0.lost_at'));
         $this->assertDatabaseHas('lost_reasons', [
             'opportunity_id' => $opportunity->getKey(),
             'competitor_id' => $competitor->getKey(),

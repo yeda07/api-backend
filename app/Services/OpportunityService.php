@@ -186,7 +186,9 @@ class OpportunityService
 
         return DB::transaction(function () use ($uid, $validated) {
             $opportunity = $this->getOpportunity($uid);
+            $stage = $this->resolveOutcomeStage($opportunity, 'won');
             $opportunity->update([
+                'stage_id' => $stage?->getKey() ?? $opportunity->stage_id,
                 'won_at' => now(),
                 'lost_at' => null,
             ]);
@@ -236,7 +238,9 @@ class OpportunityService
 
         return DB::transaction(function () use ($uid, $validated) {
             $opportunity = $this->getOpportunity($uid);
+            $stage = $this->resolveOutcomeStage($opportunity, 'lost');
             $opportunity->update([
+                'stage_id' => $stage?->getKey() ?? $opportunity->stage_id,
                 'won_at' => null,
                 'lost_at' => now(),
             ]);
@@ -777,6 +781,21 @@ class OpportunityService
     private function resolveStage(string $uid): OpportunityStage
     {
         return OpportunityStage::query()->where('uid', $uid)->firstOrFail();
+    }
+
+    private function resolveOutcomeStage(Opportunity $opportunity, string $outcome): ?OpportunityStage
+    {
+        $flag = $outcome === 'won' ? 'is_won' : 'is_lost';
+
+        return OpportunityStage::query()
+            ->where('tenant_id', $opportunity->tenant_id)
+            ->where($flag, true)
+            ->orderByDesc('position')
+            ->first()
+            ?? OpportunityStage::query()
+                ->where('tenant_id', $opportunity->tenant_id)
+                ->orderByDesc('position')
+                ->first();
     }
 
     private function resolveEntity(?string $type, ?string $uid)
