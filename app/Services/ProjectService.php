@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Contact;
+use App\Models\Invoice;
 use App\Models\Opportunity;
 use App\Models\Project;
 use App\Models\ProjectAssignment;
@@ -30,6 +31,7 @@ class ProjectService
             'account_uid' => 'nullable|uuid',
             'client_uid' => 'nullable|uuid',
             'opportunity_uid' => 'nullable|uuid',
+            'invoice_uid' => 'nullable|uuid',
             'page' => 'sometimes|integer|min:1',
             'per_page' => 'sometimes|integer|min:1|max:100',
         ])->validate();
@@ -42,6 +44,11 @@ class ProjectService
         if (!empty($validated['opportunity_uid'])) {
             $validated['opportunity_id'] = $this->resolveOpportunity($validated['opportunity_uid'])->getKey();
             unset($validated['opportunity_uid']);
+        }
+
+        if (!empty($validated['invoice_uid'])) {
+            $validated['invoice_id'] = $this->resolveInvoice($validated['invoice_uid'])->getKey();
+            unset($validated['invoice_uid']);
         }
 
         return $this->projectRepository->all($validated);
@@ -58,10 +65,15 @@ class ProjectService
         $validated = $this->validateProject($data);
 
         return DB::transaction(function () use ($validated) {
-            $accountId = $this->resolveAccountId($validated['account_uid']);
+            $invoice = !empty($validated['invoice_uid'])
+                ? $this->resolveInvoice($validated['invoice_uid'])
+                : null;
             $opportunity = !empty($validated['opportunity_uid'])
                 ? $this->resolveOpportunity($validated['opportunity_uid'])
-                : null;
+                : $this->resolveOpportunityFromInvoice($invoice);
+            $accountId = !empty($validated['account_uid'])
+                ? $this->resolveAccountId($validated['account_uid'])
+                : $this->resolveAccountIdFromInvoiceOrOpportunity($invoice, $opportunity);
 
             if ($opportunity) {
                 $existing = $this->projectRepository->findByOpportunityId($opportunity->getKey());
@@ -73,10 +85,17 @@ class ProjectService
                 }
             }
 
+            if ($invoice && $existing = $this->projectRepository->findByInvoiceId($invoice->getKey())) {
+                throw ValidationException::withMessages([
+                    'invoice_uid' => ['La factura ya tiene un proyecto asociado'],
+                ]);
+            }
+
             $project = $this->projectRepository->create([
                 'tenant_id' => auth()->user()->tenant_id,
                 'account_id' => $accountId,
                 'opportunity_id' => $opportunity?->getKey(),
+                'invoice_id' => $invoice?->getKey(),
                 'assigned_user_id' => !empty($validated['assigned_to_uid']) ? $this->resolveUserId($validated['assigned_to_uid']) : null,
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
@@ -90,7 +109,7 @@ class ProjectService
 
             $this->syncPrimaryAssignment($project, $validated);
 
-            return $project->fresh(['account', 'opportunity.stage', 'assignedUser', 'milestones', 'assignments.user']);
+            return $project->fresh(['account', 'opportunity.stage', 'invoice', 'assignedUser', 'milestones', 'assignments.user']);
         });
     }
 
@@ -134,10 +153,29 @@ class ProjectService
                 }
             }
 
+            if (array_key_exists('invoice_uid', $validated)) {
+                if ($validated['invoice_uid']) {
+                    $invoice = $this->resolveInvoice($validated['invoice_uid']);
+                    $existing = $this->projectRepository->findByInvoiceId($invoice->getKey());
+
+                    if ($existing && $existing->uid !== $project->uid) {
+                        throw ValidationException::withMessages([
+                            'invoice_uid' => ['La factura ya tiene un proyecto asociado'],
+                        ]);
+                    }
+
+                    $payload['invoice_id'] = $invoice->getKey();
+                    $payload['opportunity_id'] ??= $this->resolveOpportunityFromInvoice($invoice)?->getKey();
+                    $payload['account_id'] ??= $this->resolveAccountIdFromInvoiceOrOpportunity($invoice, $payload['opportunity_id'] ? Opportunity::query()->whereKey($payload['opportunity_id'])->first() : null);
+                } else {
+                    $payload['invoice_id'] = null;
+                }
+            }
+
             $project = $this->projectRepository->update($project, $payload);
             $this->syncPrimaryAssignment($project, $validated);
 
-            return $project->fresh(['account', 'opportunity.stage', 'assignedUser', 'milestones', 'assignments.user']);
+            return $project->fresh(['account', 'opportunity.stage', 'invoice', 'assignedUser', 'milestones', 'assignments.user']);
         });
     }
 
@@ -189,9 +227,10 @@ class ProjectService
     private function validateProject(array $data, bool $partial = false): array
     {
         $validator = Validator::make($data, [
-            'account_uid' => [$partial ? 'sometimes' : 'required', 'nullable', 'uuid'],
+            'account_uid' => [$partial ? 'sometimes' : 'required_without_all:opportunity_uid,invoice_uid', 'nullable', 'uuid'],
             'client_uid' => 'nullable|uuid',
             'opportunity_uid' => 'sometimes|nullable|uuid',
+            'invoice_uid' => 'sometimes|nullable|uuid',
             'name' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'description' => 'nullable|string',
             'status' => 'sometimes|string|in:pending,active,completed,planning,in_progress,on_hold,cancelled',
@@ -209,9 +248,9 @@ class ProjectService
 
         $validated = $validator->validated();
 
-        if (!$partial && empty($validated['account_uid'])) {
+        if (!$partial && empty($validated['account_uid']) && empty($validated['opportunity_uid']) && empty($validated['invoice_uid'])) {
             throw ValidationException::withMessages([
-                'account_uid' => ['Debes enviar account_uid para crear el proyecto'],
+                'account_uid' => ['Debes enviar account_uid, opportunity_uid o invoice_uid para crear el proyecto'],
             ]);
         }
 
@@ -254,6 +293,54 @@ class ProjectService
     private function resolveOpportunity(string $opportunityUid): Opportunity
     {
         return Opportunity::query()->where('uid', $opportunityUid)->firstOrFail();
+    }
+
+    private function resolveInvoice(string $invoiceUid): Invoice
+    {
+        return Invoice::query()
+            ->with(['quotation.quoteable', 'invoiceable'])
+            ->where('uid', $invoiceUid)
+            ->firstOrFail();
+    }
+
+    private function resolveOpportunityFromInvoice(?Invoice $invoice): ?Opportunity
+    {
+        if (! $invoice) {
+            return null;
+        }
+
+        if ($invoice->invoiceable instanceof Opportunity) {
+            return $invoice->invoiceable;
+        }
+
+        $quoteable = $invoice->quotation?->quoteable;
+
+        return $quoteable instanceof Opportunity ? $quoteable : null;
+    }
+
+    private function resolveAccountIdFromInvoiceOrOpportunity(?Invoice $invoice, ?Opportunity $opportunity): int
+    {
+        $accountId = $opportunity ? $this->resolveAccountIdFromOpportunity($opportunity) : null;
+
+        if (! $accountId && $invoice) {
+            $entity = $invoice->invoiceable;
+
+            if ($entity instanceof Account) {
+                $accountId = $entity->getKey();
+            }
+
+            if ($entity instanceof Contact) {
+                $accountId = $entity->account_id;
+            }
+        }
+
+        if (! $accountId) {
+            throw ValidationException::withMessages([
+                'account_uid' => ['No fue posible resolver una cuenta desde la oportunidad o factura enviada'],
+            ]);
+        }
+
+        return $accountId;
     }
 
     private function syncPrimaryAssignment(Project $project, array $validated): void

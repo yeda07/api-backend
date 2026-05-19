@@ -3,7 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\Invoice;
+use App\Models\Opportunity;
+use App\Models\OpportunityStage;
 use App\Models\Permission;
+use App\Models\Project;
+use App\Models\Quotation;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -80,6 +85,77 @@ class ProjectsBackendIntegrationTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.status', 'on_hold');
+    }
+
+    public function test_projects_can_be_created_from_invoice_uid_and_keep_traceability(): void
+    {
+        $user = $this->authenticateWithPermissions(['projects.read', 'projects.manage']);
+        $account = Account::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'name' => 'Cliente Facturado',
+            'document' => 'INV-PROJ-' . uniqid(),
+        ]);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Ganada',
+            'key' => 'won-' . uniqid(),
+            'position' => 1,
+            'is_won' => true,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'opportunityable_type' => Account::class,
+            'opportunityable_id' => $account->getKey(),
+            'title' => 'Venta con factura',
+            'amount' => 5000,
+            'currency' => 'COP',
+        ]);
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Opportunity::class,
+            'quoteable_id' => $opportunity->getKey(),
+            'quote_number' => 'Q-PROJ-' . uniqid(),
+            'title' => 'Cotizacion proyecto',
+            'status' => 'invoiced',
+            'currency' => 'COP',
+        ]);
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'invoiceable_type' => Opportunity::class,
+            'invoiceable_id' => $opportunity->getKey(),
+            'invoice_number' => 'INV-PROJ-' . uniqid(),
+            'status' => 'issued',
+            'currency' => 'COP',
+            'total' => 5000,
+            'outstanding_total' => 5000,
+        ]);
+
+        $created = $this->postJson('/api/projects', [
+            'invoice_uid' => $invoice->uid,
+            'name' => 'Implementacion desde factura',
+            'status' => 'planning',
+        ]);
+
+        $created->assertCreated()
+            ->assertJsonPath('data.client_uid', $account->uid)
+            ->assertJsonPath('data.opportunity_uid', $opportunity->uid)
+            ->assertJsonPath('data.invoice_uid', $invoice->uid);
+
+        $projectUid = $created->json('data.uid');
+
+        $this->getJson('/api/projects/' . $projectUid)
+            ->assertOk()
+            ->assertJsonPath('data.invoice_uid', $invoice->uid)
+            ->assertJsonPath('data.opportunity_uid', $opportunity->uid);
+
+        $this->getJson('/api/projects?invoice_uid=' . $invoice->uid)
+            ->assertOk()
+            ->assertJsonPath('data.0.uid', $projectUid);
     }
 
     public function test_milestones_assignments_team_and_progress_match_frontend_contract(): void

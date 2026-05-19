@@ -16,6 +16,7 @@ class Project extends Model
         'tenant_id',
         'account_id',
         'opportunity_id',
+        'invoice_id',
         'assigned_user_id',
         'name',
         'description',
@@ -32,6 +33,7 @@ class Project extends Model
         'tenant_id',
         'account_id',
         'opportunity_id',
+        'invoice_id',
         'assigned_user_id',
     ];
 
@@ -40,6 +42,7 @@ class Project extends Model
         'client_uid',
         'client_name',
         'opportunity_uid',
+        'invoice_uid',
         'priority',
         'manager_uid',
         'assigned_to_uid',
@@ -63,6 +66,11 @@ class Project extends Model
     public function opportunity()
     {
         return $this->belongsTo(Opportunity::class);
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class);
     }
 
     public function assignedUser()
@@ -101,6 +109,12 @@ class Project extends Model
     {
         return $this->opportunity?->uid
             ?? ($this->opportunity_id ? Opportunity::query()->whereKey($this->opportunity_id)->value('uid') : null);
+    }
+
+    public function getInvoiceUidAttribute(): ?string
+    {
+        return $this->invoice?->uid
+            ?? ($this->invoice_id ? Invoice::query()->whereKey($this->invoice_id)->value('uid') : null);
     }
 
     public function getStatusAttribute($value): string
