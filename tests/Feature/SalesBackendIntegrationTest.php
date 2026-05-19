@@ -343,6 +343,42 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.quote_number', 'COT-'.$year.'-002');
     }
 
+    public function test_quotation_pdf_endpoint_returns_client_ready_pdf(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.read']);
+        $account = $this->account($user);
+        $quotation = Quotation::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'quoteable_type' => Account::class,
+            'quoteable_id' => $account->getKey(),
+            'quote_number' => 'Q-PDF-'.uniqid(),
+            'title' => 'Cotizacion PDF',
+            'status' => 'sent',
+            'currency' => 'COP',
+            'valid_until' => now()->addDays(15)->toDateString(),
+            'notes' => 'Condiciones comerciales vigentes.',
+        ]);
+        QuotationItem::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'quotation_id' => $quotation->getKey(),
+            'sku' => 'PDF-001',
+            'description' => 'Servicio de implementacion',
+            'quantity' => 2,
+            'list_unit_price' => 1000,
+            'discount_percent' => 10,
+            'discount_amount' => 100,
+            'net_unit_price' => 900,
+            'unit_price' => 900,
+        ]);
+
+        $response = $this->get('/api/quotations/'.$quotation->uid.'/pdf');
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-1.4', $response->getContent());
+    }
+
     public function test_catalog_services_store_default_pricing_and_prefill_quotation_items(): void
     {
         $user = $this->authenticateWithPermissions([
