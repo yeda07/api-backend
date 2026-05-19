@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\CreditService;
 use App\Services\FinancialOperationsService;
+use App\Services\InvoiceDeliveryService;
 use App\Services\InvoiceService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
@@ -15,6 +16,7 @@ class FinancialOperationsController extends Controller
     public function __construct(
         private readonly FinancialOperationsService $financialOperationsService,
         private readonly InvoiceService $invoiceService,
+        private readonly InvoiceDeliveryService $invoiceDeliveryService,
         private readonly PaymentService $paymentService,
         private readonly CreditService $creditService
     ) {
@@ -86,6 +88,21 @@ class FinancialOperationsController extends Controller
     {
         try {
             return $this->successResponse($this->invoiceService->createFromQuotation($request->all()), 201, 'Factura generada');
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation error', 422, $e->errors());
+        } catch (\Throwable $e) {
+            return $this->errorResponse('Server error', 500, ['server' => [$e->getMessage()]]);
+        }
+    }
+
+    public function sendInvoice(Request $request, string $uid)
+    {
+        try {
+            return $this->successResponse(
+                $this->invoiceDeliveryService->send($this->invoiceService->getByUid($uid), $request->all()),
+                200,
+                'Factura enviada'
+            );
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {

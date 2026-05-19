@@ -505,6 +505,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access
         Route::get('/invoices/{uid}', [FinancialOperationsController::class, 'showInvoice'])->middleware('permission:finance.read');
         Route::post('/invoices/export', [FinancialOperationsController::class, 'exportInvoices'])->middleware('permission:finance.read');
         Route::post('/invoices', [FinancialOperationsController::class, 'createInvoice'])->middleware('permission:finance.manage');
+        Route::post('/invoices/{uid}/send', [FinancialOperationsController::class, 'sendInvoice'])->middleware('permission:finance.manage');
         Route::get('/payments', [FinancialOperationsController::class, 'payments'])->middleware('permission:finance.read');
         Route::post('/payments', [FinancialOperationsController::class, 'registerPayment'])->middleware('permission:finance.manage');
         Route::get('/alerts', [FinancialOperationsController::class, 'alerts'])->middleware('permission:finance.read');

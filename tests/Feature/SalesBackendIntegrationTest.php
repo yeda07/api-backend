@@ -19,7 +19,9 @@ use App\Models\QuotationItem;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Services\InvoicePdfMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -360,6 +362,49 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.invoiceable_uid', $opportunity->uid);
 
         $this->assertArrayNotHasKey('invoiceable_type', $response->json('data'));
+    }
+
+    public function test_invoice_can_be_sent_by_email_with_pdf_attachment(): void
+    {
+        Mail::fake();
+
+        $user = $this->authenticateWithPermissions(['finance.read', 'finance.manage']);
+        $account = Account::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'name' => 'Cliente Factura',
+            'document' => 'INV-SEND-'.uniqid(),
+            'email' => 'cliente-factura@example.test',
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'invoiceable_type' => Account::class,
+            'invoiceable_id' => $account->getKey(),
+            'invoice_number' => 'INV-SEND-'.uniqid(),
+            'status' => 'issued',
+            'currency' => 'COP',
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'total' => 1000,
+            'paid_total' => 0,
+            'outstanding_total' => 1000,
+        ]);
+
+        $this->postJson('/api/finance/invoices/'.$invoice->uid.'/send', [
+            'subject' => 'Factura lista',
+            'message' => 'Adjuntamos la factura.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Factura enviada')
+            ->assertJsonPath('data.recipient_email', 'cliente-factura@example.test')
+            ->assertJsonPath('data.subject', 'Factura lista')
+            ->assertJsonPath('data.filename', 'factura-'.$invoice->invoice_number.'.pdf');
+
+        Mail::assertSent(InvoicePdfMail::class, function (InvoicePdfMail $mail) use ($invoice) {
+            return $mail->invoice->is($invoice)
+                && $mail->filename === 'factura-'.$invoice->invoice_number.'.pdf';
+        });
     }
 
     public function test_quotation_create_auto_generates_quote_number(): void
