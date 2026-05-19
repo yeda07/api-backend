@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Support\ApiIndex;
+use App\Models\Account;
 use App\Models\Battlecard;
+use App\Models\Contact;
+use App\Models\CrmEntity;
 use App\Models\Competitor;
 use App\Models\LostReason;
 use App\Models\Opportunity;
@@ -166,45 +169,11 @@ class CompetitiveIntelligenceService
 
     public function lostReasons(array $filters = [])
     {
-        $validated = Validator::make($filters, [
-            'search' => 'nullable|string|max:255',
-            'competitor_uid' => 'nullable|uuid',
-            'opportunity_uid' => 'nullable|uuid',
-            'entity_type' => 'nullable|string',
-            'entity_uid' => 'nullable|uuid',
-            'reason_type' => 'nullable|string',
-        ])->validate();
+        $result = ApiIndex::paginateOrGet($this->lostReasonsQuery($filters), $filters, 'lost_reasons_page');
 
-        $query = LostReason::query()->with(['competitor', 'opportunity', 'owner', 'lossable'])->latest('lost_at');
-
-        if (!empty($validated['competitor_uid'])) {
-            $query->where('competitor_id', $this->findCompetitor($validated['competitor_uid'])->getKey());
-        }
-
-        if (!empty($validated['search'])) {
-            $search = '%' . mb_strtolower($validated['search']) . '%';
-            $query->where(function ($searchQuery) use ($search) {
-                $searchQuery->whereRaw('LOWER(summary) LIKE ?', [$search])
-                    ->orWhereRaw('LOWER(details) LIKE ?', [$search])
-                    ->orWhereHas('competitor', fn ($competitorQuery) => $competitorQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
-            });
-        }
-
-        if (!empty($validated['opportunity_uid'])) {
-            $query->where('opportunity_id', $this->findOpportunity($validated['opportunity_uid'])->getKey());
-        }
-
-        if (!empty($validated['entity_type']) || !empty($validated['entity_uid'])) {
-            $entity = $this->resolveEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
-            $query->where('lossable_type', get_class($entity))
-                ->where('lossable_id', $entity->getKey());
-        }
-
-        if (!empty($validated['reason_type'])) {
-            $query->where('reason_type', $validated['reason_type']);
-        }
-
-        return ApiIndex::paginateOrGet($query, $filters, 'lost_reasons_page');
+        return method_exists($result, 'through')
+            ? $result->through(fn (LostReason $lostReason) => $this->serializeLostReason($lostReason))
+            : $result->map(fn (LostReason $lostReason) => $this->serializeLostReason($lostReason))->values();
     }
 
     public function createLostReason(array $data): LostReason
@@ -274,7 +243,7 @@ class CompetitiveIntelligenceService
     {
         unset($filters['page'], $filters['per_page']);
 
-        $lostReasons = $this->lostReasons($filters);
+        $lostReasons = $this->lostReasonsQuery($filters)->get();
 
         return [
             'summary' => [
@@ -295,8 +264,124 @@ class CompetitiveIntelligenceService
                     'estimated_value_total' => round((float) $group->sum('estimated_value'), 2),
                 ])
                 ->values(),
-            'latest' => $lostReasons->take(10)->values(),
+            'latest' => $lostReasons
+                ->take(10)
+                ->map(fn (LostReason $lostReason) => $this->serializeLostReason($lostReason))
+                ->values(),
         ];
+    }
+
+    private function lostReasonsQuery(array $filters)
+    {
+        $validated = Validator::make($filters, [
+            'search' => 'nullable|string|max:255',
+            'competitor_uid' => 'nullable|uuid',
+            'opportunity_uid' => 'nullable|uuid',
+            'entity_type' => 'nullable|string',
+            'entity_uid' => 'nullable|uuid',
+            'reason_type' => 'nullable|string',
+        ])->validate();
+
+        $query = LostReason::query()
+            ->with(['competitor:id,uid,name', 'opportunity:id,uid,title', 'owner:id,uid,name'])
+            ->latest('lost_at');
+
+        if (!empty($validated['competitor_uid'])) {
+            $query->where('competitor_id', $this->findCompetitor($validated['competitor_uid'])->getKey());
+        }
+
+        if (!empty($validated['search'])) {
+            $search = '%' . mb_strtolower($validated['search']) . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->whereRaw('LOWER(summary) LIKE ?', [$search])
+                    ->orWhereRaw('LOWER(details) LIKE ?', [$search])
+                    ->orWhereHas('competitor', fn ($competitorQuery) => $competitorQuery->whereRaw('LOWER(name) LIKE ?', [$search]));
+            });
+        }
+
+        if (!empty($validated['opportunity_uid'])) {
+            $query->where('opportunity_id', $this->findOpportunity($validated['opportunity_uid'])->getKey());
+        }
+
+        if (!empty($validated['entity_type']) || !empty($validated['entity_uid'])) {
+            $entity = $this->resolveEntity($validated['entity_type'] ?? null, $validated['entity_uid'] ?? null);
+            $query->where('lossable_type', get_class($entity))
+                ->where('lossable_id', $entity->getKey());
+        }
+
+        if (!empty($validated['reason_type'])) {
+            $query->where('reason_type', $validated['reason_type']);
+        }
+
+        return $query;
+    }
+
+    private function serializeLostReason(LostReason $lostReason): array
+    {
+        return [
+            'uid' => $lostReason->uid,
+            'competitor_uid' => $lostReason->competitor?->uid,
+            'competitor_name' => $lostReason->competitor?->name,
+            'opportunity_uid' => $lostReason->opportunity?->uid,
+            'owner_user_uid' => $lostReason->owner?->uid,
+            'entity_uid' => $this->resolveMorphUid($lostReason->lossable_type, $lostReason->lossable_id),
+            'entity_type' => $this->normalizeLossableType($lostReason->lossable_type),
+            'account_name' => $this->resolveLossableLabel($lostReason),
+            'deal_value' => round((float) ($lostReason->estimated_value ?? 0), 2),
+            'lost_reason_category' => $lostReason->lost_reason_category,
+            'lost_reason_detail' => $lostReason->lost_reason_detail,
+            'closed_date' => $lostReason->lost_at?->toISOString(),
+            'sales_rep' => $lostReason->owner?->name,
+            'reason_type' => $lostReason->reason_type,
+            'summary' => $lostReason->summary,
+            'details' => $lostReason->details,
+            'lost_at' => $lostReason->lost_at,
+            'estimated_value' => round((float) ($lostReason->estimated_value ?? 0), 2),
+            'currency' => $lostReason->currency,
+            'meta' => $lostReason->meta,
+            'created_at' => $lostReason->created_at,
+            'updated_at' => $lostReason->updated_at,
+        ];
+    }
+
+    private function resolveMorphUid(?string $class, ?int $id): ?string
+    {
+        if (! $class || ! $id || ! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
+            return null;
+        }
+
+        return $class::withoutGlobalScopes()->whereKey($id)->value('uid');
+    }
+
+    private function normalizeLossableType(?string $type): ?string
+    {
+        return match ($type) {
+            Account::class => 'account',
+            Contact::class => 'contact',
+            CrmEntity::class => 'crm-entity',
+            null, '' => null,
+            default => str(class_basename($type))->snake()->toString(),
+        };
+    }
+
+    private function resolveLossableLabel(LostReason $lostReason): ?string
+    {
+        if (! $lostReason->lossable_type || ! $lostReason->lossable_id) {
+            return $lostReason->opportunity?->title;
+        }
+
+        $class = $lostReason->lossable_type;
+
+        if (! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
+            return $lostReason->opportunity?->title;
+        }
+
+        $entity = $class::withoutGlobalScopes()->whereKey($lostReason->lossable_id)->first();
+
+        return $entity?->display_name
+            ?? $entity?->name
+            ?? $entity?->title
+            ?? $lostReason->opportunity?->title;
     }
 
     private function validateLostReason(array $data, bool $partial = false): array
