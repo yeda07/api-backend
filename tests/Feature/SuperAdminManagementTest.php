@@ -67,6 +67,7 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonFragment(['key' => 'gastos', 'label' => 'Gastos'])
             ->assertJsonFragment(['key' => 'compras', 'label' => 'Compras'])
             ->assertJsonFragment(['key' => 'multi-currency', 'label' => 'Multi-currency'])
+            ->assertJsonFragment(['key' => 'custom-fields', 'label' => 'Campos personalizados'])
             ->assertJsonFragment(['key' => 'api-publica', 'label' => 'API Publica']);
     }
 

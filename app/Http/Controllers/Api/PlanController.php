@@ -23,6 +23,7 @@ class PlanController extends Controller
         ['key' => 'compras', 'label' => 'Compras'],
         ['key' => 'reportes', 'label' => 'Reportes'],
         ['key' => 'multi-currency', 'label' => 'Multi-currency'],
+        ['key' => 'custom-fields', 'label' => 'Campos personalizados'],
         ['key' => 'api-publica', 'label' => 'API Publica'],
     ];
 
