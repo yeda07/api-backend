@@ -9,6 +9,7 @@ use App\Support\ApiIndex;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AccessControlService
@@ -92,7 +93,7 @@ class AccessControlService
 
     public function createRole(array $data): Role
     {
-        $this->ensureRoleKeyIsAvailable($data['key']);
+        $data['key'] = $this->uniqueRoleKey($data['key'] ?? $data['name']);
         $permissionIds = $this->permissionIdsFromUids($data['permission_uids'] ?? []);
 
         $role = Role::query()->create([
@@ -117,8 +118,12 @@ class AccessControlService
             ]);
         }
 
+        if (array_key_exists('key', $data) && $data['key'] === null) {
+            unset($data['key']);
+        }
+
         if (isset($data['key']) && $data['key'] !== $role->key) {
-            $this->ensureRoleKeyIsAvailable($data['key'], $role->getKey());
+            $data['key'] = $this->uniqueRoleKey($data['key'], $role->getKey());
         }
 
         $permissionIds = array_key_exists('permission_uids', $data)
@@ -284,6 +289,39 @@ class AccessControlService
                 'key' => ['Ya existe un rol con esta clave en el tenant'],
             ]);
         }
+    }
+
+    private function uniqueRoleKey(string $source, ?int $ignoreRoleId = null): string
+    {
+        $base = $this->normalizeRoleKey($source);
+        $key = $base;
+        $suffix = 2;
+
+        while ($this->roleKeyExists($key, $ignoreRoleId)) {
+            $key = Str::limit($base, 95 - strlen((string) $suffix), '') . '_' . $suffix;
+            $suffix++;
+        }
+
+        return $key;
+    }
+
+    private function normalizeRoleKey(string $source): string
+    {
+        $key = str_replace('-', '_', Str::slug($source, '_'));
+
+        return $key !== '' ? $key : 'role';
+    }
+
+    private function roleKeyExists(string $key, ?int $ignoreRoleId = null): bool
+    {
+        $query = $this->platformAdminIsActing()
+            ? Role::withoutGlobalScopes()
+            : Role::query();
+
+        return $query
+            ->where('key', $key)
+            ->when($ignoreRoleId, fn ($query) => $query->where('id', '!=', $ignoreRoleId))
+            ->exists();
     }
 
     private function platformAdminIsActing(): bool

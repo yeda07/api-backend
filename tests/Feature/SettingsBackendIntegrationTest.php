@@ -155,6 +155,24 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('meta.pagination.total', 2);
     }
 
+    public function test_roles_generate_key_from_name_when_missing(): void
+    {
+        $this->authenticateWithPermissions(['users.manage']);
+
+        $this->postJson('/api/rbac/roles', [
+            'name' => 'Administrador Comercial',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Administrador Comercial')
+            ->assertJsonPath('data.key', 'administrador_comercial');
+
+        $this->postJson('/api/rbac/roles', [
+            'name' => 'Administrador Comercial',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.key', 'administrador_comercial_2');
+    }
+
     public function test_teams_member_endpoints_and_delete_guard_match_settings_contract(): void
     {
         $owner = $this->authenticateWithPermissions(['teams.read', 'teams.manage']);

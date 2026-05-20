@@ -32,7 +32,7 @@ class AccessControlController extends Controller
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
-                'key' => 'required|string|max:100',
+                'key' => 'nullable|string|max:100',
                 'description' => 'nullable|string',
                 'permission_uids' => 'nullable|array',
                 'permission_uids.*' => 'uuid',
