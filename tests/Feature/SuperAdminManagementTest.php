@@ -70,6 +70,24 @@ class SuperAdminManagementTest extends TestCase
             ->assertJsonFragment(['key' => 'api-publica', 'label' => 'API Publica']);
     }
 
+    public function test_superadmin_can_create_platform_role_without_key(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        $this->postJson('/api/admin/platform/roles', [
+            'name' => 'Soporte Plataforma',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Soporte Plataforma')
+            ->assertJsonPath('data.key', 'soporte_plataforma');
+
+        $this->postJson('/api/admin/platform/roles', [
+            'name' => 'Soporte Plataforma',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.key', 'soporte_plataforma_2');
+    }
+
     public function test_plan_delete_deactivates_when_tenants_are_attached(): void
     {
         $this->authenticateSuperadmin(['plans.manage']);

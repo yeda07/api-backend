@@ -8,6 +8,7 @@ use App\Models\Permission;
 use App\Support\ApiIndex;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AdminPlatformRoleController extends Controller
@@ -41,7 +42,7 @@ class AdminPlatformRoleController extends Controller
     {
         $validated = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'key' => 'required|string|max:100|unique:admin_roles,key',
+            'key' => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'permission_uids' => 'nullable|array',
             'permission_uids.*' => 'uuid|exists:permissions,uid',
@@ -49,7 +50,7 @@ class AdminPlatformRoleController extends Controller
 
         $role = AdminRole::query()->create([
             'name' => $validated['name'],
-            'key' => $validated['key'],
+            'key' => $this->uniqueRoleKey($validated['key'] ?? $validated['name']),
             'description' => $validated['description'] ?? null,
         ]);
 
@@ -71,11 +72,17 @@ class AdminPlatformRoleController extends Controller
 
         $validated = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
-            'key' => 'sometimes|string|max:100|unique:admin_roles,key,' . $role->id,
+            'key' => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'permission_uids' => 'nullable|array',
             'permission_uids.*' => 'uuid|exists:permissions,uid',
         ])->validate();
+
+        if (array_key_exists('key', $validated) && $validated['key'] !== null) {
+            $validated['key'] = $this->uniqueRoleKey($validated['key'], $role->getKey());
+        } elseif (array_key_exists('key', $validated)) {
+            unset($validated['key']);
+        }
 
         $role->update([
             'name' => $validated['name'] ?? $role->name,
@@ -107,5 +114,31 @@ class AdminPlatformRoleController extends Controller
     public function permissions()
     {
         return $this->successResponse(Permission::query()->orderBy('module')->orderBy('action')->get());
+    }
+
+    private function uniqueRoleKey(string $source, ?int $ignoreRoleId = null): string
+    {
+        $base = $this->normalizeRoleKey($source);
+        $key = $base;
+        $suffix = 2;
+
+        while (
+            AdminRole::query()
+                ->where('key', $key)
+                ->when($ignoreRoleId, fn ($query) => $query->whereKeyNot($ignoreRoleId))
+                ->exists()
+        ) {
+            $key = Str::limit($base, 95 - strlen((string) $suffix), '') . '_' . $suffix;
+            $suffix++;
+        }
+
+        return $key;
+    }
+
+    private function normalizeRoleKey(string $source): string
+    {
+        $key = str_replace('-', '_', Str::slug($source, '_'));
+
+        return $key !== '' ? $key : 'platform_role';
     }
 }
