@@ -76,8 +76,12 @@ class OpportunityService
         $query = Opportunity::query()
             ->with(['stage', 'owner', 'customFieldValues.customField'])
             ->when(! empty($validated['stage_uid']), function ($query) use ($validated) {
-                $stageId = OpportunityStage::query()->where('uid', $validated['stage_uid'])->value('id');
-                $query->where('stage_id', $stageId ?: 0);
+                $stage = OpportunityStage::query()->where('uid', $validated['stage_uid'])->first();
+                $query->where('stage_id', $stage?->getKey() ?: 0);
+
+                if ($stage && $this->isWonClosingStage($stage)) {
+                    $this->applyWonOpportunityFilter($query);
+                }
             })
             ->when(! empty($validated['owner_user_uid']), function ($query) use ($validated) {
                 $ownerId = User::query()->where('uid', $validated['owner_user_uid'])->value('id');
@@ -135,11 +139,11 @@ class OpportunityService
                 'currency' => $validated['currency'] ?? null,
                 'expected_close_date' => $validated['expected_close_date'] ?? null,
                 'description' => $validated['description'] ?? null,
-                'won_at' => $stage->is_won ? now() : null,
+                'won_at' => $this->isWonClosingStage($stage) ? now() : null,
                 'lost_at' => $stage->is_lost ? now() : null,
             ]);
 
-            if ($stage->is_won) {
+            if ($this->isWonClosingStage($stage)) {
                 $this->projectService->createFromOpportunityModel($opportunity->fresh(['opportunityable']), quietIfNoAccount: true);
             }
 
@@ -164,7 +168,7 @@ class OpportunityService
             if (array_key_exists('stage_uid', $validated)) {
                 $stage = $this->resolveStage($validated['stage_uid']);
                 $payload['stage_id'] = $stage->getKey();
-                $payload['won_at'] = $stage->is_won ? now() : null;
+                $payload['won_at'] = $this->isWonClosingStage($stage) ? now() : null;
                 $payload['lost_at'] = $stage->is_lost ? now() : null;
             }
 
@@ -182,7 +186,7 @@ class OpportunityService
 
             $opportunity = $opportunity->fresh(['stage', 'owner', 'opportunityable']);
 
-            if ($opportunity->stage?->is_won) {
+            if ($opportunity->stage && $this->isWonClosingStage($opportunity->stage)) {
                 $this->projectService->createFromOpportunityModel($opportunity, quietIfNoAccount: true);
             }
 
@@ -401,7 +405,13 @@ class OpportunityService
 
         $payload = [
             'stages' => $stages->map(function (OpportunityStage $stage) use ($opportunities) {
-                $items = $opportunities->get($stage->getKey(), collect())->values();
+                $items = $opportunities->get($stage->getKey(), collect());
+
+                if ($this->isWonClosingStage($stage)) {
+                    $items = $items->filter(fn (array $opportunity) => ! empty($opportunity['won_at']) && empty($opportunity['lost_at']));
+                }
+
+                $items = $items->values();
 
                 return [
                     'stage' => $stage,
@@ -953,13 +963,35 @@ class OpportunityService
 
         return OpportunityStage::query()
             ->where('tenant_id', $opportunity->tenant_id)
-            ->where($flag, true)
+            ->where(function ($query) use ($flag, $outcome) {
+                $query->where($flag, true);
+
+                if ($outcome === 'won') {
+                    $query
+                        ->orWhereRaw('LOWER("key") = ?', ['cerrador'])
+                        ->orWhereRaw('LOWER("name") = ?', ['cerrador']);
+                }
+            })
             ->orderByDesc('position')
             ->first()
             ?? OpportunityStage::query()
                 ->where('tenant_id', $opportunity->tenant_id)
                 ->orderByDesc('position')
                 ->first();
+    }
+
+    private function isWonClosingStage(OpportunityStage $stage): bool
+    {
+        return $stage->is_won
+            || mb_strtolower((string) $stage->key) === 'cerrador'
+            || mb_strtolower((string) $stage->name) === 'cerrador';
+    }
+
+    private function applyWonOpportunityFilter($query): void
+    {
+        $query
+            ->whereNotNull('won_at')
+            ->whereNull('lost_at');
     }
 
     private function resolveEntity(?string $type, ?string $uid)

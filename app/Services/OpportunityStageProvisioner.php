@@ -19,7 +19,7 @@ class OpportunityStageProvisioner
                     'name' => $stage['name'],
                     'position' => $stage['position'],
                     'probability_percent' => $stage['probability_percent'],
-                    'is_won' => false,
+                    'is_won' => $stage['is_won'] ?? false,
                     'is_lost' => false,
                     'is_active' => true,
                 ]
@@ -33,7 +33,7 @@ class OpportunityStageProvisioner
             ['name' => 'Leads', 'key' => 'leads', 'position' => 1, 'probability_percent' => 10],
             ['name' => 'Contactado', 'key' => 'contactado', 'position' => 2, 'probability_percent' => 30],
             ['name' => 'Negociación', 'key' => 'negociacion', 'position' => 3, 'probability_percent' => 70],
-            ['name' => 'Cerrador', 'key' => 'cerrador', 'position' => 4, 'probability_percent' => 90],
+            ['name' => 'Cerrador', 'key' => 'cerrador', 'position' => 4, 'probability_percent' => 90, 'is_won' => true],
         ];
     }
 }

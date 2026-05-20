@@ -1084,6 +1084,58 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.stages.0.items.0.title', 'CRM Enterprise');
     }
 
+    public function test_closing_stage_only_returns_won_opportunities(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $closingStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cerrador',
+            'key' => 'cerrador',
+            'position' => 4,
+            'probability_percent' => 90,
+            'is_won' => false,
+        ]);
+
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $closingStage->getKey(),
+            'title' => 'Abierta en cerrador',
+            'amount' => 1000,
+            'lost_at' => null,
+            'won_at' => null,
+        ]);
+        $won = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $closingStage->getKey(),
+            'title' => 'Ganada en cerrador',
+            'amount' => 2000,
+            'won_at' => now(),
+            'lost_at' => null,
+        ]);
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $closingStage->getKey(),
+            'title' => 'Perdida en cerrador',
+            'amount' => 3000,
+            'won_at' => null,
+            'lost_at' => now(),
+        ]);
+
+        $this->getJson('/api/opportunities/board')
+            ->assertOk()
+            ->assertJsonPath('data.stages.0.summary.count', 1)
+            ->assertJsonPath('data.stages.0.items.0.uid', $won->uid)
+            ->assertJsonPath('data.stages.0.items.0.title', 'Ganada en cerrador');
+
+        $this->getJson('/api/opportunities?stage_uid='.$closingStage->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $won->uid);
+    }
+
     public function test_opportunity_can_be_marked_won_without_dragging_to_stage(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read', 'opportunities.manage', 'projects.manage', 'activities.create']);
