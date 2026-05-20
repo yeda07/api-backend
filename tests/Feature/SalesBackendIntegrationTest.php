@@ -1087,6 +1087,13 @@ class SalesBackendIntegrationTest extends TestCase
     public function test_closing_stage_only_returns_won_opportunities(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $leadStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Leads',
+            'key' => 'leads',
+            'position' => 1,
+            'probability_percent' => 10,
+        ]);
         $closingStage = OpportunityStage::query()->create([
             'tenant_id' => $user->tenant_id,
             'name' => 'Cerrador',
@@ -1123,17 +1130,33 @@ class SalesBackendIntegrationTest extends TestCase
             'won_at' => null,
             'lost_at' => now(),
         ]);
+        $wonInLead = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $leadStage->getKey(),
+            'title' => 'Ganada heredada en leads',
+            'amount' => 4000,
+            'won_at' => now(),
+            'lost_at' => null,
+        ]);
 
         $this->getJson('/api/opportunities/board')
             ->assertOk()
-            ->assertJsonPath('data.stages.0.summary.count', 1)
-            ->assertJsonPath('data.stages.0.items.0.uid', $won->uid)
-            ->assertJsonPath('data.stages.0.items.0.title', 'Ganada en cerrador');
+            ->assertJsonPath('data.stages.0.summary.count', 0)
+            ->assertJsonPath('data.stages.1.summary.count', 2)
+            ->assertJsonPath('data.stages.1.items.0.stage_uid', $closingStage->uid)
+            ->assertJsonPath('data.stages.1.items.1.stage_uid', $closingStage->uid);
 
         $this->getJson('/api/opportunities?stage_uid='.$closingStage->uid)
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.uid', $won->uid);
+            ->assertJsonCount(2, 'data');
+
+        $returnedUids = collect($this->getJson('/api/opportunities?stage_uid='.$closingStage->uid)->json('data'))
+            ->pluck('uid')
+            ->all();
+
+        $this->assertContains($won->uid, $returnedUids);
+        $this->assertContains($wonInLead->uid, $returnedUids);
     }
 
     public function test_opportunity_can_be_marked_won_without_dragging_to_stage(): void
