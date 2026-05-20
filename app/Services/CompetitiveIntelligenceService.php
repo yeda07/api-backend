@@ -283,7 +283,7 @@ class CompetitiveIntelligenceService
         ])->validate();
 
         $query = LostReason::query()
-            ->with(['competitor:id,uid,name', 'opportunity:id,uid,title', 'owner:id,uid,name'])
+            ->with(['competitor:id,uid,name', 'opportunity:id,uid,title', 'owner:id,uid,name', 'lossable'])
             ->latest('lost_at');
 
         if (!empty($validated['competitor_uid'])) {
@@ -324,9 +324,9 @@ class CompetitiveIntelligenceService
             'competitor_name' => $lostReason->competitor?->name,
             'opportunity_uid' => $lostReason->opportunity?->uid,
             'owner_user_uid' => $lostReason->owner?->uid,
-            'entity_uid' => $this->resolveMorphUid($lostReason->lossable_type, $lostReason->lossable_id),
+            'entity_uid' => $lostReason->entity_uid,
             'entity_type' => $this->normalizeLossableType($lostReason->lossable_type),
-            'account_name' => $this->resolveLossableLabel($lostReason),
+            'account_name' => $lostReason->account_name ?? $this->resolveLossableLabel($lostReason),
             'deal_value' => round((float) ($lostReason->estimated_value ?? 0), 2),
             'lost_reason_category' => $lostReason->lost_reason_category,
             'lost_reason_detail' => $lostReason->lost_reason_detail,
@@ -342,15 +342,6 @@ class CompetitiveIntelligenceService
             'created_at' => $lostReason->created_at,
             'updated_at' => $lostReason->updated_at,
         ];
-    }
-
-    private function resolveMorphUid(?string $class, ?int $id): ?string
-    {
-        if (! $class || ! $id || ! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
-            return null;
-        }
-
-        return $class::withoutGlobalScopes()->whereKey($id)->value('uid');
     }
 
     private function normalizeLossableType(?string $type): ?string
@@ -370,13 +361,9 @@ class CompetitiveIntelligenceService
             return $lostReason->opportunity?->title;
         }
 
-        $class = $lostReason->lossable_type;
-
-        if (! is_subclass_of($class, \Illuminate\Database\Eloquent\Model::class)) {
-            return $lostReason->opportunity?->title;
-        }
-
-        $entity = $class::withoutGlobalScopes()->whereKey($lostReason->lossable_id)->first();
+        $entity = $lostReason->relationLoaded('lossable')
+            ? $lostReason->lossable
+            : null;
 
         return $entity?->display_name
             ?? $entity?->name

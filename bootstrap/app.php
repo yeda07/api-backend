@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
     ->withSchedule(function (Schedule $schedule) {
         $schedule->command('admin-alerts:evaluate')->everyFiveMinutes()->withoutOverlapping();
+        $schedule->command('activities:sync-overdue')->everyMinute()->withoutOverlapping();
     })
 
     ->withMiddleware(function (Middleware $middleware) {

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\InvoiceService;
+use App\Services\ActivityService;
 use App\Services\AdminAlertEvaluatorService;
 use App\Services\SearchBenchmarkService;
 use App\Models\Permission;
@@ -63,6 +64,14 @@ Artisan::command('finance:sync-overdue', function () {
 
     return 0;
 })->purpose('Mark issued and partial invoices as overdue when due date has passed');
+
+Artisan::command('activities:sync-overdue', function () {
+    $updated = app(ActivityService::class)->syncOverdueStatuses();
+
+    $this->info('Actividades vencidas sincronizadas: ' . $updated);
+
+    return 0;
+})->purpose('Mark pending activities as overdue when scheduled date has passed');
 
 Artisan::command('admin-alerts:evaluate', function () {
     $result = app(AdminAlertEvaluatorService::class)->evaluateActiveRules();
