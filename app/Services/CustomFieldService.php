@@ -37,6 +37,7 @@ class CustomFieldService
     {
         $validated = Validator::make($filters, [
             'entity_type' => 'nullable|string',
+            'module' => 'nullable|string',
             'search' => 'nullable|string|max:255',
         ])->validate();
 
@@ -46,7 +47,11 @@ class CustomFieldService
             ->orderBy('entity_type')
             ->orderBy('name');
 
-        if (!empty($validated['entity_type'])) {
+        $module = $this->resolveModuleFilter($validated);
+
+        if ($module) {
+            $this->applyModuleFilter($query, $module);
+        } elseif (!empty($validated['entity_type'])) {
             $query->where('entity_type', $this->resolveEntityType($validated['entity_type']));
         }
 
@@ -184,7 +189,16 @@ class CustomFieldService
         ])->validate();
 
         if (!empty($validated['module']) && empty($validated['entity_type'])) {
+            $validated['module'] = $this->normalizeModule($validated['module']);
             $validated['entity_type'] = $validated['module'];
+        } elseif (!empty($validated['module'])) {
+            $validated['module'] = $this->normalizeModule($validated['module']);
+        } elseif (!empty($validated['entity_type'])) {
+            $module = $this->moduleFromInput($validated['entity_type']);
+
+            if ($module) {
+                $validated['module'] = $module;
+            }
         }
 
         if (!empty($validated['module'])) {
@@ -209,6 +223,61 @@ class CustomFieldService
         return $validated;
     }
 
+    private function resolveModuleFilter(array $validated): ?string
+    {
+        if (!empty($validated['module'])) {
+            return $this->normalizeModule($validated['module']);
+        }
+
+        return !empty($validated['entity_type'])
+            ? $this->moduleFromInput($validated['entity_type'])
+            : null;
+    }
+
+    private function applyModuleFilter($query, string $module): void
+    {
+        $entityType = $this->resolveEntityType($module);
+
+        $query
+            ->where('entity_type', $entityType)
+            ->where(function ($nested) use ($module, $entityType) {
+                $nested->where('options->_module', $module)
+                    ->orWhere(function ($legacy) use ($module, $entityType) {
+                        $legacy->whereNull('options->_module')
+                            ->where('entity_type', $entityType)
+                            ->whereRaw('? = ?', [$this->fallbackModuleForEntityType($entityType), $module]);
+                    });
+            });
+    }
+
+    private function normalizeModule(string $module): string
+    {
+        return match ($module) {
+            'account', 'accounts', 'company' => 'companies',
+            'contact' => 'contacts',
+            'opportunity' => 'opportunities',
+            'product' => 'products',
+            default => $module,
+        };
+    }
+
+    private function moduleFromInput(string $value): ?string
+    {
+        $module = $this->normalizeModule($value);
+
+        return array_key_exists($module, self::SUPPORTED_MODULES) ? $module : null;
+    }
+
+    private function fallbackModuleForEntityType(string $entityType): ?string
+    {
+        return match ($entityType) {
+            Contact::class => 'contacts',
+            Account::class => 'companies',
+            CrmEntity::class => 'opportunities',
+            default => null,
+        };
+    }
+
     private function moduleTotals(int $tenantId): array
     {
         $totals = array_fill_keys(array_keys(self::SUPPORTED_MODULES), 0);
@@ -217,12 +286,7 @@ class CustomFieldService
             ->where('tenant_id', $tenantId)
             ->get(['entity_type', 'options'])
             ->each(function (CustomField $field) use (&$totals) {
-                $module = $field->options['_module'] ?? match ($field->entity_type) {
-                    Contact::class => 'contacts',
-                    Account::class => 'companies',
-                    CrmEntity::class => 'opportunities',
-                    default => null,
-                };
+                $module = $field->options['_module'] ?? $this->fallbackModuleForEntityType($field->entity_type);
 
                 if ($module && array_key_exists($module, $totals)) {
                     $totals[$module]++;

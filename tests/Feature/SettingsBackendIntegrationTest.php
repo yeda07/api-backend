@@ -436,6 +436,41 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('meta.totals.products', 1);
     }
 
+    public function test_custom_fields_can_be_filtered_by_frontend_module(): void
+    {
+        $this->authenticateWithPermissions(['custom-fields.manage']);
+
+        $productField = $this->postJson('/api/custom-fields', [
+            'entity_type' => 'product',
+            'label' => 'Talla comercial',
+            'key' => 'talla_comercial',
+            'type' => 'text',
+        ]);
+
+        $productField->assertCreated()
+            ->assertJsonPath('data.module', 'products');
+
+        $this->postJson('/api/custom-fields', [
+            'entity_type' => 'opportunity',
+            'label' => 'Probabilidad externa',
+            'key' => 'probabilidad_externa',
+            'type' => 'number',
+        ])->assertCreated()
+            ->assertJsonPath('data.module', 'opportunities');
+
+        $this->getJson('/api/custom-fields?module=products')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $productField->json('data.uid'))
+            ->assertJsonPath('meta.totals.products', 1)
+            ->assertJsonPath('meta.totals.opportunities', 1);
+
+        $this->getJson('/api/custom-fields?entity_type=products')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $productField->json('data.uid'));
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([
