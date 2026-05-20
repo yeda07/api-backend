@@ -62,9 +62,15 @@ class PlanPermissionService
 
     public function allowedModulesForTenant(Tenant $tenant): ?array
     {
-        $modules = data_get($tenant->plan?->features, 'modules', []);
+        $features = $tenant->plan?->features ?? [];
 
-        if (!is_array($modules) || $modules === []) {
+        if (! is_array($features) || ! array_key_exists('modules', $features)) {
+            return null;
+        }
+
+        $modules = $features['modules'];
+
+        if (! is_array($modules)) {
             return null;
         }
 

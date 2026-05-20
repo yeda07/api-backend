@@ -191,6 +191,50 @@ class PlatformGeneralIntegrationTest extends TestCase
             ->assertJsonPath('message', 'No autorizado por el plan activo');
     }
 
+    public function test_empty_plan_modules_means_no_paid_modules_are_enabled(): void
+    {
+        Permission::query()->firstOrCreate(
+            ['key' => 'inventory.read'],
+            ['module' => 'inventory', 'action' => 'read', 'description' => 'inventory.read']
+        );
+        Permission::query()->firstOrCreate(
+            ['key' => 'opportunities.read'],
+            ['module' => 'opportunities', 'action' => 'read', 'description' => 'opportunities.read']
+        );
+        Permission::query()->firstOrCreate(
+            ['key' => 'settings.manage'],
+            ['module' => 'settings', 'action' => 'manage', 'description' => 'settings.manage']
+        );
+
+        $plan = Plan::query()->create([
+            'name' => 'No Modules Plan',
+            'price' => 0,
+            'status' => 'active',
+            'features' => [
+                'modules' => [],
+            ],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant No Modules',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, ['inventory.read', 'opportunities.read', 'settings.manage']);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $response = $this->getJson('/api/auth/init')->assertOk();
+        $modules = collect($response->json('data.modules'));
+
+        $this->assertFalse($modules->firstWhere('key', 'inventory')['enabled']);
+        $this->assertFalse($modules->firstWhere('key', 'sales')['enabled']);
+        $this->assertTrue($modules->firstWhere('key', 'settings')['enabled']);
+        $this->assertNotContains('inventory.read', $response->json('data.permissions.effective'));
+        $this->assertNotContains('opportunities.read', $response->json('data.permissions.effective'));
+        $this->assertContains('settings.manage', $response->json('data.permissions.effective'));
+    }
+
     public function test_me_features_resolves_authenticated_tenant_plan_flags(): void
     {
         $plan = Plan::query()->create([
