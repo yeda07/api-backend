@@ -98,7 +98,13 @@ class OpportunityController extends Controller
     public function update(Request $request, string $uid)
     {
         try {
-            return $this->successResponse($this->opportunityService->updateOpportunity($uid, $request->all()), 200, 'Oportunidad actualizada');
+            $opportunity = $this->opportunityService->updateOpportunity($uid, $request->all());
+
+            return $this->successResponse(
+                $this->opportunityService->getOpportunityDetail($opportunity->uid),
+                200,
+                'Oportunidad actualizada'
+            );
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
