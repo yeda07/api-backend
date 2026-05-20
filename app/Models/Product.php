@@ -4,12 +4,13 @@ namespace App\Models;
 
 use App\Models\Traits\HasPublicUid;
 use App\Models\Traits\HasTenantRelation;
+use App\Models\Traits\HasCustomFieldValues;
 use App\Models\Traits\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
-    use HasPublicUid, HasTenantRelation, TenantScope;
+    use HasCustomFieldValues, HasPublicUid, HasTenantRelation, TenantScope;
 
     protected $fillable = [
         'uid',

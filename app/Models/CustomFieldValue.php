@@ -77,6 +77,8 @@ class CustomFieldValue extends Model
             Account::class => Account::find($this->entity_id)?->uid,
             Contact::class => Contact::find($this->entity_id)?->uid,
             CrmEntity::class => CrmEntity::find($this->entity_id)?->uid,
+            Opportunity::class => Opportunity::find($this->entity_id)?->uid,
+            Product::class => Product::find($this->entity_id)?->uid,
             default => null,
         };
     }

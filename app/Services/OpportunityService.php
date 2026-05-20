@@ -74,7 +74,7 @@ class OpportunityService
         ])->validate();
 
         $query = Opportunity::query()
-            ->with(['stage', 'owner'])
+            ->with(['stage', 'owner', 'customFieldValues.customField'])
             ->when(! empty($validated['stage_uid']), function ($query) use ($validated) {
                 $stageId = OpportunityStage::query()->where('uid', $validated['stage_uid'])->value('id');
                 $query->where('stage_id', $stageId ?: 0);
@@ -98,6 +98,7 @@ class OpportunityService
                 'stage',
                 'owner',
                 'opportunityable',
+                'customFieldValues.customField',
                 'project',
                 'lostReasons.competitor',
                 'activities.owner',
@@ -462,6 +463,7 @@ class OpportunityService
             ] : null,
             'opportunityable_type' => $opportunity->opportunityable_type,
             'opportunityable_uid' => $this->resolveMorphUid($opportunity->opportunityable_type, $opportunity->opportunityable_id),
+            'custom_fields' => $opportunity->custom_fields,
             'won_at' => $opportunity->won_at,
             'lost_at' => $opportunity->lost_at,
             'created_at' => $opportunity->created_at,

@@ -50,7 +50,7 @@ class ProductService
             ]);
         }
 
-        return $product->fresh(['inventoryProduct', 'versions']);
+        return $product->fresh(['inventoryProduct', 'versions', 'customFieldValues.customField']);
     }
 
     public function update(string $uid, array $data): Product

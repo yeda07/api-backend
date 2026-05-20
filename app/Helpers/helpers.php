@@ -4,6 +4,7 @@ use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\Opportunity;
+use App\Models\Product;
 
 if (!function_exists('formatCurrency')) {
     function formatCurrency($amount)
@@ -26,6 +27,7 @@ if (!function_exists('crm_entity_model_class')) {
             Contact::class, 'Contact', 'contact', 'contacts' => Contact::class,
             CrmEntity::class, 'CrmEntity', 'crm_entity', 'crm-entity', 'crm_entities', 'crm-entities' => CrmEntity::class,
             Opportunity::class, 'Opportunity', 'opportunity', 'opportunities' => Opportunity::class,
+            Product::class, 'Product', 'product', 'products' => Product::class,
             default => null,
         };
     }

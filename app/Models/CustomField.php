@@ -29,6 +29,7 @@ class CustomField extends Model
     ];
 
     protected $appends = [
+        'entity_type_key',
         'label',
         'module',
         'required',
@@ -79,6 +80,18 @@ class CustomField extends Model
         return $this->name;
     }
 
+    public function getEntityTypeKeyAttribute(): string
+    {
+        return match ($this->entity_type) {
+            Account::class => 'company',
+            Contact::class => 'contact',
+            CrmEntity::class => 'crm_entity',
+            Opportunity::class => 'opportunity',
+            Product::class => 'product',
+            default => $this->entity_type,
+        };
+    }
+
     public function getModuleAttribute()
     {
         if (!empty($this->options['_module'])) {
@@ -89,6 +102,8 @@ class CustomField extends Model
             Account::class => 'companies',
             Contact::class => 'contacts',
             CrmEntity::class => 'opportunities',
+            Opportunity::class => 'opportunities',
+            Product::class => 'products',
             default => $this->entity_type,
         };
     }

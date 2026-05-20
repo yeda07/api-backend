@@ -9,7 +9,7 @@ class ProductRepository
 {
     public function query()
     {
-        return Product::query()->with(['inventoryProduct', 'versions']);
+        return Product::query()->with(['inventoryProduct', 'versions', 'customFieldValues.customField']);
     }
 
     public function all(array $filters = [])
@@ -51,7 +51,7 @@ class ProductRepository
     {
         $product->update($data);
 
-        return $product->fresh(['inventoryProduct', 'versions']);
+        return $product->fresh(['inventoryProduct', 'versions', 'customFieldValues.customField']);
     }
 
     public function delete(Product $product): void
@@ -63,6 +63,6 @@ class ProductRepository
     {
         $product->update(['status' => 'inactive']);
 
-        return $product->fresh(['inventoryProduct', 'versions']);
+        return $product->fresh(['inventoryProduct', 'versions', 'customFieldValues.customField']);
     }
 }

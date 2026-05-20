@@ -27,6 +27,7 @@ class CustomFieldController extends Controller
                 'total' => $items instanceof LengthAwarePaginator ? $items->total() : $items->count(),
                 'totals' => $result['totals'],
             ];
+            $items = $this->service->serializeFields($items);
 
             if ($items instanceof LengthAwarePaginator) {
                 $meta = array_merge(ApiIndex::meta($items), $meta);
@@ -55,7 +56,7 @@ class CustomFieldController extends Controller
     public function store(Request $request)
     {
         try {
-            return $this->successResponse($this->service->createField($request->all()), 201);
+            return $this->successResponse($this->service->serializeField($this->service->createField($request->all())), 201);
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Exception $e) {
@@ -91,7 +92,7 @@ class CustomFieldController extends Controller
     public function update(Request $request, string $uid)
     {
         try {
-            return $this->successResponse($this->service->updateField($uid, $request->all()), 200, 'Campo actualizado');
+            return $this->successResponse($this->service->serializeField($this->service->updateField($uid, $request->all())), 200, 'Campo actualizado');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Exception $e) {

@@ -7,9 +7,12 @@ use App\Models\CustomFieldValue;
 use App\Models\Account;
 use App\Models\Contact;
 use App\Models\CrmEntity;
+use App\Models\Opportunity;
+use App\Models\Product;
 use App\Support\ApiIndex;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CustomFieldService
@@ -71,11 +74,42 @@ class CustomFieldService
     {
         $data = $this->validateFieldPayload($data);
         $data['entity_type'] = $this->resolveEntityType($data['entity_type']);
+        $data['key'] = $this->uniqueFieldKey(
+            $data['entity_type'],
+            $data['key'] ?? $data['name']
+        );
 
         return CustomField::create([
             'tenant_id' => auth()->user()->tenant_id,
             ...$data,
         ]);
+    }
+
+    public function serializeField(CustomField $field): array
+    {
+        return [
+            'uid' => $field->uid,
+            'entity_type' => $field->entity_type_key,
+            'name' => $field->name,
+            'label' => $field->label,
+            'key' => $field->key,
+            'type' => $field->type,
+            'module' => $field->module,
+            'required' => $field->required,
+            'options' => $field->options,
+            'select_options' => $field->select_options,
+            'created_at' => $field->created_at,
+            'updated_at' => $field->updated_at,
+        ];
+    }
+
+    public function serializeFields($fields)
+    {
+        if ($fields instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+            return $fields->through(fn (CustomField $field) => $this->serializeField($field));
+        }
+
+        return $fields->map(fn (CustomField $field) => $this->serializeField($field));
     }
 
     public function updateField(string $uid, array $data): CustomField
@@ -85,6 +119,24 @@ class CustomFieldService
 
         if (array_key_exists('entity_type', $validated)) {
             $validated['entity_type'] = $this->resolveEntityType($validated['entity_type']);
+        }
+
+        if (array_key_exists('key', $validated) && $validated['key'] === null) {
+            unset($validated['key']);
+        }
+
+        if (array_key_exists('key', $validated)) {
+            $validated['key'] = $this->uniqueFieldKey(
+                $validated['entity_type'] ?? $field->entity_type,
+                $validated['key'],
+                $field->getKey()
+            );
+        } elseif (array_key_exists('entity_type', $validated)) {
+            $validated['key'] = $this->uniqueFieldKey(
+                $validated['entity_type'],
+                $field->key,
+                $field->getKey()
+            );
         }
 
         $field->update($validated);
@@ -162,7 +214,6 @@ class CustomFieldService
     {
         return match ($entityType) {
             'companies', 'company' => 'accounts',
-            'opportunities', 'opportunity', 'products', 'product' => 'crm_entities',
             default => $entityType,
         };
     }
@@ -182,7 +233,7 @@ class CustomFieldService
             'module' => [$partial ? 'sometimes' : 'nullable', 'string'],
             'name' => [$partial ? 'sometimes' : 'required_without:label', 'string', 'max:255'],
             'label' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:255'],
-            'key' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
+            'key' => [$partial ? 'sometimes' : 'nullable', 'string', 'max:255'],
             'type' => [$partial ? 'sometimes' : 'required', 'string', 'in:text,number,select,date,boolean'],
             'required' => 'sometimes|boolean',
             'options' => 'nullable|array',
@@ -221,6 +272,34 @@ class CustomFieldService
         }
 
         return $validated;
+    }
+
+    private function uniqueFieldKey(string $entityType, string $source, ?int $ignoreId = null): string
+    {
+        $base = $this->normalizeFieldKey($source);
+        $key = $base;
+        $suffix = 2;
+
+        while (
+            CustomField::query()
+                ->where('tenant_id', auth()->user()->tenant_id)
+                ->where('entity_type', $entityType)
+                ->where('key', $key)
+                ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+                ->exists()
+        ) {
+            $key = Str::limit($base, 250 - strlen((string) $suffix), '') . '_' . $suffix;
+            $suffix++;
+        }
+
+        return $key;
+    }
+
+    private function normalizeFieldKey(string $source): string
+    {
+        $key = str_replace('-', '_', Str::slug($source, '_'));
+
+        return $key !== '' ? $key : 'custom_field';
     }
 
     private function resolveModuleFilter(array $validated): ?string
@@ -274,6 +353,8 @@ class CustomFieldService
             Contact::class => 'contacts',
             Account::class => 'companies',
             CrmEntity::class => 'opportunities',
+            Opportunity::class => 'opportunities',
+            Product::class => 'products',
             default => null,
         };
     }

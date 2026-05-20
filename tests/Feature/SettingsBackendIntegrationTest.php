@@ -6,7 +6,10 @@ use App\Models\Account;
 use App\Models\Currency;
 use App\Models\CustomField;
 use App\Models\DocumentType;
+use App\Models\Opportunity;
+use App\Models\OpportunityStage;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\Tag;
 use App\Models\Tenant;
@@ -438,7 +441,11 @@ class SettingsBackendIntegrationTest extends TestCase
 
     public function test_custom_fields_can_be_filtered_by_frontend_module(): void
     {
-        $this->authenticateWithPermissions(['custom-fields.manage']);
+        $user = $this->authenticateWithPermissions([
+            'custom-fields.manage',
+            'products.read',
+            'opportunities.read',
+        ]);
 
         $productField = $this->postJson('/api/custom-fields', [
             'entity_type' => 'product',
@@ -448,20 +455,25 @@ class SettingsBackendIntegrationTest extends TestCase
         ]);
 
         $productField->assertCreated()
+            ->assertJsonPath('data.entity_type', 'product')
             ->assertJsonPath('data.module', 'products');
 
-        $this->postJson('/api/custom-fields', [
+        $opportunityField = $this->postJson('/api/custom-fields', [
             'entity_type' => 'opportunity',
             'label' => 'Probabilidad externa',
             'key' => 'probabilidad_externa',
             'type' => 'number',
-        ])->assertCreated()
+        ]);
+
+        $opportunityField->assertCreated()
+            ->assertJsonPath('data.entity_type', 'opportunity')
             ->assertJsonPath('data.module', 'opportunities');
 
         $this->getJson('/api/custom-fields?module=products')
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.uid', $productField->json('data.uid'))
+            ->assertJsonPath('data.0.entity_type', 'product')
             ->assertJsonPath('meta.totals.products', 1)
             ->assertJsonPath('meta.totals.opportunities', 1);
 
@@ -469,6 +481,85 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.uid', $productField->json('data.uid'));
+
+        $product = Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Camisa',
+            'type' => 'product',
+            'sku' => 'CAM-'.uniqid(),
+            'status' => 'active',
+        ]);
+
+        $this->postJson('/api/custom-fields/value', [
+            'entity_type' => 'products',
+            'entity_uid' => $product->uid,
+            'custom_field_uid' => $productField->json('data.uid'),
+            'value' => 'XL',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.entity_uid', $product->uid)
+            ->assertJsonPath('data.custom_field_uid', $productField->json('data.uid'))
+            ->assertJsonPath('data.value', 'XL');
+
+        $this->getJson('/api/products/'.$product->uid)
+            ->assertOk()
+            ->assertJsonPath('data.custom_fields.0.custom_field_uid', $productField->json('data.uid'))
+            ->assertJsonPath('data.custom_fields.0.value', 'XL');
+
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Leads',
+            'key' => 'leads-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 10,
+        ]);
+
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Venta enterprise',
+            'amount' => 1000,
+            'currency' => 'COP',
+        ]);
+
+        $this->postJson('/api/custom-fields/value', [
+            'entity_type' => 'opportunities',
+            'entity_uid' => $opportunity->uid,
+            'custom_field_uid' => $opportunityField->json('data.uid'),
+            'value' => 80,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.entity_uid', $opportunity->uid)
+            ->assertJsonPath('data.custom_field_uid', $opportunityField->json('data.uid'))
+            ->assertJsonPath('data.value', 80);
+
+        $this->getJson('/api/opportunities/'.$opportunity->uid)
+            ->assertOk()
+            ->assertJsonPath('data.custom_fields.0.custom_field_uid', $opportunityField->json('data.uid'))
+            ->assertJsonPath('data.custom_fields.0.value', 80);
+    }
+
+    public function test_custom_field_key_is_generated_from_label_when_missing(): void
+    {
+        $this->authenticateWithPermissions(['custom-fields.manage']);
+
+        $first = $this->postJson('/api/custom-fields', [
+            'module' => 'products',
+            'label' => 'Fecha de garantia',
+            'type' => 'date',
+        ]);
+
+        $first->assertCreated()
+            ->assertJsonPath('data.key', 'fecha_de_garantia');
+
+        $this->postJson('/api/custom-fields', [
+            'module' => 'products',
+            'label' => 'Fecha de garantia',
+            'type' => 'date',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.key', 'fecha_de_garantia_2');
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User
