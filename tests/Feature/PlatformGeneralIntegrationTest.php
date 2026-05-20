@@ -31,6 +31,9 @@ class PlatformGeneralIntegrationTest extends TestCase
             'tier' => 'pro',
             'price' => 99,
             'status' => 'active',
+            'features' => [
+                'inventory' => true,
+            ],
         ]);
         $tenant = Tenant::query()->create([
             'name' => 'Empresa Demo',
@@ -284,6 +287,51 @@ class PlatformGeneralIntegrationTest extends TestCase
                     'message' => 'Este módulo no está disponible en tu plan',
                 ]);
         }
+    }
+
+    public function test_auth_init_disables_modules_and_items_when_plan_features_are_disabled(): void
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Menu Feature Plan',
+            'price' => 0,
+            'status' => 'active',
+            'features' => [
+                'inventory' => false,
+                'reports' => false,
+                'multicurrency' => false,
+                'custom_fields' => false,
+            ],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Menu Features',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, [
+            'inventory.read',
+            'reports.read',
+            'finance.read',
+            'finance.manage',
+            'settings.manage',
+            'custom-fields.manage',
+        ]);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $response = $this->getJson('/api/auth/init')->assertOk();
+        $modules = collect($response->json('data.modules'));
+        $salesItems = collect($modules->firstWhere('key', 'sales')['items']);
+        $settingsItems = collect($modules->firstWhere('key', 'settings')['items']);
+
+        $this->assertFalse($modules->firstWhere('key', 'inventory')['enabled']);
+        $this->assertSame([], $modules->firstWhere('key', 'inventory')['permissions']);
+        $this->assertFalse($modules->firstWhere('key', 'reports')['enabled']);
+        $this->assertSame([], $modules->firstWhere('key', 'reports')['permissions']);
+        $this->assertFalse($salesItems->firstWhere('key', 'multi-currency')['enabled']);
+        $this->assertSame([], $salesItems->firstWhere('key', 'multi-currency')['permissions']);
+        $this->assertFalse($settingsItems->firstWhere('key', 'custom-fields')['enabled']);
+        $this->assertSame([], $settingsItems->firstWhere('key', 'custom-fields')['permissions']);
     }
 
     public function test_plan_feature_middleware_allows_enabled_features(): void

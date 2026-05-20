@@ -7,6 +7,20 @@ use App\Models\User;
 
 class PlatformInitService
 {
+    private const MODULE_FEATURES = [
+        'inventory' => 'inventory',
+        'reports' => 'reports',
+    ];
+
+    private const ITEM_FEATURES = [
+        'sales' => [
+            'multi-currency' => 'multicurrency',
+        ],
+        'settings' => [
+            'custom-fields' => 'custom_fields',
+        ],
+    ];
+
     private const MODULES = [
         'dashboard' => ['label' => 'Dashboard', 'permissions' => ['dashboard.read']],
         'inventory' => ['label' => 'Inventario', 'permissions' => ['inventory.read', 'inventory.manage', 'inventory.reserve', 'inventory.report']],
@@ -125,6 +139,10 @@ class PlatformInitService
             $adminPermissions = $user->effectiveAdminPermissions()->pluck('key')->values()->all();
         }
 
+        $featureFlags = (! $user->is_platform_admin && $user->tenant?->plan)
+            ? $this->planPermissionService->featureFlagsForTenant($user->tenant)
+            : null;
+
         return [
             'user' => [
                 'uid' => $user->uid,
@@ -141,7 +159,7 @@ class PlatformInitService
                 'plan' => $user->tenant?->plan?->tier ?? $user->tenant?->plan?->name ?? 'free',
                 'logo_url' => null,
             ],
-            'modules' => $this->modules($effectivePermissionKeys, (bool) $user->is_platform_admin),
+            'modules' => $this->modules($effectivePermissionKeys, (bool) $user->is_platform_admin, $featureFlags),
             'localization' => $this->localization($user),
             'permissions' => $this->permissionsPayload($effectivePermissionKeys),
             'admin_permissions' => $adminPermissions,
@@ -165,23 +183,25 @@ class PlatformInitService
         ];
     }
 
-    private function modules(array $effectivePermissionKeys, bool $forceDisabled = false): array
+    private function modules(array $effectivePermissionKeys, bool $forceDisabled = false, ?array $featureFlags = null): array
     {
         return collect(self::MODULES)
-            ->map(function (array $module, string $key) use ($effectivePermissionKeys, $forceDisabled) {
+            ->map(function (array $module, string $key) use ($effectivePermissionKeys, $forceDisabled, $featureFlags) {
                 $actions = collect($module['permissions'])
                     ->filter(fn (string $permission) => in_array($permission, $effectivePermissionKeys, true))
                     ->map(fn (string $permission) => str($permission)->afterLast('.')->toString())
                     ->unique()
                     ->values()
                     ->all();
+                $featureEnabled = $this->isModuleFeatureEnabled($key, $featureFlags);
+                $disabled = $forceDisabled || ! $featureEnabled;
 
                 return [
                     'key' => $key,
                     'label' => $module['label'],
-                    'enabled' => $forceDisabled ? false : !empty($actions),
-                    'permissions' => $forceDisabled ? [] : $actions,
-                    'items' => $this->moduleItems($key, $effectivePermissionKeys, $forceDisabled),
+                    'enabled' => $disabled ? false : !empty($actions),
+                    'permissions' => $disabled ? [] : $actions,
+                    'items' => $this->moduleItems($key, $effectivePermissionKeys, $disabled, $featureFlags),
                 ];
             })
             ->values()
@@ -208,19 +228,21 @@ class PlatformInitService
         ];
     }
 
-    private function moduleItems(string $moduleKey, array $effectivePermissionKeys, bool $forceDisabled = false): array
+    private function moduleItems(string $moduleKey, array $effectivePermissionKeys, bool $forceDisabled = false, ?array $featureFlags = null): array
     {
         return collect(self::MODULE_ITEMS[$moduleKey] ?? [])
-            ->map(function (array $item) use ($effectivePermissionKeys, $forceDisabled) {
+            ->map(function (array $item) use ($moduleKey, $effectivePermissionKeys, $forceDisabled, $featureFlags) {
                 $matchedPermissions = collect($item['permissions'])
                     ->filter(fn (string $permission) => in_array($permission, $effectivePermissionKeys, true))
                     ->values();
+                $featureEnabled = $this->isItemFeatureEnabled($moduleKey, $item['key'], $featureFlags);
+                $disabled = $forceDisabled || ! $featureEnabled;
 
                 return [
                     'key' => $item['key'],
                     'label' => $item['label'],
-                    'enabled' => $forceDisabled ? false : $matchedPermissions->isNotEmpty(),
-                    'permissions' => $forceDisabled ? [] : $matchedPermissions
+                    'enabled' => $disabled ? false : $matchedPermissions->isNotEmpty(),
+                    'permissions' => $disabled ? [] : $matchedPermissions
                         ->map(fn (string $permission) => str($permission)->afterLast('.')->toString())
                         ->unique()
                         ->values()
@@ -229,6 +251,24 @@ class PlatformInitService
             })
             ->values()
             ->all();
+    }
+
+    private function isModuleFeatureEnabled(string $moduleKey, ?array $featureFlags): bool
+    {
+        if ($featureFlags === null || ! isset(self::MODULE_FEATURES[$moduleKey])) {
+            return true;
+        }
+
+        return (bool) ($featureFlags[self::MODULE_FEATURES[$moduleKey]] ?? false);
+    }
+
+    private function isItemFeatureEnabled(string $moduleKey, string $itemKey, ?array $featureFlags): bool
+    {
+        if ($featureFlags === null || ! isset(self::ITEM_FEATURES[$moduleKey][$itemKey])) {
+            return true;
+        }
+
+        return (bool) ($featureFlags[self::ITEM_FEATURES[$moduleKey][$itemKey]] ?? false);
     }
 
     private function localeFor(string $currencyCode): string
