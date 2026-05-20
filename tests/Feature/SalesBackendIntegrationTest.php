@@ -1059,7 +1059,7 @@ class SalesBackendIntegrationTest extends TestCase
             ],
         ]);
 
-        Opportunity::query()->create([
+        $lost = Opportunity::query()->create([
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'stage_id' => $stage->getKey(),
@@ -1084,30 +1084,31 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.stages.0.items.0.title', 'CRM Enterprise');
     }
 
-    public function test_closing_stage_only_returns_won_opportunities(): void
+    public function test_closing_stage_returns_won_and_lost_opportunities(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $suffix = uniqid();
         $leadStage = OpportunityStage::query()->create([
             'tenant_id' => $user->tenant_id,
-            'name' => 'Leads',
-            'key' => 'leads',
+            'name' => 'Leads '.$suffix,
+            'key' => 'leads-'.$suffix,
             'position' => 1,
             'probability_percent' => 10,
         ]);
         $closingStage = OpportunityStage::query()->create([
             'tenant_id' => $user->tenant_id,
-            'name' => 'Cerrador',
+            'name' => 'Cerrador '.$suffix,
             'key' => 'cerrador',
             'position' => 4,
             'probability_percent' => 90,
             'is_won' => false,
         ]);
 
-        Opportunity::query()->create([
+        $lost = Opportunity::query()->create([
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'stage_id' => $closingStage->getKey(),
-            'title' => 'Abierta en cerrador',
+            'title' => 'Abierta en cerrador '.$suffix,
             'amount' => 1000,
             'lost_at' => null,
             'won_at' => null,
@@ -1116,16 +1117,16 @@ class SalesBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'stage_id' => $closingStage->getKey(),
-            'title' => 'Ganada en cerrador',
+            'title' => 'Ganada en cerrador '.$suffix,
             'amount' => 2000,
             'won_at' => now(),
             'lost_at' => null,
         ]);
-        Opportunity::query()->create([
+        $lost = Opportunity::query()->create([
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'stage_id' => $closingStage->getKey(),
-            'title' => 'Perdida en cerrador',
+            'title' => 'Perdida en cerrador '.$suffix,
             'amount' => 3000,
             'won_at' => null,
             'lost_at' => now(),
@@ -1134,7 +1135,7 @@ class SalesBackendIntegrationTest extends TestCase
             'tenant_id' => $user->tenant_id,
             'owner_user_id' => $user->getKey(),
             'stage_id' => $leadStage->getKey(),
-            'title' => 'Ganada heredada en leads',
+            'title' => 'Ganada heredada en leads '.$suffix,
             'amount' => 4000,
             'won_at' => now(),
             'lost_at' => null,
@@ -1143,13 +1144,14 @@ class SalesBackendIntegrationTest extends TestCase
         $this->getJson('/api/opportunities/board')
             ->assertOk()
             ->assertJsonPath('data.stages.0.summary.count', 0)
-            ->assertJsonPath('data.stages.1.summary.count', 2)
+            ->assertJsonPath('data.stages.1.summary.count', 3)
             ->assertJsonPath('data.stages.1.items.0.stage_uid', $closingStage->uid)
-            ->assertJsonPath('data.stages.1.items.1.stage_uid', $closingStage->uid);
+            ->assertJsonPath('data.stages.1.items.1.stage_uid', $closingStage->uid)
+            ->assertJsonPath('data.stages.1.items.2.stage_uid', $closingStage->uid);
 
         $this->getJson('/api/opportunities?stage_uid='.$closingStage->uid)
             ->assertOk()
-            ->assertJsonCount(2, 'data');
+            ->assertJsonCount(3, 'data');
 
         $returnedUids = collect($this->getJson('/api/opportunities?stage_uid='.$closingStage->uid)->json('data'))
             ->pluck('uid')
@@ -1157,6 +1159,61 @@ class SalesBackendIntegrationTest extends TestCase
 
         $this->assertContains($won->uid, $returnedUids);
         $this->assertContains($wonInLead->uid, $returnedUids);
+        $this->assertContains($lost->uid, $returnedUids);
+    }
+
+    public function test_lost_opportunities_are_not_shown_in_active_pipeline_stages_without_lost_stage(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Negociacion',
+            'key' => 'negociacion',
+            'position' => 1,
+            'probability_percent' => 70,
+        ]);
+        $closingStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cerrador',
+            'key' => 'cerrador',
+            'position' => 2,
+            'probability_percent' => 90,
+            'is_won' => true,
+        ]);
+
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Oportunidad perdida en etapa activa',
+            'amount' => 15000000,
+            'won_at' => null,
+            'lost_at' => now(),
+        ]);
+
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Oportunidad abierta',
+            'amount' => 2000,
+            'won_at' => null,
+            'lost_at' => null,
+        ]);
+
+        $this->getJson('/api/opportunities/board')
+            ->assertOk()
+            ->assertJsonPath('data.stages.0.summary.count', 1)
+            ->assertJsonPath('data.stages.0.items.0.title', 'Oportunidad abierta')
+            ->assertJsonPath('data.stages.1.stage.uid', $closingStage->uid)
+            ->assertJsonPath('data.stages.1.summary.count', 1)
+            ->assertJsonPath('data.stages.1.items.0.title', 'Oportunidad perdida en etapa activa')
+            ->assertJsonPath('data.stages.1.items.0.stage_uid', $closingStage->uid);
+
+        $this->getJson('/api/opportunities?stage_uid='.$stage->uid)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.title', 'Oportunidad abierta');
     }
 
     public function test_opportunity_can_be_marked_won_without_dragging_to_stage(): void

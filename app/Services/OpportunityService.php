@@ -80,12 +80,20 @@ class OpportunityService
                 $stage = OpportunityStage::query()->where('uid', $validated['stage_uid'])->first();
 
                 if ($stage && $this->isWonClosingStage($stage)) {
-                    $this->applyWonOpportunityFilter($query);
+                    $this->applyClosedOpportunityFilter($query);
 
                     return;
                 }
 
-                $query->where('stage_id', $stage?->getKey() ?: 0);
+                if ($stage && $this->isLostStage($stage)) {
+                    $this->applyLostOpportunityFilter($query);
+
+                    return;
+                }
+
+                $query->where('stage_id', $stage?->getKey() ?: 0)
+                    ->whereNull('won_at')
+                    ->whereNull('lost_at');
             })
             ->when(! empty($validated['owner_user_uid']), function ($query) use ($validated) {
                 $ownerId = User::query()->where('uid', $validated['owner_user_uid'])->value('id');
@@ -453,8 +461,11 @@ class OpportunityService
 
         $result = ApiIndex::paginateOrGet($opportunityQuery->latest(), $filters, 'opportunities_board_page');
         $closingStage = $this->resolveClosingStageFromCollection($stages);
+        $lostStage = $this->resolveLostStageFromCollection($stages);
         $items = collect(method_exists($result, 'items') ? $result->items() : $result)
-            ->map(fn (Opportunity $opportunity) => $this->serializeOpportunityForBoard($opportunity, $closingStage));
+            ->map(fn (Opportunity $opportunity) => $this->serializeOpportunityForBoard($opportunity, $closingStage, $lostStage))
+            ->filter(fn (array $opportunity) => $opportunity['board_stage_id'] !== null)
+            ->values();
         $opportunities = $items->groupBy('board_stage_id');
 
         $payload = [
@@ -462,7 +473,11 @@ class OpportunityService
                 $items = $opportunities->get($stage->getKey(), collect());
 
                 if ($this->isWonClosingStage($stage)) {
-                    $items = $items->filter(fn (array $opportunity) => ! empty($opportunity['won_at']) && empty($opportunity['lost_at']));
+                    $items = $items->filter(fn (array $opportunity) => ! empty($opportunity['won_at']) || ! empty($opportunity['lost_at']));
+                }
+
+                if ($this->isLostStage($stage)) {
+                    $items = $items->filter(fn (array $opportunity) => ! empty($opportunity['lost_at']));
                 }
 
                 $items = $items->values()
@@ -540,29 +555,60 @@ class OpportunityService
         ];
     }
 
-    private function serializeOpportunityForBoard(Opportunity $opportunity, ?OpportunityStage $closingStage): array
+    private function serializeOpportunityForBoard(
+        Opportunity $opportunity,
+        ?OpportunityStage $closingStage,
+        ?OpportunityStage $lostStage = null
+    ): array
     {
         $payload = $this->serializeOpportunityIndex($opportunity);
         $payload['board_stage_id'] = $payload['stage_id'];
+
+        if (! empty($payload['lost_at'])) {
+            $targetStage = $lostStage ?? $closingStage;
+
+            if (! $targetStage) {
+                $payload['board_stage_id'] = null;
+
+                return $payload;
+            }
+
+            $payload['board_stage_id'] = $targetStage->getKey();
+            $payload['stage_id'] = $targetStage->getKey();
+            $payload['stage_uid'] = $targetStage->uid;
+            $payload['stage_name'] = $targetStage->name;
+            $payload['stage'] = $this->serializeStageForBoard(
+                $targetStage,
+                isWon: $this->isWonClosingStage($targetStage),
+                isLost: true
+            );
+
+            return $payload;
+        }
 
         if ($closingStage && ! empty($payload['won_at']) && empty($payload['lost_at'])) {
             $payload['board_stage_id'] = $closingStage->getKey();
             $payload['stage_id'] = $closingStage->getKey();
             $payload['stage_uid'] = $closingStage->uid;
             $payload['stage_name'] = $closingStage->name;
-            $payload['stage'] = [
-                'uid' => $closingStage->uid,
-                'name' => $closingStage->name,
-                'key' => $closingStage->key,
-                'position' => $closingStage->position,
-                'probability' => $closingStage->probability,
-                'color' => $closingStage->color,
-                'is_won' => true,
-                'is_lost' => $closingStage->is_lost,
-            ];
+            $payload['stage'] = $this->serializeStageForBoard($closingStage, isWon: true, isLost: $closingStage->is_lost);
         }
 
         return $payload;
+    }
+
+    private function serializeStageForBoard(OpportunityStage $stage, bool $isWon, bool $isLost): array
+    {
+        return [
+            'uid' => $stage->uid,
+            'name' => $stage->name,
+            'key' => $stage->key,
+            'position' => $stage->position,
+            'probability' => $stage->probability,
+            'color' => $stage->color,
+            'is_won' => $isWon,
+            'is_lost' => $isLost,
+        ];
     }
 
     private function serializeOpportunityDetail(Opportunity $opportunity): array
@@ -1064,6 +1110,13 @@ class OpportunityService
                 ->first();
     }
 
+    private function isLostStage(OpportunityStage $stage): bool
+    {
+        return $stage->is_lost
+            || in_array(mb_strtolower((string) $stage->key), ['perdido', 'perdida', 'lost'], true)
+            || in_array(mb_strtolower((string) $stage->name), ['perdido', 'perdida', 'lost'], true);
+    }
+
     private function isWonClosingStage(OpportunityStage $stage): bool
     {
         return $stage->is_won
@@ -1076,11 +1129,23 @@ class OpportunityService
         return $stages->first(fn (OpportunityStage $stage) => $this->isWonClosingStage($stage));
     }
 
-    private function applyWonOpportunityFilter($query): void
+    private function resolveLostStageFromCollection($stages): ?OpportunityStage
     {
-        $query
-            ->whereNotNull('won_at')
-            ->whereNull('lost_at');
+        return $stages->first(fn (OpportunityStage $stage) => $this->isLostStage($stage));
+    }
+
+    private function applyClosedOpportunityFilter($query): void
+    {
+        $query->where(function ($closedQuery) {
+            $closedQuery
+                ->whereNotNull('won_at')
+                ->orWhereNotNull('lost_at');
+        });
+    }
+
+    private function applyLostOpportunityFilter($query): void
+    {
+        $query->whereNotNull('lost_at');
     }
 
     private function resolveEntity(?string $type, ?string $uid)
