@@ -160,6 +160,7 @@ class PlatformInitService
                 'logo_url' => null,
             ],
             'modules' => $this->modules($effectivePermissionKeys, (bool) $user->is_platform_admin, $featureFlags),
+            'features' => $featureFlags ?? $this->defaultFeatureFlags(),
             'localization' => $this->localization($user),
             'permissions' => $this->permissionsPayload($effectivePermissionKeys),
             'admin_permissions' => $adminPermissions,
@@ -269,6 +270,16 @@ class PlatformInitService
         }
 
         return (bool) ($featureFlags[self::ITEM_FEATURES[$moduleKey][$itemKey]] ?? false);
+    }
+
+    private function defaultFeatureFlags(): array
+    {
+        return [
+            'inventory' => true,
+            'reports' => true,
+            'multicurrency' => true,
+            'custom_fields' => true,
+        ];
     }
 
     private function localeFor(string $currencyCode): string

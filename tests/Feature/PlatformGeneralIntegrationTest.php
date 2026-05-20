@@ -82,7 +82,11 @@ class PlatformGeneralIntegrationTest extends TestCase
             ->assertJsonPath('data.modules.1.permissions.0', 'read')
             ->assertJsonPath('data.modules.1.permissions.1', 'manage')
             ->assertJsonPath('data.modules.10.key', 'settings')
-            ->assertJsonPath('data.modules.10.enabled', true);
+            ->assertJsonPath('data.modules.10.enabled', true)
+            ->assertJsonPath('data.features.inventory', true)
+            ->assertJsonPath('data.features.reports', false)
+            ->assertJsonPath('data.features.multicurrency', false)
+            ->assertJsonPath('data.features.custom_fields', false);
     }
 
     public function test_auth_init_disables_tenant_modules_for_platform_admin_without_removing_permissions(): void
@@ -332,6 +336,12 @@ class PlatformGeneralIntegrationTest extends TestCase
         $this->assertSame([], $salesItems->firstWhere('key', 'multi-currency')['permissions']);
         $this->assertFalse($settingsItems->firstWhere('key', 'custom-fields')['enabled']);
         $this->assertSame([], $settingsItems->firstWhere('key', 'custom-fields')['permissions']);
+        $this->assertSame([
+            'inventory' => false,
+            'reports' => false,
+            'multicurrency' => false,
+            'custom_fields' => false,
+        ], $response->json('data.features'));
     }
 
     public function test_plan_feature_middleware_allows_enabled_features(): void

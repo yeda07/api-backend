@@ -33,7 +33,7 @@ class CheckFeatureEnabled
 
         if (! ($features[$featureKey] ?? false)) {
             return response()->json([
-                'message' => 'Este módulo no está disponible en tu plan',
+                'message' => "Este m\u{00F3}dulo no est\u{00E1} disponible en tu plan",
             ], 403);
         }
 

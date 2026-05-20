@@ -3937,6 +3937,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /me/features:
+    get:
+      tags: [Auth]
+      summary: 'Features habilitadas del plan autenticado'
+      description: >-
+        Devuelve los flags de feature resueltos desde tenant autenticado -> plan.
+        Si una feature no esta definida en el plan, responde false.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlagsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/init:
+    get:
+      tags: [Auth]
+      summary: 'Inicializar sesion autenticada'
+      description: >-
+        Devuelve usuario, tenant, modulos, permisos, localizacion y features del plan.
+        La clave features es aditiva y no reemplaza el contrato anterior.
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthInitEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /metrics/my-usage:
     get:
       description: >-
@@ -7228,6 +7260,22 @@ components:
         advanced_reports:
           type: boolean
           example: true
+        inventory:
+          type: boolean
+          description: Habilita endpoints y modulo de inventario.
+          example: true
+        reports:
+          type: boolean
+          description: Habilita endpoints y modulo de reportes.
+          example: false
+        multicurrency:
+          type: boolean
+          description: Habilita endpoints de moneda y submodulo multimoneda.
+          example: true
+        custom_fields:
+          type: boolean
+          description: Habilita endpoints y submodulo de campos personalizados.
+          example: true
     PlanResource:
       type: object
       properties:
@@ -8205,6 +8253,55 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/AdminTenantUserCreateResource'
+    FeatureFlags:
+      type: object
+      additionalProperties: false
+      properties:
+        inventory:
+          type: boolean
+          example: true
+        reports:
+          type: boolean
+          example: false
+        multicurrency:
+          type: boolean
+          example: true
+        custom_fields:
+          type: boolean
+          example: true
+    FeatureFlagsEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/FeatureFlags'
+    AuthInitEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                user:
+                  type: object
+                tenant:
+                  type: object
+                modules:
+                  type: array
+                  items:
+                    type: object
+                features:
+                  $ref: '#/components/schemas/FeatureFlags'
+                localization:
+                  type: object
+                permissions:
+                  type: object
+                admin_permissions:
+                  type: array
+                  items:
+                    type: string
     SuccessEnvelope:
       type: object
       example:
