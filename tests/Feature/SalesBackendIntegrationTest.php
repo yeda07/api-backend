@@ -1283,6 +1283,81 @@ class SalesBackendIntegrationTest extends TestCase
             'competitor_id' => $competitor->getKey(),
             'reason_type' => 'price',
         ]);
+
+        $this->postJson('/api/opportunities/'.$opportunity->uid.'/lost', [
+            'lost_reasons' => [
+                [
+                    'category' => 'Precio',
+                    'competitor_uid' => $competitor->uid,
+                    'detail' => 'Intento duplicado.',
+                ],
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.opportunity.0', 'La oportunidad ya tiene una perdida registrada');
+    }
+
+    public function test_opportunity_lost_flow_can_create_competitor_inline(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'opportunities.manage']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Negociacion',
+            'key' => 'negociacion-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 70,
+        ]);
+        OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Perdido',
+            'key' => 'perdido-'.uniqid(),
+            'position' => 100,
+            'probability_percent' => 0,
+            'is_lost' => true,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Perdida con competidor nuevo',
+            'amount' => 7000,
+            'currency' => 'COP',
+        ]);
+
+        $response = $this->postJson('/api/opportunities/'.$opportunity->uid.'/lost', [
+            'lost_reasons' => [
+                [
+                    'reason_type' => 'price',
+                    'competitor' => [
+                        'name' => 'Competidor Nuevo',
+                        'type' => 'direct',
+                        'description' => 'Compite directo en precio.',
+                    ],
+                    'notes' => 'Perdimos por precio',
+                ],
+            ],
+            'notes' => 'Comentario general de cierre',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.opportunity.uid', $opportunity->uid)
+            ->assertJsonPath('data.lost_reasons.0.competitor_name', 'Competidor Nuevo')
+            ->assertJsonPath('data.lost_reasons.0.reason_type', 'price')
+            ->assertJsonPath('data.lost_reasons.0.details', 'Perdimos por precio');
+
+        $competitor = Competitor::query()->where('name', 'Competidor Nuevo')->firstOrFail();
+
+        $this->assertDatabaseHas('lost_reasons', [
+            'opportunity_id' => $opportunity->getKey(),
+            'competitor_id' => $competitor->getKey(),
+            'reason_type' => 'price',
+        ]);
+        $this->assertDatabaseHas('activities', [
+            'activityable_type' => Opportunity::class,
+            'activityable_id' => $opportunity->getKey(),
+            'type' => 'note',
+            'title' => 'Oportunidad marcada como perdida',
+        ]);
     }
 
     public function test_opportunity_tasks_shortcut_reuses_generic_tasks(): void

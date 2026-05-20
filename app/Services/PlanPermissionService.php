@@ -9,6 +9,13 @@ use Illuminate\Support\Str;
 
 class PlanPermissionService
 {
+    private const FEATURE_KEYS = [
+        'inventory' => ['inventory', 'inventario'],
+        'reports' => ['reports', 'reportes'],
+        'multicurrency' => ['multicurrency', 'multi-currency', 'multimoneda', 'multi-moneda'],
+        'custom_fields' => ['custom-fields', 'customfields', 'campos-personalizados'],
+    ];
+
     private const MODULE_PERMISSION_MAP = [
         'dashboard' => ['dashboard'],
         'inventario' => ['inventory', 'products', 'price-books'],
@@ -101,6 +108,53 @@ class PlanPermissionService
                 'permission_uids' => ['Permisos no incluidos en el plan activo: ' . implode(', ', $denied)],
             ]);
         }
+    }
+
+    public function featureFlagsForTenant(?Tenant $tenant): array
+    {
+        $featureKeys = array_keys(self::FEATURE_KEYS);
+
+        if (! $tenant?->plan) {
+            return array_fill_keys($featureKeys, false);
+        }
+
+        $features = $tenant->plan->features ?? [];
+        $modules = collect(data_get($features, 'modules', []))
+            ->filter(fn ($module) => is_string($module))
+            ->map(fn (string $module) => $this->normalizeModule($module))
+            ->values();
+
+        return collect(self::FEATURE_KEYS)
+            ->mapWithKeys(function (array $aliases, string $featureKey) use ($features, $modules) {
+                $normalizedAliases = collect($aliases)
+                    ->map(fn (string $alias) => $this->normalizeModule($alias))
+                    ->unique()
+                    ->values();
+
+                $explicit = $this->explicitFeatureValue($features, $featureKey, $normalizedAliases->all());
+
+                return [
+                    $featureKey => $explicit ?? $modules->intersect($normalizedAliases)->isNotEmpty(),
+                ];
+            })
+            ->all();
+    }
+
+    private function explicitFeatureValue(array $features, string $featureKey, array $aliases): ?bool
+    {
+        $candidates = collect([$featureKey, str_replace('_', '-', $featureKey), ...$aliases])
+            ->unique()
+            ->all();
+
+        foreach ($candidates as $candidate) {
+            foreach ([$candidate, str_replace('-', '_', $candidate)] as $key) {
+                if (array_key_exists($key, $features)) {
+                    return filter_var($features[$key], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (bool) $features[$key];
+                }
+            }
+        }
+
+        return null;
     }
 
     private function normalizeModule(string $module): string

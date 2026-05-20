@@ -33,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
             'tenant.token' => \App\Http\Middleware\EnsureTenantTokenAccess::class,
             'full.access' => \App\Http\Middleware\EnsureFullAccessToken::class,
+            'feature' => \App\Http\Middleware\CheckFeatureEnabled::class,
             'platform.admin' => \App\Http\Middleware\EnsurePlatformAdminAccess::class,
             'platform.permission' => \App\Http\Middleware\EnsurePlatformPermission::class,
             'docs.auth' => \App\Http\Middleware\ProtectApiDocs::class,

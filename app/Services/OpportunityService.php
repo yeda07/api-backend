@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Activity;
+use App\Models\Competitor;
 use App\Models\Contact;
 use App\Models\CrmEntity;
 use App\Models\Invoice;
@@ -242,15 +243,25 @@ class OpportunityService
             'lost_reasons.*.category' => 'nullable|string|max:255',
             'lost_reasons.*.reason_type' => 'nullable|string',
             'lost_reasons.*.competitor_uid' => 'nullable|uuid',
+            'lost_reasons.*.competitor' => 'nullable|array',
+            'lost_reasons.*.competitor.name' => 'required_with:lost_reasons.*.competitor|string|max:255',
+            'lost_reasons.*.competitor.type' => 'nullable|string|max:100',
+            'lost_reasons.*.competitor.description' => 'nullable|string',
             'lost_reasons.*.detail' => 'nullable|string',
             'lost_reasons.*.details' => 'nullable|string',
+            'lost_reasons.*.notes' => 'nullable|string',
             'lost_reasons.*.summary' => 'nullable|string|max:255',
             'reasons' => 'nullable|array',
             'reasons.*.category' => 'nullable|string|max:255',
             'reasons.*.reason_type' => 'nullable|string',
             'reasons.*.competitor_uid' => 'nullable|uuid',
+            'reasons.*.competitor' => 'nullable|array',
+            'reasons.*.competitor.name' => 'required_with:reasons.*.competitor|string|max:255',
+            'reasons.*.competitor.type' => 'nullable|string|max:100',
+            'reasons.*.competitor.description' => 'nullable|string',
             'reasons.*.detail' => 'nullable|string',
             'reasons.*.details' => 'nullable|string',
+            'reasons.*.notes' => 'nullable|string',
             'reasons.*.summary' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:2000',
             'comment' => 'nullable|string|max:2000',
@@ -258,6 +269,13 @@ class OpportunityService
 
         return DB::transaction(function () use ($uid, $validated) {
             $opportunity = Opportunity::query()->where('uid', $uid)->firstOrFail();
+
+            if ($opportunity->lost_at || $opportunity->lostReasons()->exists()) {
+                throw ValidationException::withMessages([
+                    'opportunity' => ['La oportunidad ya tiene una perdida registrada'],
+                ]);
+            }
+
             $stage = $this->resolveOutcomeStage($opportunity, 'lost');
             $opportunity->update([
                 'stage_id' => $stage?->getKey() ?? $opportunity->stage_id,
@@ -297,13 +315,14 @@ class OpportunityService
 
     private function lostReasonPayload(Opportunity $opportunity, array $reason): array
     {
-        $details = $reason['detail'] ?? $reason['details'] ?? null;
+        $details = $reason['detail'] ?? $reason['details'] ?? $reason['notes'] ?? null;
         $category = $reason['category'] ?? null;
+        $competitorUid = $this->resolveLostReasonCompetitorUid($reason);
 
         $payload = [
             'opportunity_uid' => $opportunity->uid,
             'lost_reason_category' => $category,
-            'competitor_uid' => $reason['competitor_uid'] ?? null,
+            'competitor_uid' => $competitorUid,
             'lost_reason_detail' => $details,
             'summary' => $reason['summary'] ?? $details ?? $category ?? 'Oportunidad perdida',
             'lost_at' => now()->toDateString(),
@@ -316,6 +335,37 @@ class OpportunityService
         }
 
         return array_filter($payload, fn ($value) => $value !== null && $value !== '');
+    }
+
+    private function resolveLostReasonCompetitorUid(array $reason): ?string
+    {
+        if (! empty($reason['competitor_uid'])) {
+            return $reason['competitor_uid'];
+        }
+
+        $competitor = $reason['competitor'] ?? null;
+
+        if (! is_array($competitor) || empty($competitor['name'])) {
+            return null;
+        }
+
+        $key = str($competitor['name'])->lower()->slug('-')->toString();
+        $existing = Competitor::withoutGlobalScopes()
+            ->where('tenant_id', auth()->user()->tenant_id)
+            ->where('key', $key)
+            ->first();
+
+        if ($existing) {
+            return $existing->uid;
+        }
+
+        return $this->competitiveIntelligenceService->createCompetitor([
+            'name' => $competitor['name'],
+            'key' => $key,
+            'description' => $competitor['description'] ?? null,
+            'notes' => $competitor['description'] ?? null,
+            'is_active' => true,
+        ])->uid;
     }
 
     public function deleteOpportunity(string $uid): void

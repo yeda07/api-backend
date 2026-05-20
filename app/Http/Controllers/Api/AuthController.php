@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\PlanPermissionService;
 use App\Services\PlatformInitService;
 use App\Services\TwoFactorService;
 use Illuminate\Auth\Events\PasswordReset;
@@ -98,6 +99,13 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return $this->successResponse($this->serializeUser($request->user()));
+    }
+
+    public function features(Request $request, PlanPermissionService $planPermissionService)
+    {
+        $request->user()->loadMissing('tenant.plan');
+
+        return $this->successResponse($planPermissionService->featureFlagsForTenant($request->user()->tenant));
     }
 
     public function updateMe(Request $request)

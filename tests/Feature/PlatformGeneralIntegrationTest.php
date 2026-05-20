@@ -184,6 +184,146 @@ class PlatformGeneralIntegrationTest extends TestCase
             ->assertJsonPath('message', 'No autorizado por el plan activo');
     }
 
+    public function test_me_features_resolves_authenticated_tenant_plan_flags(): void
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Feature Plan',
+            'price' => 49,
+            'status' => 'active',
+            'features' => [
+                'modules' => ['inventario'],
+                'multicurrency' => true,
+                'custom_fields' => true,
+            ],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Feature Flags',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, []);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $this->getJson('/api/me/features')
+            ->assertOk()
+            ->assertJsonPath('data.inventory', true)
+            ->assertJsonPath('data.reports', false)
+            ->assertJsonPath('data.multicurrency', true)
+            ->assertJsonPath('data.custom_fields', true)
+            ->assertJsonMissing(['plan_id' => $plan->getKey()]);
+    }
+
+    public function test_me_features_defaults_missing_plan_features_to_false(): void
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Empty Feature Plan',
+            'price' => 0,
+            'status' => 'active',
+            'features' => [],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Empty Features',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, []);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        $this->getJson('/api/me/features')
+            ->assertOk()
+            ->assertExactJson([
+                'success' => true,
+                'message' => null,
+                'data' => [
+                    'inventory' => false,
+                    'reports' => false,
+                    'multicurrency' => false,
+                    'custom_fields' => false,
+                ],
+                'meta' => null,
+                'errors' => null,
+            ]);
+    }
+
+    public function test_plan_feature_middleware_blocks_disabled_features_before_module_endpoints(): void
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Blocked Feature Plan',
+            'price' => 0,
+            'status' => 'active',
+            'features' => [],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Blocked Features',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, [
+            'inventory.read',
+            'reports.read',
+            'finance.read',
+            'custom-fields.manage',
+        ]);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        foreach ([
+            '/api/inventory/master',
+            '/api/reports/filters',
+            '/api/currency/rates',
+            '/api/custom-fields/modules',
+        ] as $endpoint) {
+            $this->getJson($endpoint)
+                ->assertForbidden()
+                ->assertExactJson([
+                    'message' => 'Este módulo no está disponible en tu plan',
+                ]);
+        }
+    }
+
+    public function test_plan_feature_middleware_allows_enabled_features(): void
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Enabled Feature Plan',
+            'price' => 49,
+            'status' => 'active',
+            'features' => [
+                'inventory' => true,
+                'reports' => true,
+                'multicurrency' => true,
+                'custom_fields' => true,
+            ],
+        ]);
+        $tenant = Tenant::query()->create([
+            'name' => 'Tenant Enabled Features',
+            'status' => 'active',
+            'is_active' => true,
+            'plan_id' => $plan->getKey(),
+        ]);
+        $user = $this->tenantUser($tenant, [
+            'inventory.read',
+            'reports.read',
+            'finance.read',
+            'custom-fields.manage',
+        ]);
+
+        Sanctum::actingAs($user, ['access:full', 'tenant:' . $tenant->uid]);
+
+        foreach ([
+            '/api/inventory/master',
+            '/api/reports/filters',
+            '/api/currency/rates',
+            '/api/custom-fields/modules',
+        ] as $endpoint) {
+            $this->getJson($endpoint)->assertOk();
+        }
+    }
+
     public function test_localization_endpoint_returns_frontend_fields(): void
     {
         $currency = Currency::query()->create([
