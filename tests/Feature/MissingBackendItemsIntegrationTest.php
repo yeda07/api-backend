@@ -8,6 +8,7 @@ use App\Models\InventoryProduct;
 use App\Models\Opportunity;
 use App\Models\OpportunityStage;
 use App\Models\Permission;
+use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,6 +60,26 @@ class MissingBackendItemsIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.pagination.per_page', 1)
             ->assertJsonPath('data.pagination.total', 2);
+    }
+
+    public function test_tasks_are_paginated_by_default(): void
+    {
+        $user = $this->authenticateWithPermissions(['tasks.read']);
+
+        foreach (range(1, 30) as $index) {
+            Task::query()->create([
+                'tenant_id' => $user->tenant_id,
+                'owner_user_id' => $user->getKey(),
+                'title' => 'Tarea '.$index,
+                'status' => 'pending',
+            ]);
+        }
+
+        $this->getJson('/api/tasks')
+            ->assertOk()
+            ->assertJsonCount(25, 'data')
+            ->assertJsonPath('meta.pagination.per_page', 25)
+            ->assertJsonPath('meta.pagination.total', 30);
     }
 
     public function test_document_types_can_be_deleted(): void

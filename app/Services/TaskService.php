@@ -3,8 +3,12 @@
 namespace App\Services;
 
 use App\Support\ApiIndex;
+use App\Models\Account;
+use App\Models\Contact;
+use App\Models\Opportunity;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -17,9 +21,12 @@ class TaskService
             'search' => 'nullable|string|max:255',
             'taskable_type' => 'nullable|string',
             'taskable_uid' => 'nullable|uuid',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'paginate' => 'sometimes',
         ])->validate();
 
-        $query = Task::query()->with(['owner', 'assignedUser', 'taskable'])->latest();
+        $query = Task::query()->with($this->taskIndexRelations())->latest();
 
         if (!empty($validated['status'])) {
             $query->where('status', $validated['status']);
@@ -52,12 +59,25 @@ class TaskService
                 ->where('taskable_id', $entity->getKey());
         }
 
-        return ApiIndex::paginateOrGet($query, $filters, 'tasks_page');
+        $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
+
+        if ($withoutPagination) {
+            $limit = min(max((int) ($filters['per_page'] ?? 25), 1), 100);
+
+            return $query->limit($limit)->get();
+        }
+
+        return $query->paginate(
+            ApiIndex::perPage($filters),
+            ['*'],
+            'tasks_page',
+            ApiIndex::page($filters)
+        );
     }
 
     public function getByUid(string $uid): Task
     {
-        return Task::query()->with(['owner', 'assignedUser', 'taskable'])->where('uid', $uid)->firstOrFail();
+        return Task::query()->with($this->taskIndexRelations())->where('uid', $uid)->firstOrFail();
     }
 
     public function create(array $data): Task
@@ -65,7 +85,7 @@ class TaskService
         $validated = $this->validate($data);
         $payload = $this->normalizePayload($validated);
 
-        return Task::query()->create($payload)->fresh(['owner', 'assignedUser', 'taskable']);
+        return Task::query()->create($payload)->fresh($this->taskIndexRelations());
     }
 
     public function update(string $uid, array $data): Task
@@ -76,7 +96,7 @@ class TaskService
 
         $task->update($payload);
 
-        return $task->fresh(['owner', 'assignedUser', 'taskable']);
+        return $task->fresh($this->taskIndexRelations());
     }
 
     public function delete(string $uid): void
@@ -169,5 +189,20 @@ class TaskService
         }
 
         return $userId;
+    }
+
+    private function taskIndexRelations(): array
+    {
+        return [
+            'owner',
+            'assignedUser',
+            'taskable' => function (MorphTo $morphTo) {
+                $morphTo->morphWith([
+                    Account::class => ['owner'],
+                    Contact::class => ['account.owner', 'owner'],
+                    Opportunity::class => ['owner', 'stage'],
+                ]);
+            },
+        ];
     }
 }
