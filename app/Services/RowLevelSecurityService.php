@@ -51,48 +51,95 @@ class RowLevelSecurityService
 
     public function applyRelationScope(Builder $builder): void
     {
-        $supportedTypes = [
-            Account::class,
-            Contact::class,
-            CrmEntity::class,
-        ];
+        $user = auth()->user();
 
-        $visibleIdsByType = [];
-
-        foreach ($supportedTypes as $type) {
-            $visibleIdsByType[$type] = $this->visibleEntityIds($type);
+        if (!$user) {
+            return;
         }
 
-        $builder->where(function (Builder $relationQuery) use ($supportedTypes, $visibleIdsByType) {
-            foreach ($supportedTypes as $type) {
-                $relationQuery->orWhere(function (Builder $typedQuery) use ($type, $visibleIdsByType) {
-                    $fromVisibleIds = $visibleIdsByType[$type];
+        $relationTable = $builder->getModel()->getTable();
+        $visibleUserIds = $this->visibleUserIds($user);
+        $bypassScope = $this->shouldBypassScope($user);
 
-                    $typedQuery->where('from_type', $type);
-
-                    if (empty($fromVisibleIds)) {
-                        $typedQuery->whereRaw('1 = 0');
-                    } else {
-                        $typedQuery->whereIn('from_id', $fromVisibleIds);
-                    }
-                });
-            }
+        $builder->where(function (Builder $relationQuery) use ($relationTable, $user, $visibleUserIds, $bypassScope) {
+            $this->addVisibleRelationSideScope($relationQuery, 'from_type', 'from_id', $relationTable, $user, $visibleUserIds, $bypassScope);
         });
 
-        $builder->where(function (Builder $relationQuery) use ($supportedTypes, $visibleIdsByType) {
-            foreach ($supportedTypes as $type) {
-                $relationQuery->orWhere(function (Builder $typedQuery) use ($type, $visibleIdsByType) {
-                    $toVisibleIds = $visibleIdsByType[$type];
-
-                    $typedQuery->where('to_type', $type);
-
-                    if (empty($toVisibleIds)) {
-                        $typedQuery->whereRaw('1 = 0');
-                    } else {
-                        $typedQuery->whereIn('to_id', $toVisibleIds);
-                    }
-                });
-            }
+        $builder->where(function (Builder $relationQuery) use ($relationTable, $user, $visibleUserIds, $bypassScope) {
+            $this->addVisibleRelationSideScope($relationQuery, 'to_type', 'to_id', $relationTable, $user, $visibleUserIds, $bypassScope);
         });
+    }
+
+    private function addVisibleRelationSideScope(
+        Builder $relationQuery,
+        string $typeColumn,
+        string $idColumn,
+        string $relationTable,
+        User $user,
+        array $visibleUserIds,
+        bool $bypassScope
+    ): void {
+        foreach ($this->relationEntityTables() as $type => $table) {
+            $relationQuery->orWhere(function (Builder $typedQuery) use ($type, $table, $typeColumn, $idColumn, $relationTable, $user, $visibleUserIds, $bypassScope) {
+                $typedQuery
+                    ->where($relationTable.'.'.$typeColumn, $type)
+                    ->whereExists(function ($entityQuery) use ($type, $table, $idColumn, $relationTable, $user, $visibleUserIds, $bypassScope) {
+                        $entityQuery
+                            ->selectRaw('1')
+                            ->from($table)
+                            ->whereColumn($table.'.id', $relationTable.'.'.$idColumn)
+                            ->where($table.'.tenant_id', $user->tenant_id);
+
+                        $this->applyRelationEntityVisibility($entityQuery, $type, $table, $visibleUserIds, $bypassScope);
+                    });
+            });
+        }
+    }
+
+    private function applyRelationEntityVisibility($query, string $type, string $table, array $visibleUserIds, bool $bypassScope): void
+    {
+        if ($bypassScope) {
+            return;
+        }
+
+        if (empty($visibleUserIds)) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        if ($type === Contact::class) {
+            $query->where(function ($contactQuery) use ($table, $visibleUserIds) {
+                $contactQuery
+                    ->whereIn($table.'.owner_user_id', $visibleUserIds)
+                    ->orWhere(function ($inheritedQuery) use ($table, $visibleUserIds) {
+                        $inheritedQuery
+                            ->whereNull($table.'.owner_user_id')
+                            ->whereExists(function ($accountQuery) use ($table, $visibleUserIds) {
+                                $accountQuery
+                                    ->selectRaw('1')
+                                    ->from('accounts')
+                                    ->whereColumn('accounts.id', $table.'.account_id')
+                                    ->whereIn('accounts.owner_user_id', $visibleUserIds);
+                            });
+                    });
+            });
+
+            return;
+        }
+
+        $query->whereIn($table.'.owner_user_id', $visibleUserIds);
+    }
+
+    /**
+     * @return array<class-string, string>
+     */
+    private function relationEntityTables(): array
+    {
+        return [
+            Account::class => 'accounts',
+            Contact::class => 'contacts',
+            CrmEntity::class => 'crm_entities',
+        ];
     }
 }

@@ -10,7 +10,7 @@ class AccountRepository
 {
     public function all(array $filters = [])
     {
-        $query = Account::query()->orderBy('name');
+        $query = Account::query()->with('owner')->orderBy('name');
 
         if (! empty($filters['search'])) {
             $search = '%'.mb_strtolower($filters['search']).'%';
@@ -36,7 +36,7 @@ class AccountRepository
 
     public function findByUid(string $uid)
     {
-        return Account::where('uid', $uid)->firstOrFail();
+        return Account::with('owner')->where('uid', $uid)->firstOrFail();
     }
 
     public function create(array $data)
