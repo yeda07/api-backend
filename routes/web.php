@@ -18,6 +18,7 @@ Route::middleware('docs.auth')->group(function () {
         'Content-Type' => 'application/yaml; charset=UTF-8',
     ]));
 })->withoutMiddleware([
+    'web',
     EncryptCookies::class,
     AddQueuedCookiesToResponse::class,
     StartSession::class,
