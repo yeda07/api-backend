@@ -147,6 +147,7 @@ class OpportunityService
                 'opportunityable_id' => $entity?->getKey(),
                 'title' => $validated['title'],
                 'email' => $validated['email'] ?? null,
+                'lead_origin' => $validated['lead_origin'] ?? null,
                 'amount' => $validated['amount'] ?? 0,
                 'currency' => $validated['currency'] ?? null,
                 'expected_close_date' => $validated['expected_close_date'] ?? null,
@@ -171,7 +172,7 @@ class OpportunityService
         return DB::transaction(function () use ($opportunity, $validated) {
             $payload = [];
 
-            foreach (['title', 'email', 'amount', 'currency', 'expected_close_date', 'description'] as $field) {
+            foreach (['title', 'email', 'lead_origin', 'amount', 'currency', 'expected_close_date', 'description'] as $field) {
                 if (array_key_exists($field, $validated)) {
                     $payload[$field] = $validated[$field];
                 }
@@ -430,6 +431,7 @@ class OpportunityService
             'moneda' => 'COP',
             'fecha_cierre_esperada' => '2026-06-30',
             'email' => 'contacto@technova.com',
+            'origen_lead' => 'linkedin',
             'descripcion' => 'Cliente interesado en implementacion CRM',
         ]], [
             'format' => 'excel',
@@ -522,6 +524,7 @@ class OpportunityService
             'uid' => $opportunity->uid,
             'title' => $opportunity->title,
             'email' => $opportunity->email,
+            'lead_origin' => $opportunity->lead_origin,
             'amount' => round((float) $opportunity->amount, 2),
             'currency' => $opportunity->currency,
             'expected_close_date' => $opportunity->expected_close_date,
@@ -797,7 +800,7 @@ class OpportunityService
     {
         $query->where(function ($builder) use ($origin) {
             $builder
-                ->whereRaw('LOWER(description) LIKE ?', ['%'.mb_strtolower($origin).'%'])
+                ->where('lead_origin', $origin)
                 ->orWhereHasMorph('opportunityable', [CrmEntity::class], function ($entityQuery) use ($origin) {
                     $entityQuery->where(function ($crmQuery) use ($origin) {
                         $crmQuery
@@ -830,26 +833,44 @@ class OpportunityService
 
     public function summary(): array
     {
-        $opportunities = Opportunity::query()->with('stage')->get();
+        $tenantId = auth()->user()?->tenant_id;
+
+        $totals = Opportunity::query()
+            ->withoutGlobalScope('tenant')
+            ->where('opportunities.tenant_id', $tenantId)
+            ->leftJoin('opportunity_stages', 'opportunities.stage_id', '=', 'opportunity_stages.id')
+            ->selectRaw('COUNT(opportunities.id) as count')
+            ->selectRaw('COALESCE(SUM(opportunities.amount), 0) as amount')
+            ->selectRaw('SUM(CASE WHEN opportunities.won_at IS NOT NULL OR opportunity_stages.is_won = true THEN 1 ELSE 0 END) as won_count')
+            ->selectRaw('SUM(CASE WHEN opportunities.lost_at IS NOT NULL OR opportunity_stages.is_lost = true THEN 1 ELSE 0 END) as lost_count')
+            ->first();
+
+        $stageTotals = Opportunity::query()
+            ->withoutGlobalScope('tenant')
+            ->where('opportunities.tenant_id', $tenantId)
+            ->selectRaw('stage_id, COUNT(*) as count, COALESCE(SUM(amount), 0) as amount')
+            ->groupBy('stage_id')
+            ->get()
+            ->keyBy('stage_id');
 
         return [
             'totals' => [
-                'count' => $opportunities->count(),
-                'amount' => round((float) $opportunities->sum(fn ($opportunity) => (float) $opportunity->amount), 2),
-                'won_count' => $opportunities->filter(fn ($opportunity) => $opportunity->stage?->is_won)->count(),
-                'lost_count' => $opportunities->filter(fn ($opportunity) => $opportunity->stage?->is_lost)->count(),
+                'count' => (int) ($totals->count ?? 0),
+                'amount' => round((float) ($totals->amount ?? 0), 2),
+                'won_count' => (int) ($totals->won_count ?? 0),
+                'lost_count' => (int) ($totals->lost_count ?? 0),
             ],
             'by_stage' => OpportunityStage::query()
                 ->orderBy('position')
-                ->get()
-                ->map(function (OpportunityStage $stage) {
-                    $items = Opportunity::query()->where('stage_id', $stage->getKey())->get();
+                ->get(['id', 'uid', 'name'])
+                ->map(function (OpportunityStage $stage) use ($stageTotals) {
+                    $summary = $stageTotals->get($stage->getKey());
 
                     return [
                         'stage_uid' => $stage->uid,
                         'stage_name' => $stage->name,
-                        'count' => $items->count(),
-                        'amount' => round((float) $items->sum(fn ($opportunity) => (float) $opportunity->amount), 2),
+                        'count' => (int) ($summary->count ?? 0),
+                        'amount' => round((float) ($summary->amount ?? 0), 2),
                     ];
                 })
                 ->values(),
@@ -872,6 +893,7 @@ class OpportunityService
             'currency' => $row['currency'] ?? $row['moneda'] ?? null,
             'expected_close_date' => $row['expected_close_date'] ?? $row['fecha_cierre_esperada'] ?? $row['fecha_cierre'] ?? null,
             'email' => $row['email'] ?? $row['correo'] ?? $row['lead_email'] ?? null,
+            'lead_origin' => $row['lead_origin'] ?? $row['origen_lead'] ?? $row['origin'] ?? $row['origen'] ?? null,
             'description' => $row['description'] ?? $row['descripcion'] ?? $row['notas'] ?? $row['notes'] ?? null,
         ];
 
@@ -1061,6 +1083,8 @@ class OpportunityService
             'entity_uid' => 'nullable|uuid',
             'title' => [$partial ? 'sometimes' : 'required', 'string', 'max:255'],
             'email' => 'nullable|email|max:255',
+            'lead_origin' => 'nullable|string|max:100',
+            'origin' => 'nullable|string|max:100',
             'amount' => 'sometimes|numeric|min:0',
             'currency' => 'nullable|string|max:10',
             'expected_close_date' => 'nullable|date',
@@ -1072,6 +1096,12 @@ class OpportunityService
         }
 
         $validated = $validator->validated();
+
+        if (! array_key_exists('lead_origin', $validated) && array_key_exists('origin', $validated)) {
+            $validated['lead_origin'] = $validated['origin'];
+        }
+
+        unset($validated['origin']);
 
         if (! empty($validated['entity_type']) xor ! empty($validated['entity_uid'])) {
             throw ValidationException::withMessages([

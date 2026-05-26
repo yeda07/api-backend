@@ -27,11 +27,23 @@ class TenantOptionService
     {
         return $this->staticOptions([
             'website' => 'Sitio web',
+            'email' => 'Email',
+            'linkedin' => 'LinkedIn',
+            'whatsapp' => 'WhatsApp',
+            'phone' => 'Llamada telefonica',
+            'facebook' => 'Facebook',
+            'instagram' => 'Instagram',
+            'google_ads' => 'Google Ads',
+            'social_media' => 'Redes sociales',
             'referral' => 'Referido',
             'campaign' => 'Campana',
             'partner' => 'Partner',
             'event' => 'Evento',
             'outbound' => 'Prospeccion',
+            'inbound' => 'Inbound',
+            'walk_in' => 'Visita presencial',
+            'marketplace' => 'Marketplace',
+            'other' => 'Otro',
         ]);
     }
 

@@ -474,6 +474,61 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.quote_number', 'COT-'.$year.'-002');
     }
 
+    public function test_quotation_creation_accepts_frontend_empty_uids_and_resolves_items_by_sku(): void
+    {
+        $user = $this->authenticateWithPermissions(['quotations.create']);
+        $account = $this->account($user);
+        $inventoryProduct = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'CAM-26-001',
+            'name' => 'Camisa',
+            'cost_price' => 5000,
+            'sale_price' => 20000,
+            'discount_percent' => 5,
+            'reorder_point' => 10,
+            'is_active' => true,
+        ]);
+        $catalogProduct = Product::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'inventory_product_id' => $inventoryProduct->getKey(),
+            'name' => 'Camisa',
+            'type' => 'product',
+            'sku' => 'CAM-26-001',
+            'status' => 'active',
+            'default_price' => 20000,
+            'default_discount_percent' => 5,
+        ]);
+
+        $response = $this->postJson('/api/quotations', [
+            'uid' => '',
+            'quote_number' => '',
+            'title' => 'Venta de vehiculo',
+            'status' => 'draft',
+            'currency' => 'COP',
+            'entity_type' => 'account',
+            'entity_uid' => $account->uid,
+            'valid_until' => now()->addDays(7)->toDateString(),
+            'items' => [
+                [
+                    'uid' => '',
+                    'description' => 'Camisa',
+                    'sku' => 'CAM-26-001',
+                    'quantity' => 1,
+                    'list_unit_price' => 20000,
+                    'discount_percent' => 5,
+                ],
+            ],
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.title', 'Venta de vehiculo')
+            ->assertJsonPath('data.items.0.catalog_product_uid', $catalogProduct->uid)
+            ->assertJsonPath('data.items.0.product_uid', $inventoryProduct->uid);
+
+        $this->assertNotSame('', $response->json('data.quote_number'));
+    }
+
     public function test_quotation_pdf_endpoint_returns_client_ready_pdf(): void
     {
         $user = $this->authenticateWithPermissions(['quotations.read']);
@@ -1012,30 +1067,36 @@ class SalesBackendIntegrationTest extends TestCase
             'description' => 'Lead desde formulario',
             'currency' => 'COP',
             'email' => 'contacto@technova.com',
+            'lead_origin' => 'linkedin',
         ]);
 
         $created->assertCreated()
             ->assertJsonPath('data.title', 'TechNova S.A.')
-            ->assertJsonPath('data.email', 'contacto@technova.com');
+            ->assertJsonPath('data.email', 'contacto@technova.com')
+            ->assertJsonPath('data.lead_origin', 'linkedin');
 
         $uid = $created->json('data.uid');
 
         $this->getJson('/api/opportunities/'.$uid)
             ->assertOk()
             ->assertJsonPath('data.uid', $uid)
-            ->assertJsonPath('data.email', 'contacto@technova.com');
+            ->assertJsonPath('data.email', 'contacto@technova.com')
+            ->assertJsonPath('data.lead_origin', 'linkedin');
 
         $this->putJson('/api/opportunities/'.$uid, [
             'title' => 'TechNova S.A. actualizada',
             'email' => 'nuevo@technova.com',
+            'lead_origin' => 'email',
         ])
             ->assertOk()
             ->assertJsonPath('data.title', 'TechNova S.A. actualizada')
-            ->assertJsonPath('data.email', 'nuevo@technova.com');
+            ->assertJsonPath('data.email', 'nuevo@technova.com')
+            ->assertJsonPath('data.lead_origin', 'email');
 
         $this->assertDatabaseHas('opportunities', [
             'uid' => $uid,
             'email' => 'nuevo@technova.com',
+            'lead_origin' => 'email',
         ]);
     }
 
@@ -1066,6 +1127,7 @@ class SalesBackendIntegrationTest extends TestCase
             'opportunityable_type' => CrmEntity::class,
             'opportunityable_id' => $entity->getKey(),
             'title' => 'CRM Enterprise',
+            'lead_origin' => 'web',
             'amount' => 25000,
             'description' => 'Producto principal CRM',
         ]);
@@ -1082,6 +1144,48 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.stages.0.summary.count', 1)
             ->assertJsonPath('data.stages.0.items.0.title', 'CRM Enterprise');
+    }
+
+    public function test_opportunity_summary_uses_aggregated_totals(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $openStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Leads',
+            'key' => 'leads-summary',
+            'position' => 1,
+        ]);
+        $wonStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cerrador',
+            'key' => 'cerrador-summary',
+            'position' => 2,
+            'is_won' => true,
+        ]);
+
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $openStage->getKey(),
+            'title' => 'Abierta',
+            'amount' => 1000,
+        ]);
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $wonStage->getKey(),
+            'title' => 'Ganada',
+            'amount' => 2000,
+            'won_at' => now(),
+        ]);
+
+        $this->getJson('/api/opportunities/summary')
+            ->assertOk()
+            ->assertJsonPath('data.totals.count', 2)
+            ->assertJsonPath('data.totals.amount', 3000)
+            ->assertJsonPath('data.totals.won_count', 1)
+            ->assertJsonPath('data.by_stage.0.count', 1)
+            ->assertJsonPath('data.by_stage.1.amount', 2000);
     }
 
     public function test_closing_stage_returns_won_and_lost_opportunities(): void

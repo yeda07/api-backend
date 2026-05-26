@@ -4027,11 +4027,23 @@ paths:
     get:
       description: >-
         Requiere permiso opportunities.read. El parametro search busca por oportunidad y por cliente relacionado.
+        El parametro origin filtra por lead_origin de la oportunidad.
       tags: [Opportunities]
       summary: 'Consultar tablero - opportunities/board'
       parameters:
         - in: query
           name: search
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: origin
+          required: false
+          schema:
+            type: string
+          example: linkedin
+        - in: query
+          name: product
           required: false
           schema:
             type: string
@@ -4046,6 +4058,21 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /tenant/lead-origins:
+    get:
+      description: >-
+        Devuelve los origenes de lead disponibles para el tenant. En oportunidades se envia la key en lead_origin.
+      tags: [Settings]
+      summary: 'Listar origenes de lead'
+      responses:
+        '200':
+          description: Operacion exitosa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /opportunities/stages:
     get:
       description: >-
@@ -7949,23 +7976,32 @@ components:
                 example: 80
     OpportunityRequest:
       type: object
-      required: [title]
+      required: [title, stage_uid]
       properties:
         title:
           type: string
           example: Renovacion anual Acme
-        account_uid:
-          type: string
-          format: uuid
-        contact_uid:
-          type: string
-          format: uuid
-        crm_entity_uid:
-          type: string
-          format: uuid
         stage_uid:
           type: string
           format: uuid
+        owner_user_uid:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+          enum: [account, contact, crm_entity]
+          example: account
+        entity_uid:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          example: contacto@acme.com
+        lead_origin:
+          type: string
+          description: Key retornada por GET /tenant/lead-origins. Tambien se acepta origin como alias de entrada.
+          example: linkedin
         amount:
           type: number
           format: float
@@ -7977,9 +8013,9 @@ components:
           type: string
           format: date
           example: "2026-05-30"
-        status:
+        description:
           type: string
-          example: open
+          example: Cliente interesado en implementacion CRM
     DocumentUploadRequest:
       type: object
       required: [entity_type, entity_uid, file]

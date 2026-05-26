@@ -38,6 +38,9 @@ class QuotationService
             'search' => 'nullable|string|max:255',
             'status' => 'nullable|string|in:draft,sent,approved,rejected,cancelled,invoiced',
             'opportunity_uid' => 'nullable|uuid',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'paginate' => 'sometimes',
         ])->validate();
 
         $query = Quotation::query()
@@ -66,11 +69,16 @@ class QuotationService
             });
         }
 
-        $result = ApiIndex::paginateOrGet(
-            $query,
-            $filters,
-            'quotations_page'
-        );
+        $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
+
+        $result = $withoutPagination
+            ? $query->limit(min(max((int) ($filters['per_page'] ?? 25), 1), 100))->get()
+            : $query->paginate(
+                ApiIndex::perPage($filters),
+                ['*'],
+                'quotations_page',
+                ApiIndex::page($filters)
+            );
 
         return $this->mapQuotationIndexResult($result);
     }
@@ -82,8 +90,14 @@ class QuotationService
             ->firstOrFail();
     }
 
+    public function payload(Quotation $quotation): array
+    {
+        return $this->serializeQuotationIndex($quotation);
+    }
+
     public function create(array $data): Quotation
     {
+        $data = $this->normalizeQuotationPayload($data);
         $validated = $this->validateQuotation($data);
 
         return DB::transaction(function () use ($validated) {
@@ -121,6 +135,7 @@ class QuotationService
     public function update(string $uid, array $data): Quotation
     {
         $quotation = $this->getByUid($uid);
+        $data = $this->normalizeQuotationPayload($data);
         $validated = $this->validateQuotation($data, true);
 
         return DB::transaction(function () use ($quotation, $validated) {
@@ -424,6 +439,33 @@ class QuotationService
         return $validated;
     }
 
+    private function normalizeQuotationPayload(array $data): array
+    {
+        foreach (['uid', 'quote_number', 'owner_user_uid', 'created_by_user_uid', 'price_book_uid', 'entity_uid'] as $field) {
+            if (array_key_exists($field, $data) && $data[$field] === '') {
+                unset($data[$field]);
+            }
+        }
+
+        if (array_key_exists('items', $data) && is_array($data['items'])) {
+            $data['items'] = array_map(function ($item) {
+                if (! is_array($item)) {
+                    return $item;
+                }
+
+                foreach (['uid', 'product_uid', 'catalog_product_uid', 'warehouse_uid'] as $field) {
+                    if (array_key_exists($field, $item) && $item[$field] === '') {
+                        unset($item[$field]);
+                    }
+                }
+
+                return $item;
+            }, $data['items']);
+        }
+
+        return $data;
+    }
+
     private function mapQuotationIndexResult($result)
     {
         if (method_exists($result, 'through')) {
@@ -601,7 +643,8 @@ class QuotationService
 
     private function createQuotationItemFromBatch(Quotation $quotation, array $data): QuotationItem
     {
-        $catalogProduct = $this->resolveCatalogProduct($data['catalog_product_uid'] ?? null);
+        $catalogProduct = $this->resolveCatalogProduct($data['catalog_product_uid'] ?? null)
+            ?? $this->resolveCatalogProductBySku($data['sku'] ?? null);
         $product = $this->resolveProduct($data['product_uid'] ?? $catalogProduct?->inventoryProduct?->uid);
         $warehouse = $this->resolveWarehouse($data['warehouse_uid'] ?? null);
         $pricing = $this->buildPricingPayload(
@@ -650,7 +693,7 @@ class QuotationService
 
         $catalogProduct = array_key_exists('catalog_product_uid', $data)
             ? $this->resolveCatalogProduct($data['catalog_product_uid'])
-            : $item->catalogProduct;
+            : ($item->catalogProduct ?? $this->resolveCatalogProductBySku($data['sku'] ?? null));
         $product = array_key_exists('product_uid', $data)
             ? $this->resolveProduct($data['product_uid'])
             : ($catalogProduct?->inventoryProduct ?? $item->product);
@@ -735,6 +778,19 @@ class QuotationService
                 'catalog_product_uid' => ['El producto del catalogo no existe o no pertenece a este tenant'],
             ]);
         }
+    }
+
+    private function resolveCatalogProductBySku(?string $sku): ?Product
+    {
+        if (! $sku) {
+            return null;
+        }
+
+        return Product::query()
+            ->with('inventoryProduct')
+            ->where('sku', $sku)
+            ->where('status', 'active')
+            ->first();
     }
 
     private function resolveWarehouse(?string $uid): ?Warehouse

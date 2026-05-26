@@ -22,6 +22,7 @@ class Opportunity extends Model
         'opportunityable_id',
         'title',
         'email',
+        'lead_origin',
         'amount',
         'currency',
         'expected_close_date',

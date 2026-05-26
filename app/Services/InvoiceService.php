@@ -31,6 +31,9 @@ class InvoiceService
             'quotation_uid' => 'nullable|uuid',
             'status' => 'nullable|string|in:draft,issued,partial,paid,overdue',
             'search' => 'nullable|string|max:255',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'paginate' => 'sometimes',
         ])->validate();
 
         $query = Invoice::query()
@@ -61,9 +64,18 @@ class InvoiceService
             });
         }
 
-        return $this->mapInvoiceIndexResult(
-            ApiIndex::paginateOrGet($query, $filters, 'invoices_page')
-        );
+        $withoutPagination = filter_var($filters['paginate'] ?? true, FILTER_VALIDATE_BOOLEAN) === false;
+
+        $result = $withoutPagination
+            ? $query->limit(min(max((int) ($filters['per_page'] ?? 25), 1), 100))->get()
+            : $query->paginate(
+                ApiIndex::perPage($filters),
+                ['*'],
+                'invoices_page',
+                ApiIndex::page($filters)
+            );
+
+        return $this->mapInvoiceIndexResult($result);
     }
 
     public function getByUid(string $uid): Invoice
@@ -80,6 +92,13 @@ class InvoiceService
             ])
             ->where('uid', $uid)
             ->firstOrFail();
+    }
+
+    public function payload(Invoice $invoice): array
+    {
+        return $this->serializeInvoiceIndex($invoice) + [
+            'payments' => $invoice->payments?->values() ?? [],
+        ];
     }
 
     public function createFromQuotation(array $data): Invoice

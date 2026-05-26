@@ -25,13 +25,17 @@ class QuotationController extends Controller
 
     public function show(string $uid)
     {
-        return $this->successResponse($this->quotationService->getByUid($uid));
+        return $this->successResponse($this->quotationService->payload($this->quotationService->getByUid($uid)));
     }
 
     public function store(Request $request)
     {
         try {
-            return $this->successResponse($this->quotationService->create($request->all()), 201, 'Cotizacion creada');
+            return $this->successResponse(
+                $this->quotationService->payload($this->quotationService->create($request->all())),
+                201,
+                'Cotizacion creada'
+            );
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
@@ -42,7 +46,11 @@ class QuotationController extends Controller
     public function update(Request $request, string $uid)
     {
         try {
-            return $this->successResponse($this->quotationService->update($uid, $request->all()), 200, 'Cotizacion actualizada');
+            return $this->successResponse(
+                $this->quotationService->payload($this->quotationService->update($uid, $request->all())),
+                200,
+                'Cotizacion actualizada'
+            );
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {

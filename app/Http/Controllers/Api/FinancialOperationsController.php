@@ -72,7 +72,7 @@ class FinancialOperationsController extends Controller
 
     public function showInvoice(string $uid)
     {
-        return $this->successResponse($this->invoiceService->getByUid($uid));
+        return $this->successResponse($this->invoiceService->payload($this->invoiceService->getByUid($uid)));
     }
 
     public function exportInvoices(Request $request)
