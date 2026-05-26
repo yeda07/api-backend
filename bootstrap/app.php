@@ -33,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.active' => \App\Http\Middleware\CheckTenantActive::class,
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
             'tenant.token' => \App\Http\Middleware\EnsureTenantTokenAccess::class,
+            'tenant.schema' => \App\Http\Middleware\SetTenantSchema::class,
             'full.access' => \App\Http\Middleware\EnsureFullAccessToken::class,
             'feature' => \App\Http\Middleware\CheckFeatureEnabled::class,
             'platform.admin' => \App\Http\Middleware\EnsurePlatformAdminAccess::class,

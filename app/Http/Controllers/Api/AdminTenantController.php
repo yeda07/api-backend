@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\OpportunityStageProvisioner;
 use App\Services\PlanPermissionService;
 use App\Services\TenantRoleProvisioner;
+use App\Services\TenantSchemaService;
 use App\Support\ApiIndex;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
@@ -92,7 +93,8 @@ class AdminTenantController extends Controller
     public function store(
         Request $request,
         TenantRoleProvisioner $roleProvisioner,
-        OpportunityStageProvisioner $stageProvisioner
+        OpportunityStageProvisioner $stageProvisioner,
+        TenantSchemaService $tenantSchemaService
     )
     {
         try {
@@ -118,7 +120,7 @@ class AdminTenantController extends Controller
                 ]);
             }
 
-            $tenant = DB::transaction(function () use ($validated, $plan, $roleProvisioner, $stageProvisioner) {
+            $tenant = DB::transaction(function () use ($validated, $plan, $roleProvisioner, $stageProvisioner, $tenantSchemaService) {
                 $tenant = Tenant::query()->create([
                     'name' => $validated['nombre'],
                     'domain' => $validated['dominio'],
@@ -133,6 +135,7 @@ class AdminTenantController extends Controller
                     'expires_at' => $validated['estado'] === 'VENCIDO' ? now() : null,
                 ]);
 
+                $tenantSchemaService->provision($tenant);
                 $roleProvisioner->provision($tenant);
                 $stageProvisioner->provision($tenant);
 
@@ -489,6 +492,7 @@ class AdminTenantController extends Controller
             'uid' => $tenant->uid,
             'nombre' => $tenant->name,
             'dominio' => $tenant->domain,
+            'schema_name' => $tenant->schema_name,
             'pais' => $tenant->country,
             'email_contacto' => $tenant->contact_email,
             'plan_uid' => $tenant->plan?->uid,

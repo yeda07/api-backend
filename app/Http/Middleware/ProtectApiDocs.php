@@ -10,12 +10,12 @@ class ProtectApiDocs
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!filter_var(env('DOCS_AUTH_ENABLED', true), FILTER_VALIDATE_BOOLEAN)) {
+        if (! (bool) config('docs.auth_enabled', true)) {
             return $next($request);
         }
 
-        $username = (string) env('DOCS_USERNAME', '');
-        $password = (string) env('DOCS_PASSWORD', '');
+        $username = (string) config('docs.username', '');
+        $password = (string) config('docs.password', '');
 
         if ($username === '' || $password === '') {
             return $this->unauthorized('Documentacion no configurada');

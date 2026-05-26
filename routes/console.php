@@ -8,6 +8,7 @@ use App\Services\InvoiceService;
 use App\Services\ActivityService;
 use App\Services\AdminAlertEvaluatorService;
 use App\Services\SearchBenchmarkService;
+use App\Services\TenantSchemaService;
 use App\Models\Permission;
 use Laravel\Sanctum\Sanctum;
 use Illuminate\Support\Facades\Hash;
@@ -81,6 +82,93 @@ Artisan::command('admin-alerts:evaluate', function () {
 
     return 0;
 })->purpose('Evaluate active platform telemetry alert rules');
+
+Artisan::command('tenants:schemas:provision {--tenant_uid=} {--dry-run}', function () {
+    $tenantUid = $this->option('tenant_uid');
+    $dryRun = (bool) $this->option('dry-run');
+    $schemaService = app(TenantSchemaService::class);
+
+    $query = Tenant::query()->orderBy('id');
+
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    }
+
+    $tenants = $query->get();
+
+    if ($tenants->isEmpty()) {
+        $this->warn('No se encontraron tenants para provisionar.');
+
+        return 0;
+    }
+
+    foreach ($tenants as $tenant) {
+        $schemaName = $tenant->schema_name ?: $schemaService->generateSchemaName($tenant);
+
+        if ($dryRun) {
+            $this->line($tenant->uid.' -> '.$schemaName);
+
+            continue;
+        }
+
+        $schemaService->provision($tenant);
+        $this->info($tenant->uid.' -> '.$schemaName);
+    }
+
+    return 0;
+})->purpose('Create or backfill PostgreSQL schemas for tenants without switching runtime tenancy mode');
+
+Artisan::command('tenants:migrate {--tenant_uid=} {--path=database/migrations/tenant} {--pretend}', function () {
+    $tenantUid = $this->option('tenant_uid');
+    $path = (string) $this->option('path');
+    $pretend = (bool) $this->option('pretend');
+    $schemaService = app(TenantSchemaService::class);
+
+    if (! is_dir(base_path($path))) {
+        $this->warn('No existe el directorio de migraciones tenant: '.$path);
+
+        return 0;
+    }
+
+    $query = Tenant::query()->orderBy('id');
+
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    }
+
+    $tenants = $query->get();
+
+    if ($tenants->isEmpty()) {
+        $this->warn('No se encontraron tenants para migrar.');
+
+        return 0;
+    }
+
+    $originalMigrationTable = config('database.migrations.table', 'migrations');
+
+    foreach ($tenants as $tenant) {
+        $schemaService->provision($tenant);
+        $schemaService->setSearchPath($tenant);
+        config(['database.migrations.table' => 'tenant_migrations']);
+
+        $this->info('Migrando tenant '.$tenant->uid.' en schema '.$tenant->schema_name);
+
+        try {
+            Artisan::call('migrate', array_filter([
+                '--path' => $path,
+                '--force' => true,
+                '--pretend' => $pretend ?: null,
+            ], fn ($value) => $value !== null));
+
+            $this->line(Artisan::output());
+        } finally {
+            config(['database.migrations.table' => $originalMigrationTable]);
+            $schemaService->resetSearchPath();
+        }
+    }
+
+    return 0;
+})->purpose('Run tenant-scoped migrations inside every tenant schema');
 
 Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--password=} {--regenerate-password} {--reset-2fa}', function (string $email) {
     $name = (string) $this->option('name');

@@ -556,11 +556,15 @@ class SuperAdminManagementTest extends TestCase
             'estado' => 'ACTIVO',
         ]);
 
-        $response->assertCreated();
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.schema_name', fn (?string $schemaName) => str_starts_with((string) $schemaName, 'tenant_'));
 
         $tenant = Tenant::query()
             ->where('uid', $response->json('data.uid'))
             ->firstOrFail();
+
+        $this->assertNotEmpty($tenant->schema_name);
 
         $stages = OpportunityStage::withoutGlobalScopes()
             ->where('tenant_id', $tenant->getKey())

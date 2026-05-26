@@ -14,6 +14,7 @@ class Tenant extends Model
         'uid',
         'name',
         'domain',
+        'schema_name',
         'country',
         'contact_email',
         'status',

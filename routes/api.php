@@ -70,7 +70,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token'])->group(function () {
+Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'tenant.schema'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/2fa/setup', [AuthController::class, 'twoFactorSetup']);
     Route::post('/2fa/confirm', [AuthController::class, 'confirmTwoFactor']);
@@ -82,7 +82,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token'])->group(func
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'full.access'])->group(function () {
+Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'tenant.schema', 'full.access'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/me/features', [AuthController::class, 'features']);
     Route::put('/me', [AuthController::class, 'updateMe']);
