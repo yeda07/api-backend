@@ -27,11 +27,13 @@ tags:
   - name: Logs
   - name: Metrics
   - name: Admin
+  - name: Automation
   - name: Opportunities
   - name: Partners
   - name: Plans
   - name: PriceBooks
   - name: Products
+  - name: Projects
   - name: Purchases
   - name: Quotations
   - name: RBAC
@@ -42,6 +44,8 @@ tags:
   - name: Tags
   - name: Tasks
   - name: Teams
+  - name: TenantOptions
+  - name: Users
 paths:
   /2fa/confirm:
     post:
@@ -6703,6 +6707,1618 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /users/statuses:
+    get:
+      tags: [Users]
+      summary: Listar estados disponibles para usuarios
+      description: Requiere permiso `users.manage`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tasks/statuses:
+    get:
+      tags: [Tasks]
+      summary: Listar estados disponibles para tareas
+      description: Requiere permiso `tasks.read`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tasks/priorities:
+    get:
+      tags: [Tasks]
+      summary: Listar prioridades disponibles para tareas
+      description: Requiere permiso `tasks.read`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /settings/localization/options:
+    get:
+      tags: [Settings]
+      summary: Opciones para configuracion regional
+      description: Devuelve monedas, idiomas, zonas horarias y formatos soportados para settings/localization.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /settings/countries:
+    get:
+      tags: [Settings]
+      summary: Listar paises disponibles
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /settings/cities:
+    get:
+      tags: [Settings]
+      summary: Listar ciudades disponibles
+      parameters:
+        - in: query
+          name: country
+          schema:
+            type: string
+          description: Codigo o nombre del pais para filtrar ciudades.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/payment-methods:
+    get:
+      tags: [TenantOptions]
+      summary: Listar medios de pago del tenant
+      description: Retorna arreglo de opciones con `uid`, `key` y `name`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/activity-types:
+    get:
+      tags: [TenantOptions]
+      summary: Listar tipos de actividad
+      description: Retorna opciones como task, call, meeting, email, note y reminder.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/company-sizes:
+    get:
+      tags: [TenantOptions]
+      summary: Listar tamanos de empresa
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/industries:
+    get:
+      tags: [TenantOptions]
+      summary: Listar industrias
+      description: Combina opciones base con industrias existentes del tenant.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/institution-types:
+    get:
+      tags: [TenantOptions]
+      summary: Listar tipos de institucion
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/lost-reason-categories:
+    get:
+      tags: [TenantOptions]
+      summary: Listar categorias de razon de perdida
+      description: Opciones esperadas al marcar oportunidad como perdida.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/opportunity-products:
+    get:
+      tags: [TenantOptions]
+      summary: Listar productos seleccionables en oportunidades
+      description: Combina catalogo comercial e inventario activo, usando `uid`, `key` y `name`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /tenant/commission-plan-types:
+    get:
+      tags: [TenantOptions]
+      summary: Listar tipos de plan de comision
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /contacts/export:
+    post:
+      tags: [Contacts]
+      summary: Exportar contactos
+      description: Requiere permiso `contacts.read`. Retorna archivo exportable segun filtros enviados.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                search:
+                  type: string
+                type:
+                  type: string
+                  enum: [person, government]
+                status:
+                  type: string
+                columns:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Archivo generado
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /contacts/check-duplicate:
+    post:
+      tags: [Contacts]
+      summary: Validar duplicado de contacto
+      description: Requiere permiso `contacts.read`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                document:
+                  type: string
+                id_number:
+                  type: string
+                contact_uid:
+                  type: string
+                  format: uuid
+                  description: UID a excluir cuando se valida edicion.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /custom-fields/modules:
+    get:
+      tags: [CustomFields]
+      summary: Listar modulos soportados por campos personalizados
+      description: Requiere permiso `custom-fields.manage` y feature `custom_fields`. Retorna objetos con `key`, `value` y `label` para poblar selectores.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Feature no disponible en el plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /automation/trigger-events:
+    get:
+      tags: [Automation]
+      summary: Listar fuentes y eventos de automatizacion
+      description: Requiere permiso `automation.read`. Devuelve `sources`, `events` y `mappings`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /automation/actions:
+    get:
+      tags: [Automation]
+      summary: Listar acciones de automatizacion
+      description: Requiere permiso `automation.read`. Cada item trae `value` y `label`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /automation/rules:
+    get:
+      tags: [Automation]
+      summary: Listar reglas de automatizacion
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Automation]
+      summary: Crear regla de automatizacion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRuleRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /automation/rules/{uid}:
+    get:
+      tags: [Automation]
+      summary: Detalle de regla de automatizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Automation]
+      summary: Actualizar regla de automatizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRuleRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Automation]
+      summary: Eliminar regla de automatizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /automation/rules/{uid}/toggle:
+    post:
+      tags: [Automation]
+      summary: Activar o desactivar regla de automatizacion
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /automation/assignment-rules:
+    get:
+      tags: [Automation]
+      summary: Listar reglas de asignacion automatica
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Automation]
+      summary: Crear regla de asignacion automatica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationAssignmentRuleRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /automation/assignment-rules/{uid}:
+    put:
+      tags: [Automation]
+      summary: Actualizar regla de asignacion automatica
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationAssignmentRuleRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Automation]
+      summary: Eliminar regla de asignacion automatica
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /opportunities/import:
+    post:
+      tags: [Opportunities]
+      summary: Importar oportunidades
+      description: Procesa filas para crear oportunidades. El campo `origen_lead` se guarda como `lead_origin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      amount:
+                        type: number
+                      currency:
+                        type: string
+                        example: COP
+                      expected_close_date:
+                        type: string
+                        format: date
+                      email:
+                        type: string
+                        format: email
+                      stage_uid:
+                        type: string
+                        format: uuid
+                      origen_lead:
+                        type: string
+                        example: linkedin
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /opportunities/template:
+    get:
+      tags: [Opportunities]
+      summary: Descargar plantilla de importacion de oportunidades
+      responses:
+        '200':
+          description: Archivo XLSX/CSV de plantilla.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /opportunities/{uid}/won:
+    post:
+      tags: [Opportunities]
+      summary: Marcar oportunidad como ganada
+      description: Requiere permiso `opportunities.manage`. Mueve la oportunidad a etapa de cierre ganada si existe y puede crear proyecto asociado.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  maxLength: 2000
+                comment:
+                  type: string
+                  maxLength: 2000
+                  description: Alias de notes.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /opportunities/{uid}/lost:
+    post:
+      tags: [Opportunities]
+      summary: Marcar oportunidad como perdida
+      description: Requiere permiso `opportunities.manage`. Registra perdida una sola vez, mueve a etapa de cierre perdida si existe y permite asociar competidor.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  maxLength: 2000
+                comment:
+                  type: string
+                  maxLength: 2000
+                  description: Alias de notes.
+                lost_reasons:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/OpportunityLostReasonRequest'
+                reasons:
+                  type: array
+                  description: Alias de lost_reasons.
+                  items:
+                    $ref: '#/components/schemas/OpportunityLostReasonRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /opportunities/{uid}/tasks:
+    get:
+      tags: [Opportunities, Tasks]
+      summary: Listar tareas de una oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Opportunities, Tasks]
+      summary: Crear tarea asociada a una oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /opportunities/{uid}/activities:
+    get:
+      tags: [Opportunities, Activities]
+      summary: Listar actividades de una oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Opportunities, Activities]
+      summary: Crear actividad asociada a una oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /opportunities/{uid}/activities/{activityUid}:
+    put:
+      tags: [Opportunities, Activities]
+      summary: Actualizar actividad de una oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: activityUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Opportunities, Activities]
+      summary: Eliminar actividad de una oportunidad
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: activityUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /finance/invoices/{uid}:
+    get:
+      tags: [Finance]
+      summary: Detalle de factura
+      description: Retorna factura con invoiceable normalizado, cliente resuelto, items y pagos.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /finance/invoices/{uid}/send:
+    post:
+      tags: [Finance]
+      summary: Enviar factura por email
+      description: Si `recipient_email` no viene, el backend intenta resolverlo desde la entidad facturable.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recipient_email:
+                  type: string
+                  format: email
+                subject:
+                  type: string
+                  maxLength: 255
+                message:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /finance/invoices/export:
+    post:
+      tags: [Finance]
+      summary: Exportar facturas
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                  format: date
+                to:
+                  type: string
+                  format: date
+                status:
+                  type: string
+                format:
+                  type: string
+                  enum: [xlsx, csv]
+      responses:
+        '200':
+          description: Archivo generado.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /invoices:
+    get:
+      tags: [Finance]
+      summary: Alias de listado de facturas
+      description: Alias de `GET /finance/invoices`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /invoices/{uid}:
+    get:
+      tags: [Finance]
+      summary: Alias de detalle de factura
+      description: Alias de `GET /finance/invoices/{uid}`.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /invoices/statuses:
+    get:
+      tags: [Finance]
+      summary: Listar estados de facturas
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/plan-modules:
+    get:
+      tags: [Admin]
+      summary: Listar modulos configurables de planes
+      description: Requiere plataforma y permiso `plans.manage`. Usado por superadmin para construir el formulario de planes.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/billing/export:
+    get:
+      tags: [Admin]
+      summary: Exportar facturacion SaaS
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Archivo generado.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/platform/roles:
+    get:
+      tags: [Admin]
+      summary: Listar roles de plataforma
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Admin]
+      summary: Crear rol de plataforma
+      description: El backend genera `key` automaticamente desde `name` si no se envia.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                key:
+                  type: string
+                  description: Opcional. Si no viene, se genera desde name.
+                description:
+                  type: string
+                permission_uids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/platform/roles/permissions:
+    get:
+      tags: [Admin]
+      summary: Listar permisos disponibles para roles de plataforma
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/platform/roles/{uid}:
+    get:
+      tags: [Admin]
+      summary: Detalle de rol de plataforma
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Admin]
+      summary: Actualizar rol de plataforma
+      description: `key` es opcional; si no se envia, se conserva o se genera desde `name` segun reglas del backend.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Admin]
+      summary: Eliminar rol de plataforma
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/platform/users:
+    get:
+      tags: [Admin]
+      summary: Listar usuarios de plataforma
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Admin]
+      summary: Crear usuario de plataforma
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                admin_role_uids:
+                  type: array
+                  description: Acepta multiples roles.
+                  items:
+                    type: string
+                    format: uuid
+                is_active:
+                  type: boolean
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/platform/users/{uid}:
+    get:
+      tags: [Admin]
+      summary: Detalle de usuario de plataforma
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Admin]
+      summary: Actualizar usuario de plataforma
+      description: No existe DELETE para usuarios de plataforma; usar `is_active=false` para desactivar.
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/platform/users/{uid}/roles:
+    post:
+      tags: [Admin]
+      summary: Asignar rol a usuario de plataforma
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_uid]
+              properties:
+                role_uid:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/platform/users/{uid}/roles/{roleUid}:
+    delete:
+      tags: [Admin]
+      summary: Quitar rol a usuario de plataforma
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: roleUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/permissions:
+    get:
+      tags: [Admin]
+      summary: Consultar permisos efectivos de tenant
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/archive:
+    post:
+      tags: [Admin]
+      summary: Archivar tenant
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/restore:
+    post:
+      tags: [Admin]
+      summary: Restaurar tenant archivado
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/users/{userUid}/lock:
+    post:
+      tags: [Admin]
+      summary: Bloquear usuario de tenant
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: userUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/tenants/{uid}/users/{userUid}/unlock:
+    post:
+      tags: [Admin]
+      summary: Desbloquear usuario de tenant
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: userUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects:
+    get:
+      tags: [Projects]
+      summary: Listar proyectos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Projects]
+      summary: Crear proyecto
+      description: Puede recibir `opportunity_uid` para mantener trazabilidad desde oportunidad ganada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                opportunity_uid:
+                  type: string
+                  format: uuid
+                invoice_uid:
+                  type: string
+                  format: uuid
+                account_uid:
+                  type: string
+                  format: uuid
+                assigned_user_uid:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /projects/{uid}:
+    get:
+      tags: [Projects]
+      summary: Detalle de proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Projects]
+      summary: Actualizar proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/statuses:
+    get:
+      tags: [Projects]
+      summary: Listar estados de proyecto
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/resource-roles:
+    get:
+      tags: [Projects]
+      summary: Listar roles de recurso para proyectos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/{uid}/team:
+    get:
+      tags: [Projects]
+      summary: Equipo del proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/{uid}/progress:
+    get:
+      tags: [Projects]
+      summary: Progreso del proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/{uid}/milestones:
+    post:
+      tags: [Projects]
+      summary: Crear milestone de proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/{uid}/assignments:
+    get:
+      tags: [Projects]
+      summary: Listar asignaciones del proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Projects]
+      summary: Crear asignacion de proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /projects/{uid}/assignments/{assignmentUid}:
+    delete:
+      tags: [Projects]
+      summary: Eliminar asignacion de proyecto
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+        - in: path
+          name: assignmentUid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /milestones/statuses:
+    get:
+      tags: [Projects]
+      summary: Listar estados de milestones
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /milestones/{uid}:
+    put:
+      tags: [Projects]
+      summary: Actualizar milestone
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /segments:
+    get:
+      tags: [Contacts]
+      summary: Listar segmentos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Contacts]
+      summary: Crear segmento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /segments/{uid}:
+    get:
+      tags: [Contacts]
+      summary: Detalle de segmento
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Contacts]
+      summary: Actualizar segmento
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Contacts]
+      summary: Eliminar segmento
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /segments/{uid}/run:
+    post:
+      tags: [Contacts]
+      summary: Ejecutar segmento
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /teams:
+    get:
+      tags: [Teams]
+      summary: Listar equipos
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Teams]
+      summary: Crear equipo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /teams/{uid}:
+    get:
+      tags: [Teams]
+      summary: Detalle de equipo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Teams]
+      summary: Actualizar equipo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Teams]
+      summary: Eliminar equipo
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /admin/telemetry/alerts/evaluate:
+    post:
+      tags: [Admin]
+      summary: Evaluar alertas de telemetria
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /battlecards:
+    get:
+      tags: [CompetitiveIntelligence]
+      summary: Alias de battlecards
+      description: Alias de `GET /competitive-intelligence/battlecards`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /lost-reasons:
+    get:
+      tags: [CompetitiveIntelligence]
+      summary: Alias de razones de perdida
+      description: Alias de `GET /competitive-intelligence/lost-reasons`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /lost-reasons/report:
+    get:
+      tags: [CompetitiveIntelligence]
+      summary: Alias de reporte de razones de perdida
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/periods:
+    get:
+      tags: [Commissions]
+      summary: Listar periodos de comisiones
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /commissions/assignments/bulk:
+    post:
+      tags: [Commissions]
+      summary: Crear asignaciones de comision en lote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /commissions/targets/{uid}:
+    get:
+      tags: [Commissions]
+      summary: Detalle de meta de comision
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    put:
+      tags: [Commissions]
+      summary: Actualizar meta de comision
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Commissions]
+      summary: Eliminar meta de comision
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /interactions:
+    get:
+      tags: [Interactions]
+      summary: Listar interacciones
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /schedule:
+    get:
+      tags: [Activities]
+      summary: Agenda de actividades
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/movements/summary:
+    get:
+      tags: [Inventory]
+      summary: Resumen de movimientos de inventario
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /inventory/products/export:
+    post:
+      tags: [Inventory]
+      summary: Exportar productos de inventario
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          description: Archivo generado.
+  /inventory/stock/export:
+    post:
+      tags: [Inventory]
+      summary: Exportar stock
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          description: Archivo generado.
+  /inventory/stocks/adjust/bulk:
+    post:
+      tags: [Inventory]
+      summary: Ajuste masivo de stock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /partner-resources/types:
+    get:
+      tags: [Partners]
+      summary: Listar tipos de recursos de partners
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /partner-resources/{uid}:
+    put:
+      tags: [Partners]
+      summary: Actualizar recurso de partner
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    delete:
+      tags: [Partners]
+      summary: Eliminar recurso de partner
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /partner-resources/{uid}/download:
+    get:
+      tags: [Partners]
+      summary: Descargar recurso de partner
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          description: Archivo descargable.
+  /partners/types:
+    get:
+      tags: [Partners]
+      summary: Listar tipos de partner
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /partners/materials:
+    get:
+      tags: [Partners]
+      summary: Alias de recursos de partners
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Partners]
+      summary: Crear material de partner
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /partners/opportunities/statuses:
+    get:
+      tags: [Partners]
+      summary: Listar estados de oportunidades de partner
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /partners/opportunities/{uid}/approve:
+    post:
+      tags: [Partners]
+      summary: Aprobar oportunidad de partner
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /partners/opportunities/{uid}/reject:
+    post:
+      tags: [Partners]
+      summary: Rechazar oportunidad de partner
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /partners/opportunities/{uid}/convert:
+    post:
+      tags: [Partners]
+      summary: Convertir oportunidad de partner
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases:
+    get:
+      tags: [Purchases]
+      summary: Alias de ordenes de compra
+      description: Alias de `GET /purchases/orders`.
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+    post:
+      tags: [Purchases]
+      summary: Crear orden de compra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/GenericSuccess'
+  /purchases/{uid}:
+    put:
+      tags: [Purchases]
+      summary: Actualizar orden de compra
+      parameters:
+        - $ref: '#/components/parameters/UidPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /quotations/statuses:
+    get:
+      tags: [Quotations]
+      summary: Listar estados de cotizacion
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /relations/remove:
+    post:
+      tags: [Relations]
+      summary: Eliminar relacion por par de entidades
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GenericSuccess'
+  /reports/sales/export:
+    post:
+      tags: [Reports]
+      summary: Exportar reporte de ventas
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          description: Archivo generado.
+  /reports/inventory/export:
+    post:
+      tags: [Reports]
+      summary: Exportar reporte de inventario
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          description: Archivo generado.
+  /sales/finance/invoices/export:
+    post:
+      tags: [Finance]
+      summary: Alias comercial para exportar facturas
+      description: Alias de `POST /finance/invoices/export`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenericRequest'
+      responses:
+        '200':
+          description: Archivo generado.
 components:
   securitySchemes:
     bearerAuth:
@@ -6742,6 +8358,176 @@ components:
       type: object
       description: Payload generico. Revise las reglas del endpoint en el backend.
       example: {}
+    ActivityRequest:
+      type: object
+      description: Payload para crear o actualizar una actividad. En rutas anidadas de oportunidad, el backend asigna `entity_type=opportunity` y `entity_uid` desde la URL.
+      properties:
+        type:
+          type: string
+          enum: [task, call, meeting, email, note, reminder]
+          example: call
+        title:
+          type: string
+          example: Llamada de seguimiento
+        description:
+          type: string
+          example: Revisar propuesta enviada.
+        status:
+          type: string
+          example: pending
+        priority:
+          type: string
+          example: medium
+        scheduled_at:
+          type: string
+          format: date-time
+        assigned_user_uid:
+          type: string
+          format: uuid
+    TaskRequest:
+      type: object
+      description: Payload para crear o actualizar tarea. En rutas anidadas de oportunidad, el backend asigna `taskable_type=opportunity` y `taskable_uid` desde la URL.
+      properties:
+        title:
+          type: string
+          example: Preparar propuesta
+        description:
+          type: string
+          example: Adjuntar precios y condiciones.
+        status:
+          type: string
+          example: pending
+        priority:
+          type: string
+          example: medium
+        due_date:
+          type: string
+          format: date
+        assigned_user_uid:
+          type: string
+          format: uuid
+    OpportunityLostReasonRequest:
+      type: object
+      description: Motivo capturado cuando una oportunidad se marca como perdida.
+      properties:
+        category:
+          type: string
+          example: price
+        reason_type:
+          type: string
+          description: Alias historico de category.
+          example: price
+        competitor_uid:
+          type: string
+          format: uuid
+        competitor:
+          type: object
+          description: Si no viene competitor_uid, puede enviarse este objeto para crear el competidor.
+          properties:
+            name:
+              type: string
+              example: Competidor X
+            type:
+              type: string
+              example: direct
+            description:
+              type: string
+        detail:
+          type: string
+          example: Perdimos por precio.
+        details:
+          type: string
+          description: Alias de detail.
+        notes:
+          type: string
+        summary:
+          type: string
+    AutomationRuleRequest:
+      type: object
+      required: [name, trigger_source, actions]
+      properties:
+        name:
+          type: string
+          example: Notificar oportunidad ganada
+        description:
+          type: string
+        trigger_source:
+          type: string
+          description: Puede ser fuente (`crm`, `linkedin`, `facebook`, `time`) o evento directo como `deal_won`.
+          example: crm
+        trigger_event:
+          type: string
+          example: deal_won
+        trigger_config:
+          type: object
+          additionalProperties: true
+        conditions:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              operator:
+                type: string
+                enum: [equals, not_equals, contains, not_contains, gt, gte, lt, lte, exists, not_exists]
+              value: {}
+        actions:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [type]
+            properties:
+              type:
+                type: string
+                enum: [send_email, update_field, create_task, send_webhook, create_lead, assign_owner, create_activity, apply_tag, send_notification]
+              sequence:
+                type: integer
+              config:
+                type: object
+                additionalProperties: true
+        logic:
+          type: string
+          enum: [AND, OR]
+          example: AND
+        is_active:
+          type: boolean
+    AutomationAssignmentRuleRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Asignar leads enterprise
+        description:
+          type: string
+        conditions:
+          type: array
+          items:
+            type: object
+            required: [field, operator]
+            properties:
+              field:
+                type: string
+              operator:
+                type: string
+                enum: [equals, not_equals, contains, not_contains, gt, gte, lt, lte, exists, not_exists]
+              value: {}
+        assigned_to_uid:
+          type: string
+          format: uuid
+        user_ids:
+          type: array
+          description: Alternativa para asignacion rotativa o multiple.
+          items:
+            type: string
+            format: uuid
+        logic:
+          type: string
+          enum: [AND, OR]
+        is_active:
+          type: boolean
     LoginRequest:
       type: object
       required: [email, password]
