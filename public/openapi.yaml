@@ -7514,7 +7514,7 @@ paths:
     put:
       tags: [Admin]
       summary: Actualizar rol de plataforma
-      description: `key` es opcional; si no se envia, se conserva o se genera desde `name` segun reglas del backend.
+      description: El campo `key` es opcional; si no se envia, se conserva o se genera desde `name` segun reglas del backend.
       parameters:
         - $ref: '#/components/parameters/UidPath'
       requestBody:
