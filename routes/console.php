@@ -147,20 +147,10 @@ Artisan::command('tenants:migrate {--tenant_uid=} {--path=database/migrations/te
     $originalMigrationTable = config('database.migrations.table', 'migrations');
 
     foreach ($tenants as $tenant) {
-        $schemaService->provision($tenant);
-        $schemaService->setSearchPath($tenant);
-        config(['database.migrations.table' => 'tenant_migrations']);
-
         $this->info('Migrando tenant '.$tenant->uid.' en schema '.$tenant->schema_name);
 
         try {
-            Artisan::call('migrate', array_filter([
-                '--path' => $path,
-                '--force' => true,
-                '--pretend' => $pretend ?: null,
-            ], fn ($value) => $value !== null));
-
-            $this->line(Artisan::output());
+            $this->line($schemaService->runTenantMigrations($tenant, $path, $pretend));
         } finally {
             config(['database.migrations.table' => $originalMigrationTable]);
             $schemaService->resetSearchPath();
@@ -169,6 +159,64 @@ Artisan::command('tenants:migrate {--tenant_uid=} {--path=database/migrations/te
 
     return 0;
 })->purpose('Run tenant-scoped migrations inside every tenant schema');
+
+Artisan::command('tenants:schemas:copy-data {tenant_uid?} {--all} {--tables=} {--execute} {--truncate}', function () {
+    $tenantUid = $this->argument('tenant_uid');
+    $all = (bool) $this->option('all');
+    $execute = (bool) $this->option('execute');
+    $truncate = (bool) $this->option('truncate');
+    $tablesOption = $this->option('tables');
+    $tables = $tablesOption
+        ? collect(explode(',', (string) $tablesOption))->map(fn ($table) => trim($table))->filter()->values()->all()
+        : [];
+
+    if (! $tenantUid && ! $all) {
+        $this->error('Debes enviar tenant_uid o usar --all. Por seguridad el comando no copia todos los tenants por defecto.');
+
+        return 1;
+    }
+
+    if ($truncate && ! $execute) {
+        $this->warn('--truncate se ignora en dry-run. Agrega --execute para copiar datos realmente.');
+    }
+
+    $query = Tenant::query()->orderBy('id');
+
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    }
+
+    $tenants = $query->get();
+
+    if ($tenants->isEmpty()) {
+        $this->warn('No se encontraron tenants para copiar.');
+
+        return 0;
+    }
+
+    $schemaService = app(TenantSchemaService::class);
+
+    foreach ($tenants as $tenant) {
+        $result = $schemaService->copyTenantData($tenant, $tables, $execute, $truncate);
+        $this->info(($execute ? 'Copiando' : 'Dry-run').' tenant '.$result['tenant_uid'].' en schema '.$result['schema_name']);
+
+        foreach ($result['tables'] as $tableResult) {
+            $this->line(sprintf(
+                '  %-36s %-22s source=%s copied=%s',
+                $tableResult['table'],
+                $tableResult['status'],
+                $tableResult['source_count'] ?? 'n/a',
+                $tableResult['copied']
+            ));
+        }
+    }
+
+    if (! $execute) {
+        $this->warn('No se copiaron datos. Repite con --execute cuando las tablas tenant existan y el dry-run este correcto.');
+    }
+
+    return 0;
+})->purpose('Dry-run or copy tenant-owned rows from public tables into tenant schemas');
 
 Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--password=} {--regenerate-password} {--reset-2fa}', function (string $email) {
     $name = (string) $this->option('name');

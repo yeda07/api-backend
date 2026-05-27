@@ -17,6 +17,12 @@ Separar los datos operativos de cada tenant en un schema PostgreSQL propio, mant
 - Agregar comando para provisionar schemas de tenants existentes.
 - Mantener `TENANCY_MODE=shared`, sin cambiar runtime ni mover datos.
 
+Estado en codigo:
+
+- `TENANCY_MODE=shared` sigue siendo el valor recomendado.
+- `TenantSchemaService::createSchema()` crea el schema si la conexion es PostgreSQL.
+- `tenants:schemas:provision` permite generar/backfillear `schema_name` sin cambiar el runtime.
+
 ## Fase 2 - Clasificacion de tablas
 
 Tablas que se quedan en `public`:
@@ -45,12 +51,26 @@ Tablas candidatas a schema por tenant:
 - documents metadata
 - reports operativos
 
+Estado en codigo:
+
+- `config/tenancy.php` contiene `global_tables` y `tenant_tables`.
+- El manifiesto es explicito para evitar mover tablas administrativas por accidente.
+
 ## Fase 3 - Migraciones tenant-aware
 
 - Separar migraciones de plataforma y migraciones tenant.
 - Crear comando para ejecutar migraciones dentro de un schema especifico.
 - Usar una tabla `tenant_migrations` dentro de cada schema para que cada tenant tenga su propio historial.
 - No eliminar `tenant_id` al inicio; mantenerlo durante la transicion como cinturon de seguridad.
+
+Comandos disponibles:
+
+```bash
+php artisan tenants:migrate --tenant_uid=TENANT_UID --pretend
+php artisan tenants:migrate --tenant_uid=TENANT_UID
+# Sin --tenant_uid migra todos los tenants.
+php artisan tenants:migrate
+```
 
 ## Fase 4 - Migracion de datos
 
@@ -59,6 +79,24 @@ Tablas candidatas a schema por tenant:
 - Validar conteos por tabla.
 - Validar checksums simples en tablas criticas.
 - Activar tenant en modo schema de forma individual.
+
+Comando de preparacion/copia:
+
+```bash
+# Solo simula y muestra conteos. No copia datos.
+php artisan tenants:schemas:copy-data TENANT_UID
+
+# Simula solo algunas tablas.
+php artisan tenants:schemas:copy-data TENANT_UID --tables=accounts,contacts,opportunities
+
+# Copia realmente. Usar solo cuando las tablas tenant ya existen.
+php artisan tenants:schemas:copy-data TENANT_UID --execute
+
+# Copia realmente limpiando antes las tablas destino. Usar solo en ventana controlada.
+php artisan tenants:schemas:copy-data TENANT_UID --execute --truncate
+```
+
+Regla importante: el comando no crea tablas operativas con `LIKE public...`; solo copia si la tabla destino ya existe en el schema tenant. Esto reduce riesgos de defaults, secuencias y llaves foraneas mal clonadas.
 
 ## Fase 5 - Switching runtime
 
@@ -80,3 +118,19 @@ No activar `TENANCY_MODE=schema` globalmente hasta que:
 - Los jobs/queues reseteen `search_path`.
 - El login/auth/init funcionen desde `public`.
 - Exista rollback por tenant.
+
+## Siguiente paso recomendado
+
+1. Crear migraciones tenant reales en `database/migrations/tenant`.
+2. Empezar con un subconjunto pequeno: `accounts`, `contacts`, `opportunities`, `opportunity_stages`.
+3. Ejecutar:
+
+```bash
+php artisan tenants:schemas:provision --tenant_uid=TENANT_UID
+php artisan tenants:migrate --tenant_uid=TENANT_UID --pretend
+php artisan tenants:migrate --tenant_uid=TENANT_UID
+php artisan tenants:schemas:copy-data TENANT_UID
+```
+
+4. Revisar que el dry-run reporte `tenant_exists=true` para esas tablas.
+5. Copiar con `--execute` solo en tenant de prueba.

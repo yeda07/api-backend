@@ -525,9 +525,31 @@ paths:
   /accounts:
     get:
       description: >-
-        Requiere permiso accounts.read.
+        Requiere permiso accounts.read. Empresas B2B. No mezcla personas/instituciones.
       tags: [Accounts]
       summary: 'Listar - accounts'
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca por nombre, documento, email o telefono.
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, prospect, inactive]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         '200':
           description: Operacion exitosa
@@ -622,7 +644,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/AccountRequest'
       responses:
         '200':
           description: Operacion exitosa
@@ -1713,9 +1735,37 @@ paths:
   /contacts:
     get:
       description: >-
-        Requiere permiso contacts.read.
+        Requiere permiso contacts.read. Personas e instituciones. Las empresas viven en /accounts.
       tags: [Contacts]
       summary: 'Listar - contacts'
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Busca por nombre, email, telefono o empresa asociada.
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, prospect, inactive]
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [person, government]
+          description: person = contacto/persona, government = institucion o entidad publica.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         '200':
           description: Operacion exitosa
@@ -1810,7 +1860,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GenericRequest'
+              $ref: '#/components/schemas/ContactRequest'
       responses:
         '200':
           description: Operacion exitosa
