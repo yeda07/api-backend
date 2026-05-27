@@ -45,7 +45,7 @@ return [
             'port' => env('MAIL_PORT', env('SMTP_PORT', 587)),
             'username' => env('MAIL_USERNAME', env('SMTP_USER')),
             'password' => env('MAIL_PASSWORD', env('SMTP_PASSWORD')),
-            'timeout' => null,
+            'timeout' => env('MAIL_TIMEOUT', 10),
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
@@ -56,7 +56,7 @@ return [
             'port' => env('BREVO_MAIL_PORT', env('SMTP_PORT', 587)),
             'username' => env('BREVO_MAIL_USERNAME', env('SMTP_USER')),
             'password' => env('BREVO_MAIL_PASSWORD', env('SMTP_PASSWORD')),
-            'timeout' => null,
+            'timeout' => env('MAIL_TIMEOUT', 10),
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 

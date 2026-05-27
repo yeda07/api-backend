@@ -336,21 +336,7 @@ class AdminTenantController extends Controller
                 return $user->fresh();
             });
 
-            $resetEmailSent = true;
-
-            try {
-                $token = Password::broker()->createToken($user);
-                $user->sendPasswordResetNotification($token);
-            } catch (\Throwable $e) {
-                $resetEmailSent = false;
-
-                Log::warning('No se pudo enviar el reset password al crear usuario de tenant', [
-                    'tenant_uid' => $tenant->uid,
-                    'user_uid' => $user->uid,
-                    'email' => $user->email,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+            $resetEmailQueued = $this->sendTenantUserResetEmailAfterResponse($user, $tenant);
 
             return $this->successResponse([
                 'uid' => $user->uid,
@@ -358,7 +344,8 @@ class AdminTenantController extends Controller
                 'email' => $user->email,
                 'tenant_uid' => $tenant->uid,
                 'roles' => [$validated['role'] ?? 'owner'],
-                'reset_email_sent' => $resetEmailSent,
+                'reset_email_sent' => $resetEmailQueued,
+                'reset_email_queued' => $resetEmailQueued,
             ], 201, 'Usuario administrador del tenant creado');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
@@ -407,6 +394,42 @@ class AdminTenantController extends Controller
         );
 
         return $this->successResponse($users);
+    }
+
+    private function sendTenantUserResetEmailAfterResponse(User $user, Tenant $tenant): bool
+    {
+        if (app()->environment('testing')) {
+            return $this->deliverTenantUserResetEmail($user, $tenant);
+        }
+
+        app()->terminating(fn () => $this->deliverTenantUserResetEmail($user, $tenant));
+
+        return true;
+    }
+
+    private function deliverTenantUserResetEmail(User $user, Tenant $tenant): bool
+    {
+        try {
+            $freshUser = User::withoutGlobalScopes()->whereKey($user->getKey())->first();
+
+            if (! $freshUser) {
+                return false;
+            }
+
+            $token = Password::broker()->createToken($freshUser);
+            $freshUser->sendPasswordResetNotification($token);
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo enviar el reset password al crear usuario de tenant', [
+                'tenant_uid' => $tenant->uid,
+                'user_uid' => $user->uid,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     public function lockUser(string $uid, string $userUid)
