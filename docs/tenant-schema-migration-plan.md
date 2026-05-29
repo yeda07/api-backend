@@ -22,6 +22,7 @@ Estado en codigo:
 - `TENANCY_MODE=shared` sigue siendo el valor recomendado.
 - `TenantSchemaService::createSchema()` crea el schema si la conexion es PostgreSQL.
 - `tenants:schemas:provision` permite generar/backfillear `schema_name` sin cambiar el runtime.
+- Existe una primera migracion tenant para CRM/pipeline en `database/migrations/tenant/2026_05_28_000001_create_tenant_crm_pipeline_tables.php`.
 
 ## Fase 2 - Clasificacion de tablas
 
@@ -98,6 +99,8 @@ php artisan tenants:schemas:copy-data TENANT_UID --execute --truncate
 
 Regla importante: el comando no crea tablas operativas con `LIKE public...`; solo copia si la tabla destino ya existe en el schema tenant. Esto reduce riesgos de defaults, secuencias y llaves foraneas mal clonadas.
 
+El comando copia usando columnas explicitas comunes entre `public.tabla` y `tenant_schema.tabla`, no `SELECT *`. Esto permite que PostgreSQL tenga distinto orden fisico de columnas sin romper la copia.
+
 ## Fase 5 - Switching runtime
 
 - Resolver tenant por usuario autenticado.
@@ -122,14 +125,14 @@ No activar `TENANCY_MODE=schema` globalmente hasta que:
 ## Siguiente paso recomendado
 
 1. Crear migraciones tenant reales en `database/migrations/tenant`.
-2. Empezar con un subconjunto pequeno: `accounts`, `contacts`, `opportunities`, `opportunity_stages`.
+2. Empezar con el subconjunto ya creado: `accounts`, `contacts`, `crm_entities`, `relations`, `opportunity_stages`, `opportunities`, `tasks`, `activities`.
 3. Ejecutar:
 
 ```bash
 php artisan tenants:schemas:provision --tenant_uid=TENANT_UID
 php artisan tenants:migrate --tenant_uid=TENANT_UID --pretend
 php artisan tenants:migrate --tenant_uid=TENANT_UID
-php artisan tenants:schemas:copy-data TENANT_UID
+php artisan tenants:schemas:copy-data TENANT_UID --tables=accounts,contacts,crm_entities,relations,opportunity_stages,opportunities,tasks,activities
 ```
 
 4. Revisar que el dry-run reporte `tenant_exists=true` para esas tablas.

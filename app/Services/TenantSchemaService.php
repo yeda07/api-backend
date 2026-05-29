@@ -142,6 +142,9 @@ class TenantSchemaService
             $publicExists = Schema::hasTable($table);
             $hasTenantId = $publicExists && Schema::hasColumn($table, 'tenant_id');
             $tenantExists = $this->tableExists($schemaName, $table);
+            $columns = $publicExists && $tenantExists
+                ? $this->copyableColumns($schemaName, $table)
+                : [];
             $sourceCount = $hasTenantId
                 ? (int) DB::table($table)->where('tenant_id', $tenant->getKey())->count()
                 : null;
@@ -152,6 +155,7 @@ class TenantSchemaService
                 'tenant_exists' => $tenantExists,
                 'has_tenant_id' => $hasTenantId,
                 'source_count' => $sourceCount,
+                'columns' => $columns,
                 'copied' => 0,
                 'status' => 'dry_run',
             ];
@@ -174,14 +178,24 @@ class TenantSchemaService
                 continue;
             }
 
+            if ($columns === []) {
+                $result['status'] = 'no_common_columns';
+                $results[] = $result;
+                continue;
+            }
+
             if ($execute) {
                 if ($truncate) {
                     DB::statement('TRUNCATE TABLE '.$this->qualifiedTable($schemaName, $table).' RESTART IDENTITY CASCADE');
                 }
 
+                $columnList = collect($columns)
+                    ->map(fn ($column) => $this->quoteIdentifier($column))
+                    ->implode(', ');
+
                 $result['copied'] = DB::affectingStatement(
-                    'INSERT INTO '.$this->qualifiedTable($schemaName, $table)
-                    .' SELECT * FROM public.'.$this->quoteIdentifier($table)
+                    'INSERT INTO '.$this->qualifiedTable($schemaName, $table).' ('.$columnList.')'
+                    .' SELECT '.$columnList.' FROM public.'.$this->quoteIdentifier($table)
                     .' WHERE tenant_id = ? ON CONFLICT DO NOTHING',
                     [$tenant->getKey()]
                 );
@@ -210,6 +224,37 @@ class TenantSchemaService
             ->where('table_schema', $schemaName)
             ->where('table_name', $table)
             ->exists();
+    }
+
+    public function tableColumns(string $schemaName, string $table): array
+    {
+        if (! $this->supportsSchemas()) {
+            return [];
+        }
+
+        return DB::table('information_schema.columns')
+            ->where('table_schema', $schemaName)
+            ->where('table_name', $table)
+            ->orderBy('ordinal_position')
+            ->pluck('column_name')
+            ->all();
+    }
+
+    private function copyableColumns(string $schemaName, string $table): array
+    {
+        $sourceColumns = $this->tableColumns('public', $table);
+        $tenantColumns = $this->tableColumns($schemaName, $table);
+
+        if ($sourceColumns === [] || $tenantColumns === []) {
+            return [];
+        }
+
+        $tenantColumnLookup = array_flip($tenantColumns);
+
+        return array_values(array_filter(
+            $sourceColumns,
+            fn ($column) => isset($tenantColumnLookup[$column])
+        ));
     }
 
     private function supportsSchemas(): bool

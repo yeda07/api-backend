@@ -9,6 +9,7 @@ use App\Services\ActivityService;
 use App\Services\AdminAlertEvaluatorService;
 use App\Services\SearchBenchmarkService;
 use App\Services\TenantSchemaService;
+use App\Services\TenantDemoDataService;
 use App\Models\Permission;
 use Laravel\Sanctum\Sanctum;
 use Illuminate\Support\Facades\Hash;
@@ -202,10 +203,11 @@ Artisan::command('tenants:schemas:copy-data {tenant_uid?} {--all} {--tables=} {-
 
         foreach ($result['tables'] as $tableResult) {
             $this->line(sprintf(
-                '  %-36s %-22s source=%s copied=%s',
+                '  %-36s %-22s source=%s columns=%s copied=%s',
                 $tableResult['table'],
                 $tableResult['status'],
                 $tableResult['source_count'] ?? 'n/a',
+                count($tableResult['columns'] ?? []),
                 $tableResult['copied']
             ));
         }
@@ -217,6 +219,66 @@ Artisan::command('tenants:schemas:copy-data {tenant_uid?} {--all} {--tables=} {-
 
     return 0;
 })->purpose('Dry-run or copy tenant-owned rows from public tables into tenant schemas');
+
+Artisan::command('tenants:seed-demo {tenant_uid?} {--active} {--user_email=}', function () {
+    $tenantUid = $this->argument('tenant_uid');
+    $useActive = (bool) $this->option('active');
+    $userEmail = $this->option('user_email');
+
+    if (! $tenantUid && ! $useActive) {
+        $this->error('Debes enviar tenant_uid o usar --active.');
+
+        return 1;
+    }
+
+    $query = Tenant::query()->orderBy('id');
+
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    } else {
+        $query->where('is_active', true)->where('status', 'ACTIVO');
+    }
+
+    $tenants = $query->get();
+
+    if ($tenants->isEmpty()) {
+        $this->error('No se encontro tenant para cargar datos demo.');
+
+        return 1;
+    }
+
+    if (! $tenantUid && $tenants->count() > 1) {
+        $this->error('Hay mas de un tenant activo. Ejecuta el comando con tenant_uid para evitar cargar datos en el tenant equivocado.');
+        $tenants->each(fn (Tenant $tenant) => $this->line($tenant->uid.' - '.$tenant->name));
+
+        return 1;
+    }
+
+    $tenant = $tenants->first();
+    $owner = null;
+
+    if ($userEmail) {
+        $owner = User::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->where('email', $userEmail)
+            ->first();
+
+        if (! $owner) {
+            $this->error('No existe un usuario con ese email dentro del tenant.');
+
+            return 1;
+        }
+    }
+
+    $result = app(TenantDemoDataService::class)->seed($tenant, $owner);
+
+    $this->info('Datos demo cargados correctamente.');
+    foreach ($result as $key => $value) {
+        $this->line($key.': '.$value);
+    }
+
+    return 0;
+})->purpose('Seed demo CRM and pipeline data into an existing tenant');
 
 Artisan::command('superadmin:create {email} {--name=Platform Superadmin} {--password=} {--regenerate-password} {--reset-2fa}', function (string $email) {
     $name = (string) $this->option('name');
