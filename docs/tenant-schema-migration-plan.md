@@ -23,6 +23,9 @@ Estado en codigo:
 - `TenantSchemaService::createSchema()` crea el schema si la conexion es PostgreSQL.
 - `tenants:schemas:provision` permite generar/backfillear `schema_name` sin cambiar el runtime.
 - Existe una primera migracion tenant para CRM/pipeline en `database/migrations/tenant/2026_05_28_000001_create_tenant_crm_pipeline_tables.php`.
+- Existe una segunda migracion tenant para inventario, catalogo, cotizaciones, facturas y competencia en `database/migrations/tenant/2026_05_28_000002_create_tenant_sales_inventory_finance_tables.php`.
+- Existe una tercera migracion tenant para extensibilidad y operacion en `database/migrations/tenant/2026_05_28_000003_create_tenant_operations_extension_tables.php`.
+- Existe una cuarta migracion tenant para reservas/movimientos, credito, compras, gastos, comisiones y partners en `database/migrations/tenant/2026_05_28_000004_create_tenant_procurement_commission_partner_tables.php`.
 
 ## Fase 2 - Clasificacion de tablas
 
@@ -137,3 +140,39 @@ php artisan tenants:schemas:copy-data TENANT_UID --tables=accounts,contacts,crm_
 
 4. Revisar que el dry-run reporte `tenant_exists=true` para esas tablas.
 5. Copiar con `--execute` solo en tenant de prueba.
+
+Segundo bloque disponible:
+
+```bash
+php artisan tenants:schemas:copy-data TENANT_UID --tables=inventory_categories,warehouses,inventory_products,inventory_stocks,products,price_books,price_book_items,quotations,quotation_items,invoices,payments,competitors,battlecards,lost_reasons
+```
+
+Si el dry-run esta correcto:
+
+```bash
+php artisan tenants:schemas:copy-data TENANT_UID --tables=inventory_categories,warehouses,inventory_products,inventory_stocks,products,price_books,price_book_items,quotations,quotation_items,invoices,payments,competitors,battlecards,lost_reasons --execute
+```
+
+Tercer bloque disponible:
+
+```bash
+php artisan tenants:schemas:copy-data TENANT_UID --tables=product_versions,product_dependencies,custom_fields,custom_field_values,tags,taggables,documents,document_types,document_versions,alert_rules,document_alerts,projects,project_milestones,project_assignments,segments,teams,team_user,automation_rules,automation_assignment_rules
+```
+
+Si el dry-run esta correcto:
+
+```bash
+php artisan tenants:schemas:copy-data TENANT_UID --tables=product_versions,product_dependencies,custom_fields,custom_field_values,tags,taggables,documents,document_types,document_versions,alert_rules,document_alerts,projects,project_milestones,project_assignments,segments,teams,team_user,automation_rules,automation_assignment_rules --execute
+```
+
+Cuarto bloque disponible:
+
+```bash
+php artisan tenants:schemas:copy-data TENANT_UID --tables=inventory_reservations,inventory_movements,credit_profiles,exchange_rates,credit_rules,financial_records,commission_rules,commission_entries,commission_plans,commission_plan_role,commission_assignments,commission_targets,commission_runs,commission_run_items,expense_categories,cost_centers,suppliers,expenses,purchase_orders,purchase_order_items,purchase_order_payments,purchase_order_receipts,purchase_order_receipt_items,partners,partner_opportunities,opportunity_conflicts,partner_resources,partner_access
+```
+
+Si el dry-run esta correcto:
+
+```bash
+php artisan tenants:schemas:copy-data TENANT_UID --tables=inventory_reservations,inventory_movements,credit_profiles,exchange_rates,credit_rules,financial_records,commission_rules,commission_entries,commission_plans,commission_plan_role,commission_assignments,commission_targets,commission_runs,commission_run_items,expense_categories,cost_centers,suppliers,expenses,purchase_orders,purchase_order_items,purchase_order_payments,purchase_order_receipts,purchase_order_receipt_items,partners,partner_opportunities,opportunity_conflicts,partner_resources,partner_access --execute
+```

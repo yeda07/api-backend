@@ -7,7 +7,6 @@ use App\Models\InventoryReservation;
 use App\Models\Invoice;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
-use App\Models\Tenant;
 use App\Support\ApiIndex;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -371,7 +370,7 @@ class InvoiceService
 
     private function generateInvoiceNumber(int $tenantId): string
     {
-        Tenant::query()->whereKey($tenantId)->lockForUpdate()->firstOrFail();
+        $this->acquireInvoiceNumberLock($tenantId);
 
         $prefix = 'INV-'.now()->format('Y').'-';
         $lastNumber = Invoice::query()
@@ -398,6 +397,15 @@ class InvoiceService
         );
 
         return $invoiceNumber;
+    }
+
+    private function acquireInvoiceNumberLock(int $tenantId): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        DB::select('select pg_advisory_xact_lock(hashtext(?))', ['invoice_number:'.$tenantId]);
     }
 
     private function itemRequiresStockReservation(QuotationItem $item): bool
