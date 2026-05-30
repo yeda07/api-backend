@@ -69,15 +69,33 @@ class TenantSchemaService
             ->trim('_')
             ->value() ?: 'tenant';
 
-        $uid = $tenant->uid ?: (string) Str::uuid();
-        $suffix = Str::of($uid)
+        $source = $tenant->name ?: $tenant->uid ?: (string) Str::uuid();
+        $suffix = Str::of($source)
+            ->ascii()
             ->lower()
-            ->replace('-', '_')
+            ->replaceMatches('/[^a-z0-9_]+/', '_')
+            ->trim('_')
+            ->value() ?: Str::of($tenant->uid ?: (string) Str::uuid())
+                ->lower()
+                ->replace('-', '_')
+                ->replaceMatches('/[^a-z0-9_]+/', '_')
+                ->trim('_')
+                ->value();
+
+        $baseName = Str::limit($prefix.'_'.$suffix, 63, '');
+
+        if (! $this->schemaNameIsTaken($baseName, $tenant)) {
+            return $baseName;
+        }
+
+        $uidSuffix = Str::of($tenant->uid ?: (string) Str::uuid())
+            ->lower()
+            ->before('-')
             ->replaceMatches('/[^a-z0-9_]+/', '_')
             ->trim('_')
             ->value();
 
-        return Str::limit($prefix.'_'.$suffix, 63, '');
+        return Str::limit($baseName, max(1, 62 - strlen($uidSuffix)), '').'_'.$uidSuffix;
     }
 
     public function searchPath(Tenant $tenant): string
@@ -105,9 +123,40 @@ class TenantSchemaService
         DB::statement('SET search_path TO public');
     }
 
-    public function shouldUseSchemaMode(): bool
+    public function shouldUseSchemaMode(?Tenant $tenant = null): bool
     {
-        return config('tenancy.mode') === 'schema';
+        $mode = config('tenancy.mode', 'shared');
+
+        if ($mode === 'schema') {
+            return true;
+        }
+
+        if ($mode === 'hybrid') {
+            return (bool) $tenant?->hasMigratedSchema();
+        }
+
+        return false;
+    }
+
+    public function markMigrated(Tenant $tenant): Tenant
+    {
+        $schemaName = $this->createSchema($tenant);
+
+        $tenant->forceFill([
+            'schema_name' => $schemaName,
+            'schema_migrated_at' => now(),
+        ])->save();
+
+        return $tenant->refresh();
+    }
+
+    public function unmarkMigrated(Tenant $tenant): Tenant
+    {
+        $tenant->forceFill([
+            'schema_migrated_at' => null,
+        ])->save();
+
+        return $tenant->refresh();
     }
 
     public function tenantTables(): array
@@ -260,6 +309,28 @@ class TenantSchemaService
     private function supportsSchemas(): bool
     {
         return DB::connection()->getDriverName() === 'pgsql';
+    }
+
+    private function schemaNameIsTaken(string $schemaName, Tenant $tenant): bool
+    {
+        $query = Tenant::query()->where('schema_name', $schemaName);
+
+        if ($tenant->exists) {
+            $query->whereKeyNot($tenant->getKey());
+        }
+
+        if ($query->exists()) {
+            return true;
+        }
+
+        if (! $this->supportsSchemas()) {
+            return false;
+        }
+
+        return DB::table('information_schema.schemata')
+            ->where('schema_name', $schemaName)
+            ->exists()
+            && $tenant->schema_name !== $schemaName;
     }
 
     private function ensureSchemaName(Tenant $tenant): string

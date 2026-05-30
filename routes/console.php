@@ -220,6 +220,50 @@ Artisan::command('tenants:schemas:copy-data {tenant_uid?} {--all} {--tables=} {-
     return 0;
 })->purpose('Dry-run or copy tenant-owned rows from public tables into tenant schemas');
 
+Artisan::command('tenants:schemas:activate {tenant_uid}', function () {
+    $tenantUid = $this->argument('tenant_uid');
+
+    $tenant = Tenant::query()->where('uid', $tenantUid)->first();
+
+    if (! $tenant) {
+        $this->error('Tenant no encontrado.');
+
+        return 1;
+    }
+
+    $schemaService = app(TenantSchemaService::class);
+    $tenant = $schemaService->markMigrated($tenant);
+
+    $this->info('Tenant activado para schema en modo hybrid/schema.');
+    $this->line('tenant_uid: '.$tenant->uid);
+    $this->line('schema_name: '.$tenant->schema_name);
+    $this->line('schema_migrated_at: '.$tenant->schema_migrated_at?->toISOString());
+
+    return 0;
+})->purpose('Mark one tenant as schema-migrated so hybrid mode routes it to its PostgreSQL schema');
+
+Artisan::command('tenants:schemas:deactivate {tenant_uid}', function () {
+    $tenantUid = $this->argument('tenant_uid');
+
+    $tenant = Tenant::query()->where('uid', $tenantUid)->first();
+
+    if (! $tenant) {
+        $this->error('Tenant no encontrado.');
+
+        return 1;
+    }
+
+    $schemaService = app(TenantSchemaService::class);
+    $tenant = $schemaService->unmarkMigrated($tenant);
+
+    $this->warn('Tenant devuelto a modo shared en TENANCY_MODE=hybrid.');
+    $this->line('tenant_uid: '.$tenant->uid);
+    $this->line('schema_name: '.$tenant->schema_name);
+    $this->line('schema_migrated_at: null');
+
+    return 0;
+})->purpose('Unmark one tenant as schema-migrated for quick hybrid-mode rollback');
+
 Artisan::command('tenants:seed-demo {tenant_uid?} {--active} {--user_email=}', function () {
     $tenantUid = $this->argument('tenant_uid');
     $useActive = (bool) $this->option('active');

@@ -13,6 +13,7 @@ Separar los datos operativos de cada tenant en un schema PostgreSQL propio, mant
 ## Fase 1 - Preparacion segura
 
 - Agregar `tenants.schema_name`.
+- Bloquear nombres de tenant repetidos; el nombre comercial ahora es unico sin importar mayusculas/minusculas.
 - Provisionar schema vacio al crear tenant.
 - Agregar comando para provisionar schemas de tenants existentes.
 - Mantener `TENANCY_MODE=shared`, sin cambiar runtime ni mover datos.
@@ -21,6 +22,8 @@ Estado en codigo:
 
 - `TENANCY_MODE=shared` sigue siendo el valor recomendado.
 - `TenantSchemaService::createSchema()` crea el schema si la conexion es PostgreSQL.
+- `TenantSchemaService::generateSchemaName()` genera schemas desde el nombre del tenant, por ejemplo `tenant_yeda10` o `tenant_tt_corporation`. Si el nombre sanitizado choca con un schema existente, agrega un sufijo corto del UID.
+- Existe un indice unico case-insensitive sobre `tenants.name` para impedir duplicados como `Acme` y `acme`.
 - `tenants:schemas:provision` permite generar/backfillear `schema_name` sin cambiar el runtime.
 - Existe una primera migracion tenant para CRM/pipeline en `database/migrations/tenant/2026_05_28_000001_create_tenant_crm_pipeline_tables.php`.
 - Existe una segunda migracion tenant para inventario, catalogo, cotizaciones, facturas y competencia en `database/migrations/tenant/2026_05_28_000002_create_tenant_sales_inventory_finance_tables.php`.
@@ -110,6 +113,33 @@ El comando copia usando columnas explicitas comunes entre `public.tabla` y `tena
 - Setear `search_path` a `"schema_tenant", public` solo cuando el tenant este migrado.
 - Resetear `search_path` al final de cada request y job.
 - Mantener fallback a modo shared para tenants no migrados.
+
+Estado en codigo:
+
+- `TENANCY_MODE=shared`: ningun tenant usa schema en runtime.
+- `TENANCY_MODE=hybrid`: solo tenants con `schema_migrated_at` usan schema.
+- `TENANCY_MODE=schema`: todos los tenants usan schema.
+- `tenants:schemas:activate TENANT_UID` marca el tenant como migrado.
+- `tenants:schemas:deactivate TENANT_UID` lo devuelve a modo shared cuando `TENANCY_MODE=hybrid`.
+
+Flujo recomendado para activar un tenant de prueba:
+
+```bash
+php artisan migrate --force
+php artisan tenants:schemas:provision --tenant_uid=TENANT_UID
+php artisan tenants:migrate --tenant_uid=TENANT_UID
+php artisan tenants:schemas:copy-data TENANT_UID --tables=accounts,contacts,crm_entities,relations,opportunity_stages,opportunities,tasks,activities --execute
+php artisan tenants:schemas:copy-data TENANT_UID --tables=inventory_categories,warehouses,inventory_products,inventory_stocks,products,price_books,price_book_items,quotations,quotation_items,invoices,payments,competitors,battlecards,lost_reasons --execute
+php artisan tenants:schemas:copy-data TENANT_UID --tables=product_versions,product_dependencies,custom_fields,custom_field_values,tags,taggables,documents,document_types,document_versions,alert_rules,document_alerts,projects,project_milestones,project_assignments,segments,teams,team_user,automation_rules,automation_assignment_rules --execute
+php artisan tenants:schemas:copy-data TENANT_UID --tables=inventory_reservations,inventory_movements,credit_profiles,exchange_rates,credit_rules,financial_records,commission_rules,commission_entries,commission_plans,commission_plan_role,commission_assignments,commission_targets,commission_runs,commission_run_items,expense_categories,cost_centers,suppliers,expenses,purchase_orders,purchase_order_items,purchase_order_payments,purchase_order_receipts,purchase_order_receipt_items,partners,partner_opportunities,opportunity_conflicts,partner_resources,partner_access --execute
+php artisan tenants:schemas:activate TENANT_UID
+```
+
+Para rollback rapido en modo `hybrid`:
+
+```bash
+php artisan tenants:schemas:deactivate TENANT_UID
+```
 
 ## Fase 6 - Limpieza
 

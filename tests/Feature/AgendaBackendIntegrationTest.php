@@ -110,6 +110,45 @@ class AgendaBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.uid', $included->uid);
     }
 
+    public function test_activity_index_accepts_comma_separated_status_filter(): void
+    {
+        $user = $this->authenticateWithPermissions(['activities.read']);
+
+        $pending = Activity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'type' => 'meeting',
+            'title' => 'Actividad pendiente',
+            'status' => 'pending',
+            'priority' => 'medium',
+            'scheduled_at' => '2026-05-10 10:00:00',
+        ]);
+        $overdue = Activity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'type' => 'call',
+            'title' => 'Actividad vencida',
+            'status' => 'overdue',
+            'priority' => 'high',
+            'scheduled_at' => '2026-05-09 10:00:00',
+        ]);
+        Activity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'type' => 'note',
+            'title' => 'Actividad completada',
+            'status' => 'completed',
+            'priority' => 'low',
+            'scheduled_at' => '2026-05-08 10:00:00',
+        ]);
+
+        $this->getJson('/api/activities?status=pending,in_progress,overdue&page=1&per_page=25')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.uid', $pending->uid)
+            ->assertJsonPath('data.1.uid', $overdue->uid);
+    }
+
     public function test_schedule_endpoint_merges_agenda_and_project_items(): void
     {
         $user = $this->authenticateWithPermissions(['activities.read']);

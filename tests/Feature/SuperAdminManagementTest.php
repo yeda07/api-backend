@@ -558,7 +558,7 @@ class SuperAdminManagementTest extends TestCase
 
         $response
             ->assertCreated()
-            ->assertJsonPath('data.schema_name', fn (?string $schemaName) => str_starts_with((string) $schemaName, 'tenant_'));
+            ->assertJsonPath('data.schema_name', 'tenant_pipeline_corp');
 
         $tenant = Tenant::query()
             ->where('uid', $response->json('data.uid'))
@@ -573,6 +573,26 @@ class SuperAdminManagementTest extends TestCase
             ->all();
 
         $this->assertSame(['Leads', 'Contactado', 'Negociación', 'Cerrador'], $stages);
+    }
+
+    public function test_superadmin_cannot_create_tenant_with_repeated_name(): void
+    {
+        $this->authenticateSuperadmin(['admin.tenants.manage']);
+
+        Tenant::query()->create([
+            'name' => 'Acme SAS',
+            'domain' => 'acme.vende-mas.com.co',
+            'status' => 'ACTIVO',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/admin/tenants', [
+            'nombre' => 'acme sas',
+            'dominio' => 'acme-2.vende-mas.com.co',
+            'estado' => 'ACTIVO',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.nombre.0', 'Ya existe un tenant con este nombre');
     }
 
     public function test_tenant_user_creation_provisions_and_assigns_owner_role(): void

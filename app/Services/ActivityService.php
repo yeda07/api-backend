@@ -24,7 +24,7 @@ class ActivityService
             'entity_type' => 'nullable|string',
             'entity_uid' => 'nullable|uuid',
             'type' => 'nullable|string|in:task,call,meeting,email,note,reminder,nota,llamada,reunion,demo,seguimiento',
-            'status' => 'nullable|string|in:pending,in_progress,completed,cancelled,overdue',
+            'status' => 'nullable',
             'search' => 'nullable|string|max:255',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date|after_or_equal:date_from',
@@ -32,6 +32,8 @@ class ActivityService
             'per_page' => 'sometimes|integer|min:1|max:100',
             'paginate' => 'sometimes',
         ])->validate();
+
+        $statuses = $this->normalizeStatusFilter($validated['status'] ?? null);
 
         $query = Activity::query()
             ->with($this->activityIndexRelations())
@@ -60,8 +62,8 @@ class ActivityService
             $query->where('type', $this->normalizeActivityType($validated['type']));
         }
 
-        if (!empty($validated['status'])) {
-            $query->where('status', $validated['status']);
+        if ($statuses !== []) {
+            $query->whereIn('status', $statuses);
         }
 
         if (!empty($validated['search'])) {
@@ -248,6 +250,35 @@ class ActivityService
             'seguimiento' => 'reminder',
             default => $type,
         };
+    }
+
+    private function normalizeStatusFilter(mixed $status): array
+    {
+        if ($status === null || $status === '') {
+            return [];
+        }
+
+        $values = is_array($status)
+            ? $status
+            : explode(',', (string) $status);
+
+        $values = collect($values)
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $allowed = ['pending', 'in_progress', 'completed', 'cancelled', 'overdue'];
+        $invalid = array_values(array_diff($values, $allowed));
+
+        if ($invalid !== []) {
+            throw ValidationException::withMessages([
+                'status' => ['Estados no soportados: '.implode(', ', $invalid)],
+            ]);
+        }
+
+        return $values;
     }
 
     private function normalizePayload(array $data, ?Activity $activity = null): array

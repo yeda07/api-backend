@@ -26,7 +26,7 @@ if (!function_exists('crm_entity_model_class')) {
             Account::class, 'Account', 'account', 'accounts' => Account::class,
             Contact::class, 'Contact', 'contact', 'contacts' => Contact::class,
             CrmEntity::class, 'CrmEntity', 'crm_entity', 'crm-entity', 'crm_entities', 'crm-entities' => CrmEntity::class,
-            Opportunity::class, 'Opportunity', 'opportunity', 'opportunities' => Opportunity::class,
+            Opportunity::class, 'Opportunity', 'opportunity', 'opportunities', 'pipeline' => Opportunity::class,
             Product::class, 'Product', 'product', 'products' => Product::class,
             default => null,
         };

@@ -214,6 +214,7 @@ class CustomFieldService
     {
         return match ($entityType) {
             'companies', 'company' => 'accounts',
+            'pipeline' => 'opportunities',
             default => $entityType,
         };
     }
@@ -334,7 +335,7 @@ class CustomFieldService
         return match ($module) {
             'account', 'accounts', 'company' => 'companies',
             'contact' => 'contacts',
-            'opportunity' => 'opportunities',
+            'opportunity', 'pipeline' => 'opportunities',
             'product' => 'products',
             default => $module,
         };

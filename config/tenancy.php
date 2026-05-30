@@ -7,7 +7,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | shared: comportamiento actual, todas las tablas viven en public con tenant_id.
-    | schema: modo futuro, cada tenant opera sobre su propio schema PostgreSQL.
+    | hybrid: solo tenants con schema_migrated_at usan schema propio.
+    | schema: todos los tenants operan sobre su propio schema PostgreSQL.
     |
     */
     'mode' => env('TENANCY_MODE', 'shared'),

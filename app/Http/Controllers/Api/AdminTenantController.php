@@ -110,6 +110,12 @@ class AdminTenantController extends Controller
                 'limite_almacenamiento_gb' => 'nullable|numeric|min:0',
             ]);
 
+            if ($this->tenantNameExists($validated['nombre'])) {
+                return $this->errorResponse('Validation error', 422, [
+                    'nombre' => ['Ya existe un tenant con este nombre'],
+                ]);
+            }
+
             $plan = !empty($validated['plan_uid'])
                 ? Plan::query()->where('uid', $validated['plan_uid'])->first()
                 : null;
@@ -190,6 +196,12 @@ class AdminTenantController extends Controller
                 'almacenamiento_usado_gb' => 'sometimes|numeric|min:0',
                 'limite_almacenamiento_gb' => 'sometimes|nullable|numeric|min:0',
             ]);
+
+            if (array_key_exists('nombre', $validated) && $this->tenantNameExists($validated['nombre'], $tenant->id)) {
+                return $this->errorResponse('Validation error', 422, [
+                    'nombre' => ['Ya existe un tenant con este nombre'],
+                ]);
+            }
 
             $plan = array_key_exists('plan_uid', $validated) && !empty($validated['plan_uid'])
                 ? Plan::query()->where('uid', $validated['plan_uid'])->first()
@@ -516,6 +528,8 @@ class AdminTenantController extends Controller
             'nombre' => $tenant->name,
             'dominio' => $tenant->domain,
             'schema_name' => $tenant->schema_name,
+            'schema_migrated_at' => optional($tenant->schema_migrated_at)?->toISOString(),
+            'schema_ready' => $tenant->hasMigratedSchema(),
             'pais' => $tenant->country,
             'email_contacto' => $tenant->contact_email,
             'plan_uid' => $tenant->plan?->uid,
@@ -554,5 +568,19 @@ class AdminTenantController extends Controller
             ->where('uid', $userUid)
             ->where('is_platform_admin', false)
             ->first();
+    }
+
+    private function tenantNameExists(string $name, ?int $ignoreTenantId = null): bool
+    {
+        $normalizedName = mb_strtolower(trim($name));
+
+        $query = Tenant::query()
+            ->whereRaw('lower(name) = ?', [$normalizedName]);
+
+        if ($ignoreTenantId !== null) {
+            $query->whereKeyNot($ignoreTenantId);
+        }
+
+        return $query->exists();
     }
 }

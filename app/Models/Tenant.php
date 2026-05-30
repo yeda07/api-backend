@@ -15,6 +15,7 @@ class Tenant extends Model
         'name',
         'domain',
         'schema_name',
+        'schema_migrated_at',
         'country',
         'contact_email',
         'status',
@@ -44,6 +45,7 @@ class Tenant extends Model
         'storage_limit_gb' => 'decimal:2',
         'api_calls_mes' => 'integer',
         'limite_api_calls' => 'integer',
+        'schema_migrated_at' => 'datetime',
     ];
 
     public function users()
@@ -81,5 +83,10 @@ class Tenant extends Model
         return $this->is_active && (
             !$this->expires_at || now()->lt($this->expires_at)
         );
+    }
+
+    public function hasMigratedSchema(): bool
+    {
+        return filled($this->schema_name) && $this->schema_migrated_at !== null;
     }
 }

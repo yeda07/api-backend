@@ -580,6 +580,57 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.key', 'fecha_de_garantia_2');
     }
 
+    public function test_pipeline_is_accepted_as_custom_field_alias_for_opportunities(): void
+    {
+        $user = $this->authenticateWithPermissions(['custom-fields.manage', 'opportunities.read']);
+
+        $field = $this->postJson('/api/custom-fields', [
+            'module' => 'pipeline',
+            'label' => 'Origen campaña',
+            'type' => 'text',
+        ]);
+
+        $field->assertCreated()
+            ->assertJsonPath('data.entity_type', 'opportunity')
+            ->assertJsonPath('data.module', 'opportunities');
+
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Leads',
+            'key' => 'leads-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 10,
+        ]);
+
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Venta desde pipeline',
+            'amount' => 1000,
+            'currency' => 'COP',
+        ]);
+
+        $this->postJson('/api/custom-fields/value', [
+            'entity_type' => 'pipeline',
+            'entity_uid' => $opportunity->uid,
+            'custom_field_uid' => $field->json('data.uid'),
+            'value' => 'LinkedIn Ads',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.value', 'LinkedIn Ads');
+
+        $this->getJson('/api/opportunities/'.$opportunity->uid)
+            ->assertOk()
+            ->assertJsonPath('data.custom_fields.0.custom_field_uid', $field->json('data.uid'))
+            ->assertJsonPath('data.custom_fields.0.value', 'LinkedIn Ads');
+
+        $this->getJson('/api/custom-fields?module=pipeline')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.uid', $field->json('data.uid'));
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([

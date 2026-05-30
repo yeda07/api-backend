@@ -16,13 +16,17 @@ class SetTenantSchema
     {
         $user = $request->user();
 
-        if (! $this->tenantSchemaService->shouldUseSchemaMode() || ! $user || $user->is_platform_admin) {
+        if (! $user || $user->is_platform_admin) {
             return $next($request);
         }
 
         $tenant = $user->tenant;
 
         if (! $tenant) {
+            return $next($request);
+        }
+
+        if (! $this->tenantSchemaService->shouldUseSchemaMode($tenant)) {
             return $next($request);
         }
 
