@@ -3,26 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\FinancialRecord;
 use App\Models\Invoice;
-use App\Models\Payment;
-use App\Models\Plan;
-use App\Models\Tenant;
-use App\Support\ApiIndex;
+use App\Services\PlatformBillingService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class AdminBillingController extends Controller
 {
-    public function summary()
+    public function summary(PlatformBillingService $billing)
     {
         $currentMonth = now()->startOfMonth();
 
-        $invoices = Invoice::withoutGlobalScopes()
-            ->whereDate('issued_at', '>=', $currentMonth)
-            ->get();
+        $invoices = $billing->invoices(['from' => $currentMonth->toDateString()]);
 
         return $this->successResponse([
             'cobrado_este_mes' => round((float) $invoices->where('status', 'paid')->sum('paid_total'), 2),
@@ -35,7 +29,7 @@ class AdminBillingController extends Controller
         ]);
     }
 
-    public function index(Request $request)
+    public function index(Request $request, PlatformBillingService $billing)
     {
         $validated = Validator::make($request->query(), [
             'tenant_uid' => 'nullable|uuid',
@@ -49,40 +43,17 @@ class AdminBillingController extends Controller
             'per_page' => 'nullable|integer|min:1|max:100',
         ])->validate();
 
-        $query = Invoice::withoutGlobalScopes()->with(['tenant.plan'])->latest('issued_at');
+        $invoices = $billing->invoices($this->billingFilters($validated));
+        $rows = $invoices->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice))->values();
 
-        if (!empty($validated['tenant_uid'])) {
-            $tenantId = Tenant::query()->where('uid', $validated['tenant_uid'])->value('id');
-            $query->where('tenant_id', $tenantId);
+        if (array_key_exists('page', $validated) || array_key_exists('per_page', $validated) || config('performance.force_index_pagination', false)) {
+            return $this->successResponse($this->paginateRows($rows, $validated, 'billing_page'));
         }
 
-        $this->applyTenantFilters($query, $validated);
-
-        if (!empty($validated['estado'])) {
-            $query->where('status', $this->toInvoiceStatus($validated['estado']));
-        }
-
-        if (!empty($validated['from'])) {
-            $query->whereDate('issued_at', '>=', $validated['from']);
-        }
-
-        if (!empty($validated['to'])) {
-            $query->whereDate('issued_at', '<=', $validated['to']);
-        }
-
-        $result = ApiIndex::paginateOrGet($query, $validated, 'billing_page');
-
-        if ($result instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
-            $mapped = $result->getCollection()->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice));
-            $result->setCollection($mapped);
-
-            return $this->successResponse($result);
-        }
-
-        return $this->successResponse(collect($result)->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice))->values());
+        return $this->successResponse($rows);
     }
 
-    public function export(Request $request)
+    public function export(Request $request, PlatformBillingService $billing)
     {
         $validated = Validator::make($request->query(), [
             'tenant_uid' => 'nullable|uuid',
@@ -95,9 +66,7 @@ class AdminBillingController extends Controller
             'format' => 'nullable|string|in:json,csv',
         ])->validate();
 
-        $invoices = $this->billingQuery($validated)
-            ->orderByDesc('issued_at')
-            ->get();
+        $invoices = $billing->invoices($this->billingFilters($validated));
 
         $rows = $invoices
             ->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice))
@@ -124,14 +93,14 @@ class AdminBillingController extends Controller
         ]);
     }
 
-    public function markPaid(string $uid)
+    public function markPaid(string $uid, PlatformBillingService $billing)
     {
-        $invoices = $this->markInvoicesAsPaid([$uid]);
+        $invoices = $this->serializeInvoices($billing->markPaid([$uid]));
 
         return $this->successResponse($invoices[0] ?? null, 200, 'Factura marcada como pagada');
     }
 
-    public function markPaidBulk(Request $request)
+    public function markPaidBulk(Request $request, PlatformBillingService $billing)
     {
         try {
             $validated = $request->validate([
@@ -140,7 +109,7 @@ class AdminBillingController extends Controller
             ]);
 
             return $this->successResponse(
-                $this->markInvoicesAsPaid($validated['ids']),
+                $this->serializeInvoices($billing->markPaid($validated['ids'])),
                 200,
                 'Facturas marcadas como pagadas'
             );
@@ -149,103 +118,11 @@ class AdminBillingController extends Controller
         }
     }
 
-    private function markInvoicesAsPaid(array $uids): array
+    private function billingFilters(array $validated): array
     {
-        return DB::transaction(function () use ($uids) {
-            $invoices = Invoice::withoutGlobalScopes()
-                ->whereIn('uid', $uids)
-                ->get();
-
-            $updated = [];
-
-            foreach ($invoices as $invoice) {
-                $invoice->update([
-                    'status' => 'paid',
-                    'paid_total' => $invoice->total,
-                    'outstanding_total' => 0,
-                ]);
-
-                Payment::withoutGlobalScopes()->create([
-                    'tenant_id' => $invoice->tenant_id,
-                    'invoice_id' => $invoice->getKey(),
-                    'amount' => $invoice->total,
-                    'payment_date' => now()->toDateString(),
-                    'method' => 'admin_mark_paid',
-                    'external_reference' => 'ADMIN-' . $invoice->uid,
-                    'meta' => [
-                        'source' => 'admin_billing',
-                    ],
-                ]);
-
-                FinancialRecord::withoutGlobalScopes()
-                    ->where('tenant_id', $invoice->tenant_id)
-                    ->where('external_reference', $invoice->invoice_number)
-                    ->update([
-                        'status' => 'paid',
-                        'outstanding_amount' => 0,
-                        'paid_at' => now()->toDateString(),
-                    ]);
-
-                $updated[] = $this->serializeInvoice($invoice->fresh(['tenant.plan']));
-            }
-
-            return $updated;
-        });
-    }
-
-    private function billingQuery(array $validated)
-    {
-        $query = Invoice::withoutGlobalScopes()->with(['tenant.plan']);
-
-        if (!empty($validated['tenant_uid'])) {
-            $tenantId = Tenant::query()->where('uid', $validated['tenant_uid'])->value('id');
-            $query->where('tenant_id', $tenantId);
-        }
-
-        $this->applyTenantFilters($query, $validated);
-
-        if (!empty($validated['estado'])) {
-            $query->where('status', $this->toInvoiceStatus($validated['estado']));
-        }
-
-        if (!empty($validated['from'])) {
-            $query->whereDate('issued_at', '>=', $validated['from']);
-        }
-
-        if (!empty($validated['to'])) {
-            $query->whereDate('issued_at', '<=', $validated['to']);
-        }
-
-        return $query;
-    }
-
-    private function applyTenantFilters($query, array $validated): void
-    {
-        if (!empty($validated['search'])) {
-            $search = $validated['search'];
-            $query->whereHas('tenant', function ($tenantQuery) use ($search) {
-                $tenantQuery
-                    ->withoutGlobalScopes()
-                    ->where(function ($builder) use ($search) {
-                        $builder
-                            ->where('name', 'like', '%' . $search . '%')
-                            ->orWhere('domain', 'like', '%' . $search . '%')
-                            ->orWhere('contact_email', 'like', '%' . $search . '%');
-                    });
-            });
-        }
-
-        if (!empty($validated['plan_uid'])) {
-            $planId = Plan::query()->where('uid', $validated['plan_uid'])->value('id');
-            $query->whereHas('tenant', fn ($tenantQuery) => $tenantQuery->withoutGlobalScopes()->where('plan_id', $planId));
-        }
-
-        if (!empty($validated['plan_nombre'])) {
-            $planName = $validated['plan_nombre'];
-            $query->whereHas('tenant.plan', function ($planQuery) use ($planName) {
-                $planQuery->where('name', 'like', '%' . $planName . '%');
-            });
-        }
+        return array_merge($validated, [
+            'status' => ! empty($validated['estado']) ? $this->toInvoiceStatus($validated['estado']) : null,
+        ]);
     }
 
     private function toCsv(array $rows): string
@@ -294,6 +171,31 @@ class AdminBillingController extends Controller
             'issued_at' => optional($invoice->issued_at)?->toISOString(),
             'due_at' => optional($invoice->due_date)?->toISOString(),
         ];
+    }
+
+    private function serializeInvoices(array $invoices): array
+    {
+        return collect($invoices)
+            ->map(fn (Invoice $invoice) => $this->serializeInvoice($invoice))
+            ->values()
+            ->all();
+    }
+
+    private function paginateRows($rows, array $filters, string $pageName): LengthAwarePaginator
+    {
+        $page = max((int) ($filters['page'] ?? 1), 1);
+        $perPage = min(max((int) ($filters['per_page'] ?? config('performance.default_per_page', 25)), 1), (int) config('performance.max_per_page', 100));
+
+        return new LengthAwarePaginator(
+            $rows->slice(($page - 1) * $perPage, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $page,
+            [
+                'path' => request()->url(),
+                'pageName' => $pageName,
+            ]
+        );
     }
 
     private function toInvoiceStatus(string $status): string

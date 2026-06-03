@@ -22,6 +22,7 @@ Artisan::command('search:benchmark {--tenant_uid=} {--user_uid=} {--iterations=5
     $tenantUid = $this->option('tenant_uid');
     $userUid = $this->option('user_uid');
     $iterations = (int) $this->option('iterations');
+    $schemaService = app(TenantSchemaService::class);
 
     $tenant = $tenantUid
         ? Tenant::query()->where('uid', $tenantUid)->first()
@@ -46,7 +47,10 @@ Artisan::command('search:benchmark {--tenant_uid=} {--user_uid=} {--iterations=5
         'tenant:' . $tenant->uid,
     ]);
 
-    $results = app(SearchBenchmarkService::class)->run($iterations);
+    $results = $schemaService->runForTenant(
+        $tenant,
+        fn () => app(SearchBenchmarkService::class)->run($iterations)
+    );
 
     foreach ($results as $name => $result) {
         $this->info("Scenario: {$name}");
@@ -59,18 +63,82 @@ Artisan::command('search:benchmark {--tenant_uid=} {--user_uid=} {--iterations=5
     return 0;
 })->purpose('Measure search performance using representative backend scenarios');
 
-Artisan::command('finance:sync-overdue', function () {
-    $result = app(InvoiceService::class)->syncOverdue();
+Artisan::command('finance:sync-overdue {--tenant_uid=}', function () {
+    $tenantUid = $this->option('tenant_uid');
+    $schemaService = app(TenantSchemaService::class);
+    $invoiceService = app(InvoiceService::class);
+    $query = Tenant::query()
+        ->where('is_active', true)
+        ->whereIn('status', ['ACTIVO', 'TRIAL'])
+        ->orderBy('id');
 
-    $this->info('Facturas vencidas sincronizadas: ' . $result['updated_invoices']);
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    }
+
+    $tenants = $query->get();
+    $total = 0;
+
+    foreach ($tenants as $tenant) {
+        [$updated, $usingSchema] = $schemaService->runForTenant($tenant, function () use ($tenant, $invoiceService, $schemaService) {
+            $result = $invoiceService->syncOverdue($tenant->getKey());
+
+            return [
+                (int) ($result['updated_invoices'] ?? 0),
+                $schemaService->shouldUseSchemaMode($tenant),
+            ];
+        });
+
+        $total += $updated;
+
+        $this->line(sprintf(
+            'Tenant %s [%s]: %s facturas vencidas',
+            $tenant->uid,
+            $usingSchema ? $tenant->schema_name : 'public',
+            $updated
+        ));
+    }
+
+    $this->info('Facturas vencidas sincronizadas: ' . $total);
 
     return 0;
 })->purpose('Mark issued and partial invoices as overdue when due date has passed');
 
-Artisan::command('activities:sync-overdue', function () {
-    $updated = app(ActivityService::class)->syncOverdueStatuses();
+Artisan::command('activities:sync-overdue {--tenant_uid=}', function () {
+    $tenantUid = $this->option('tenant_uid');
+    $schemaService = app(TenantSchemaService::class);
+    $activityService = app(ActivityService::class);
+    $query = Tenant::query()
+        ->where('is_active', true)
+        ->whereIn('status', ['ACTIVO', 'TRIAL'])
+        ->orderBy('id');
 
-    $this->info('Actividades vencidas sincronizadas: ' . $updated);
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    }
+
+    $tenants = $query->get();
+    $total = 0;
+
+    foreach ($tenants as $tenant) {
+        [$updated, $usingSchema] = $schemaService->runForTenant($tenant, function () use ($tenant, $activityService, $schemaService) {
+            return [
+                $activityService->syncOverdueStatuses($tenant->getKey()),
+                $schemaService->shouldUseSchemaMode($tenant),
+            ];
+        });
+
+        $total += $updated;
+
+        $this->line(sprintf(
+            'Tenant %s [%s]: %s actividades vencidas',
+            $tenant->uid,
+            $usingSchema ? $tenant->schema_name : 'public',
+            $updated
+        ));
+    }
+
+    $this->info('Actividades vencidas sincronizadas: ' . $total);
 
     return 0;
 })->purpose('Mark pending activities as overdue when scheduled date has passed');
@@ -344,7 +412,11 @@ Artisan::command('tenants:seed-demo {tenant_uid?} {--active} {--user_email=}', f
         }
     }
 
-    $result = app(TenantDemoDataService::class)->seed($tenant, $owner);
+    $schemaService = app(TenantSchemaService::class);
+    $result = $schemaService->runForTenant(
+        $tenant,
+        fn () => app(TenantDemoDataService::class)->seed($tenant, $owner)
+    );
 
     $this->info('Datos demo cargados correctamente.');
     foreach ($result as $key => $value) {

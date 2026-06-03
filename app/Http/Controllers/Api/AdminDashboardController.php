@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Invoice;
 use App\Models\SystemLog;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\PlatformBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 
 class AdminDashboardController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, PlatformBillingService $billing)
     {
         $validated = Validator::make($request->query(), [
             'period' => 'nullable|string|in:7d,30d,90d,12m',
@@ -72,10 +72,7 @@ class AdminDashboardController extends Controller
             'tenants_activos' => $periodTenants->where('status', 'ACTIVO')->count(),
             'tenants_trial' => $periodTenants->where('status', 'TRIAL')->count(),
             'tenants_en_riesgo_count' => $periodTenants->whereIn('status', ['VENCIDO', 'SUSPENDIDO'])->count(),
-            'facturas_vencidas' => Invoice::withoutGlobalScopes()
-                ->where('status', 'overdue')
-                ->when($periodStart, fn ($query) => $query->where('created_at', '>=', $periodStart))
-                ->count(),
+            'facturas_vencidas' => $billing->overdueCount($periodStart),
             'errores_criticos_24h' => SystemLog::withoutGlobalScopes()
                 ->whereIn('level', ['error', 'critical'])
                 ->where('created_at', '>=', now()->subDay())

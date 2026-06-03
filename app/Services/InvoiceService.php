@@ -262,10 +262,11 @@ class InvoiceService
         ]);
     }
 
-    public function syncOverdue(): array
+    public function syncOverdue(?int $tenantId = null): array
     {
-        return DB::transaction(function () {
+        return DB::transaction(function () use ($tenantId) {
             $invoices = Invoice::query()
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->whereIn('status', ['issued', 'partial'])
                 ->whereDate('due_date', '<', now()->toDateString())
                 ->get();

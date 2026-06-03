@@ -138,6 +138,23 @@ class TenantSchemaService
         return false;
     }
 
+    public function runForTenant(Tenant $tenant, callable $callback): mixed
+    {
+        $usingSchema = $this->shouldUseSchemaMode($tenant);
+
+        try {
+            if ($usingSchema) {
+                $this->setSearchPath($tenant);
+            } else {
+                $this->resetSearchPath();
+            }
+
+            return $callback($tenant, $usingSchema);
+        } finally {
+            $this->resetSearchPath();
+        }
+    }
+
     public function markMigrated(Tenant $tenant): Tenant
     {
         $schemaName = $this->createSchema($tenant);
@@ -357,7 +374,9 @@ class TenantSchemaService
 
     private function resetTableSequence(string $schemaName, string $table): ?array
     {
-        if (! $this->tableColumns($schemaName, $table) || ! in_array('id', $this->tableColumns($schemaName, $table), true)) {
+        $columns = $this->tableColumns($schemaName, $table);
+
+        if ($columns === [] || ! in_array('id', $columns, true)) {
             return null;
         }
 
