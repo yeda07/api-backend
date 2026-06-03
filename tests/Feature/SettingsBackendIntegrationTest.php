@@ -631,6 +631,45 @@ class SettingsBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.uid', $field->json('data.uid'));
     }
 
+    public function test_opportunity_create_accepts_pipeline_custom_fields(): void
+    {
+        $user = $this->authenticateWithPermissions([
+            'custom-fields.manage',
+            'opportunities.read',
+            'opportunities.manage',
+        ]);
+
+        $field = $this->postJson('/api/custom-fields', [
+            'module' => 'pipeline',
+            'label' => 'Campaña origen',
+            'type' => 'text',
+        ])->assertCreated();
+
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Leads',
+            'key' => 'leads-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 10,
+        ]);
+
+        $this->postJson('/api/opportunities', [
+            'stage_uid' => $stage->uid,
+            'title' => 'Lead con campo custom',
+            'amount' => 250000,
+            'currency' => 'COP',
+            'custom_fields' => [
+                [
+                    'custom_field_uid' => $field->json('data.uid'),
+                    'value' => 'Expo SaaS',
+                ],
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.custom_fields.0.custom_field_uid', $field->json('data.uid'))
+            ->assertJsonPath('data.custom_fields.0.value', 'Expo SaaS');
+    }
+
     private function authenticateWithPermissions(array $permissionKeys): User
     {
         $tenant = Tenant::query()->create([

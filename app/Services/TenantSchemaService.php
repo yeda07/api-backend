@@ -249,6 +249,12 @@ class TenantSchemaService
                     [$tenant->getKey()]
                 );
                 $result['status'] = 'copied';
+
+                $sequence = $this->resetTableSequence($schemaName, $table);
+
+                if ($sequence) {
+                    $result['sequence_reset'] = $sequence;
+                }
             }
 
             $results[] = $result;
@@ -259,6 +265,44 @@ class TenantSchemaService
             'schema_name' => $schemaName,
             'execute' => $execute,
             'truncate' => $truncate && $execute,
+            'tables' => $results,
+        ];
+    }
+
+    public function resetTenantSequences(Tenant $tenant, array $tables = []): array
+    {
+        if (! $this->supportsSchemas()) {
+            throw ValidationException::withMessages([
+                'database' => ['La migracion por schema solo esta soportada en PostgreSQL'],
+            ]);
+        }
+
+        $schemaName = $tenant->schema_name ?: $this->generateSchemaName($tenant);
+        $tables = $tables ?: $this->tenantTables();
+        $results = [];
+
+        foreach ($tables as $table) {
+            $table = trim((string) $table);
+
+            if ($table === '' || ! $this->tableExists($schemaName, $table)) {
+                continue;
+            }
+
+            $sequence = $this->resetTableSequence($schemaName, $table);
+
+            if ($sequence) {
+                $results[] = [
+                    'table' => $table,
+                    'sequence' => $sequence['sequence'],
+                    'max_id' => $sequence['max_id'],
+                    'total' => $sequence['total'],
+                ];
+            }
+        }
+
+        return [
+            'tenant_uid' => $tenant->uid,
+            'schema_name' => $schemaName,
             'tables' => $results,
         ];
     }
@@ -309,6 +353,34 @@ class TenantSchemaService
     private function supportsSchemas(): bool
     {
         return DB::connection()->getDriverName() === 'pgsql';
+    }
+
+    private function resetTableSequence(string $schemaName, string $table): ?array
+    {
+        if (! $this->tableColumns($schemaName, $table) || ! in_array('id', $this->tableColumns($schemaName, $table), true)) {
+            return null;
+        }
+
+        $qualifiedName = $schemaName.'.'.$table;
+        $sequence = DB::selectOne("select pg_get_serial_sequence(?, 'id') as sequence_name", [$qualifiedName])?->sequence_name;
+
+        if (! $sequence) {
+            return null;
+        }
+
+        $stats = DB::selectOne(
+            'select coalesce(max('.$this->quoteIdentifier('id').'), 0) as max_id, count(*) as total from '.$this->qualifiedTable($schemaName, $table)
+        );
+        $maxId = max(1, (int) ($stats->max_id ?? 0));
+        $total = (int) ($stats->total ?? 0);
+
+        DB::statement('select setval(?::regclass, ?, ?)', [$sequence, $maxId, $total > 0]);
+
+        return [
+            'sequence' => $sequence,
+            'max_id' => $maxId,
+            'total' => $total,
+        ];
     }
 
     private function schemaNameIsTaken(string $schemaName, Tenant $tenant): bool

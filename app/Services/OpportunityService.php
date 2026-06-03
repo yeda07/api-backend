@@ -7,6 +7,7 @@ use App\Models\Activity;
 use App\Models\Competitor;
 use App\Models\Contact;
 use App\Models\CrmEntity;
+use App\Models\CustomField;
 use App\Models\Invoice;
 use App\Models\LostReason;
 use App\Models\Opportunity;
@@ -29,7 +30,8 @@ class OpportunityService
         private readonly ProjectService $projectService,
         private readonly ExportService $exportService,
         private readonly CompetitiveIntelligenceService $competitiveIntelligenceService,
-        private readonly ActivityService $activityService
+        private readonly ActivityService $activityService,
+        private readonly CustomFieldService $customFieldService
     ) {}
 
     public function stages()
@@ -156,11 +158,13 @@ class OpportunityService
                 'lost_at' => $stage->is_lost ? now() : null,
             ]);
 
+            $this->assignCustomFieldValues($opportunity, $validated['custom_fields'] ?? []);
+
             if ($this->isWonClosingStage($stage)) {
                 $this->projectService->createFromOpportunityModel($opportunity->fresh(['opportunityable']), quietIfNoAccount: true);
             }
 
-            return $opportunity->fresh(['stage', 'owner', 'opportunityable']);
+            return $opportunity->fresh(['stage', 'owner', 'opportunityable', 'customFieldValues.customField']);
         });
     }
 
@@ -197,7 +201,9 @@ class OpportunityService
 
             $opportunity->update($payload);
 
-            $opportunity = $opportunity->fresh(['stage', 'owner', 'opportunityable']);
+            $this->assignCustomFieldValues($opportunity, $validated['custom_fields'] ?? []);
+
+            $opportunity = $opportunity->fresh(['stage', 'owner', 'opportunityable', 'customFieldValues.customField']);
 
             if ($opportunity->stage && $this->isWonClosingStage($opportunity->stage)) {
                 $this->projectService->createFromOpportunityModel($opportunity, quietIfNoAccount: true);
@@ -1089,6 +1095,7 @@ class OpportunityService
             'currency' => 'nullable|string|max:10',
             'expected_close_date' => 'nullable|date',
             'description' => 'nullable|string',
+            'custom_fields' => 'nullable|array',
         ]);
 
         if ($validator->fails()) {
@@ -1110,6 +1117,88 @@ class OpportunityService
         }
 
         return $validated;
+    }
+
+    private function assignCustomFieldValues(Opportunity $opportunity, array $customFields): void
+    {
+        if ($customFields === []) {
+            return;
+        }
+
+        foreach ($this->normalizeCustomFieldPayload($opportunity, $customFields) as $fieldValue) {
+            $this->customFieldService->assignValue(
+                'opportunities',
+                $opportunity->uid,
+                $fieldValue['custom_field_uid'],
+                $fieldValue['value'] ?? null
+            );
+        }
+    }
+
+    private function normalizeCustomFieldPayload(Opportunity $opportunity, array $customFields): array
+    {
+        if (! array_is_list($customFields)) {
+            return collect($customFields)
+                ->map(function ($value, string $fieldKey) use ($opportunity) {
+                    return [
+                        'custom_field_uid' => $this->resolveOpportunityCustomFieldUid($opportunity, $fieldKey),
+                        'value' => $value,
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        return collect($customFields)
+            ->map(function ($fieldValue) use ($opportunity) {
+                if (! is_array($fieldValue)) {
+                    throw ValidationException::withMessages([
+                        'custom_fields' => ['Cada campo personalizado debe ser un objeto con custom_field_uid y value'],
+                    ]);
+                }
+
+                $fieldUid = $fieldValue['custom_field_uid']
+                    ?? $fieldValue['field_uid']
+                    ?? $fieldValue['uid']
+                    ?? null;
+
+                if (! $fieldUid && isset($fieldValue['key'])) {
+                    $fieldUid = $this->resolveOpportunityCustomFieldUid($opportunity, (string) $fieldValue['key']);
+                }
+
+                if (! $fieldUid) {
+                    throw ValidationException::withMessages([
+                        'custom_fields' => ['Cada campo personalizado debe incluir custom_field_uid o key'],
+                    ]);
+                }
+
+                return [
+                    'custom_field_uid' => $fieldUid,
+                    'value' => $fieldValue['value'] ?? null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function resolveOpportunityCustomFieldUid(Opportunity $opportunity, string $fieldKeyOrUid): string
+    {
+        $field = CustomField::query()
+            ->where('tenant_id', $opportunity->tenant_id)
+            ->where('entity_type', Opportunity::class)
+            ->where(function ($query) use ($fieldKeyOrUid) {
+                $query->where('uid', $fieldKeyOrUid)
+                    ->orWhere('key', $fieldKeyOrUid);
+            })
+            ->first();
+
+        if (! $field) {
+            throw ValidationException::withMessages([
+                'custom_fields' => ["El campo personalizado {$fieldKeyOrUid} no existe para pipeline"],
+            ]);
+        }
+
+        return $field->uid;
     }
 
     private function resolveStage(string $uid): OpportunityStage

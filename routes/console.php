@@ -220,6 +220,36 @@ Artisan::command('tenants:schemas:copy-data {tenant_uid?} {--all} {--tables=} {-
     return 0;
 })->purpose('Dry-run or copy tenant-owned rows from public tables into tenant schemas');
 
+Artisan::command('tenants:schemas:reset-sequences {tenant_uid} {--tables=}', function () {
+    $tenantUid = $this->argument('tenant_uid');
+    $tables = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('tables')))));
+
+    $tenant = Tenant::query()->where('uid', $tenantUid)->first();
+
+    if (! $tenant) {
+        $this->error('Tenant no encontrado.');
+
+        return 1;
+    }
+
+    $schemaService = app(TenantSchemaService::class);
+    $result = $schemaService->resetTenantSequences($tenant, $tables);
+
+    $this->info('Secuencias reiniciadas para tenant '.$result['tenant_uid'].' en schema '.$result['schema_name']);
+
+    foreach ($result['tables'] as $tableResult) {
+        $this->line(sprintf(
+            '  %-36s sequence=%s max_id=%s total=%s',
+            $tableResult['table'],
+            $tableResult['sequence'],
+            $tableResult['max_id'],
+            $tableResult['total']
+        ));
+    }
+
+    return 0;
+})->purpose('Reset PostgreSQL sequences after copying explicit IDs into a tenant schema');
+
 Artisan::command('tenants:schemas:activate {tenant_uid}', function () {
     $tenantUid = $this->argument('tenant_uid');
 
