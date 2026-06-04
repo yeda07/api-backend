@@ -476,11 +476,25 @@ class PlatformGeneralIntegrationTest extends TestCase
             'sku' => 'CRM-ENT',
             'status' => 'active',
         ]);
-        InventoryProduct::query()->create([
+        $inventoryProduct = InventoryProduct::query()->create([
             'tenant_id' => $tenant->getKey(),
             'name' => 'Licencia Base',
             'sku' => 'LIC-BASE',
             'is_active' => true,
+        ]);
+        $linkedInventoryProduct = InventoryProduct::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'name' => 'Servidor Base',
+            'sku' => 'SRV-BASE',
+            'is_active' => true,
+        ]);
+        Product::query()->create([
+            'tenant_id' => $tenant->getKey(),
+            'inventory_product_id' => $linkedInventoryProduct->getKey(),
+            'name' => 'Servidor Base Catalogo',
+            'type' => 'product',
+            'sku' => 'SRV-BASE-CAT',
+            'status' => 'active',
         ]);
 
         foreach ([
@@ -501,10 +515,25 @@ class PlatformGeneralIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['name' => 'Salud', 'key' => 'salud']);
 
-        $this->getJson('/api/tenant/opportunity-products')
+        $response = $this->getJson('/api/tenant/opportunity-products')
             ->assertOk()
             ->assertJsonFragment(['name' => 'CRM Enterprise', 'key' => 'CRM-ENT'])
-            ->assertJsonFragment(['name' => 'Licencia Base', 'key' => 'LIC-BASE']);
+            ->assertJsonFragment([
+                'name' => 'Licencia Base',
+                'key' => 'LIC-BASE',
+                'source' => 'inventory',
+                'product_uid' => $inventoryProduct->uid,
+                'catalog_product_uid' => null,
+            ])
+            ->assertJsonFragment([
+                'name' => 'Servidor Base Catalogo',
+                'key' => 'SRV-BASE-CAT',
+                'source' => 'catalog',
+                'product_uid' => $linkedInventoryProduct->uid,
+            ]);
+
+        $options = collect($response->json('data'));
+        $this->assertFalse($options->contains(fn (array $option) => $option['key'] === 'SRV-BASE' && $option['source'] === 'inventory'));
     }
 
     public function test_rbac_roles_can_filter_permissions_by_active_plan_modules(): void

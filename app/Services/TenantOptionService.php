@@ -90,9 +90,15 @@ class TenantOptionService
     public function opportunityProducts(): array
     {
         $catalog = $this->catalogProductOptions();
-        $inventory = $this->inventoryProductOptions();
+        $linkedInventoryIds = $catalog
+            ->pluck('inventory_product_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $inventory = $this->inventoryProductOptions($linkedInventoryIds);
 
-        return $catalog->merge($inventory)->unique('uid')->values()->all();
+        return $catalog->merge($inventory)->values()->all();
     }
 
     public function lostReasonCategories(): array
@@ -154,6 +160,7 @@ class TenantOptionService
         }
 
         return Product::query()
+            ->with(['inventoryProduct.stocks'])
             ->when(Schema::hasColumn('products', 'status'), fn ($query) => $query->where('status', 'active'))
             ->orderBy('name')
             ->get()
@@ -162,17 +169,28 @@ class TenantOptionService
                 'uid' => $product->uid,
                 'name' => $product->name,
                 'key' => $product->sku,
+                'source' => 'catalog',
+                'type' => $product->type,
+                'catalog_product_uid' => $product->uid,
+                'product_uid' => $product->inventoryProduct?->uid,
+                'inventory_product_uid' => $product->inventoryProduct?->uid,
+                'inventory_product_id' => $product->inventory_product_id,
+                'default_price' => $product->default_price,
+                'sale_price' => $product->inventoryProduct?->sale_price,
+                'stock_available_total' => $this->availableStock($product->inventoryProduct),
             ]);
     }
 
-    private function inventoryProductOptions(): Collection
+    private function inventoryProductOptions(array $excludeInventoryIds = []): Collection
     {
         if (!Schema::hasTable('inventory_products')) {
             return collect();
         }
 
         return InventoryProduct::query()
+            ->with('stocks')
             ->when(Schema::hasColumn('inventory_products', 'is_active'), fn ($query) => $query->where('is_active', true))
+            ->when($excludeInventoryIds !== [], fn ($query) => $query->whereNotIn('id', $excludeInventoryIds))
             ->orderBy('name')
             ->get()
             ->toBase()
@@ -180,7 +198,28 @@ class TenantOptionService
                 'uid' => $product->uid,
                 'name' => $product->name,
                 'key' => $product->sku,
+                'source' => 'inventory',
+                'type' => 'product',
+                'catalog_product_uid' => null,
+                'product_uid' => $product->uid,
+                'inventory_product_uid' => $product->uid,
+                'inventory_product_id' => $product->getKey(),
+                'default_price' => $product->sale_price,
+                'sale_price' => $product->sale_price,
+                'stock_available_total' => $this->availableStock($product),
             ]);
+    }
+
+    private function availableStock(?InventoryProduct $product): ?int
+    {
+        if (! $product) {
+            return null;
+        }
+
+        return max(
+            0,
+            (int) $product->stocks->sum('physical_stock') - (int) $product->stocks->sum('reserved_stock')
+        );
     }
 
     private function stableUid(string $key): string
