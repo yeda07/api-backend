@@ -395,7 +395,7 @@ class ActivityService
         ];
     }
 
-    private function serializeActivityIndex(Activity $activity): array
+    public function serializeActivityIndex(Activity $activity): array
     {
         return [
             'uid' => $activity->uid,

@@ -1558,6 +1558,45 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.uid', $created->json('data.uid'));
     }
 
+    public function test_opportunity_activities_shortcut_returns_serialized_payload(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'activities.read', 'activities.create']);
+        $stage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Seguimiento',
+            'key' => 'seguimiento-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 30,
+        ]);
+        $opportunity = Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $stage->getKey(),
+            'title' => 'Con actividad',
+            'amount' => 1000,
+        ]);
+
+        $created = $this->postJson('/api/opportunities/'.$opportunity->uid.'/activities', [
+            'type' => 'call',
+            'title' => 'Llamar decisor',
+            'description' => 'Confirmar alcance',
+            'scheduled_at' => '2026-06-06T00:00:00.000Z',
+            'status' => 'pending',
+        ]);
+
+        $created
+            ->assertCreated()
+            ->assertJsonPath('data.title', 'Llamar decisor')
+            ->assertJsonPath('data.activityable_uid', $opportunity->uid)
+            ->assertJsonPath('data.activityable_type', Opportunity::class);
+
+        $this->assertDatabaseHas('activities', [
+            'activityable_type' => Opportunity::class,
+            'activityable_id' => $opportunity->getKey(),
+            'title' => 'Llamar decisor',
+        ]);
+    }
+
     private function account(User $user): Account
     {
         return Account::query()->create([

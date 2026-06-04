@@ -318,6 +318,73 @@ Artisan::command('tenants:schemas:reset-sequences {tenant_uid} {--tables=}', fun
     return 0;
 })->purpose('Reset PostgreSQL sequences after copying explicit IDs into a tenant schema');
 
+Artisan::command('tenants:schemas:verify {tenant_uid?} {--all} {--tables=} {--orphans}', function () {
+    $tenantUid = $this->argument('tenant_uid');
+    $all = (bool) $this->option('all');
+    $tables = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('tables')))));
+    $schemaService = app(TenantSchemaService::class);
+
+    if ((bool) $this->option('orphans')) {
+        $knownSchemas = Tenant::query()
+            ->whereNotNull('schema_name')
+            ->pluck('schema_name')
+            ->all();
+        $knownLookup = array_flip($knownSchemas);
+        $orphans = collect($schemaService->tenantSchemas())
+            ->reject(fn (string $schemaName) => isset($knownLookup[$schemaName]))
+            ->values();
+
+        if ($orphans->isEmpty()) {
+            $this->info('No hay schemas tenant huerfanos.');
+        } else {
+            $this->warn('Schemas tenant sin registro activo en tenants:');
+            $orphans->each(fn (string $schemaName) => $this->line('  '.$schemaName));
+        }
+
+        if (! $tenantUid && ! $all) {
+            return 0;
+        }
+    }
+
+    if (! $tenantUid && ! $all) {
+        $this->error('Debes enviar tenant_uid o usar --all. Tambien puedes usar solo --orphans.');
+
+        return 1;
+    }
+
+    $query = Tenant::query()->orderBy('id');
+
+    if ($tenantUid) {
+        $query->where('uid', $tenantUid);
+    }
+
+    $tenants = $query->get();
+
+    if ($tenants->isEmpty()) {
+        $this->warn('No se encontraron tenants para verificar.');
+
+        return 0;
+    }
+
+    foreach ($tenants as $tenant) {
+        $result = $schemaService->tenantDataStatus($tenant, $tables);
+        $this->info('Tenant '.$result['tenant_uid'].' en schema '.$result['schema_name']);
+
+        foreach ($result['tables'] as $tableResult) {
+            $this->line(sprintf(
+                '  %-36s public=%s schema=%s delta=%s tenant_table=%s',
+                $tableResult['table'],
+                $tableResult['public_count'] ?? 'n/a',
+                $tableResult['schema_count'] ?? 'n/a',
+                $tableResult['delta'] ?? 'n/a',
+                $tableResult['tenant_exists'] ? 'yes' : 'no'
+            ));
+        }
+    }
+
+    return 0;
+})->purpose('Verify tenant schema table counts against public tenant rows');
+
 Artisan::command('tenants:schemas:activate {tenant_uid}', function () {
     $tenantUid = $this->argument('tenant_uid');
 

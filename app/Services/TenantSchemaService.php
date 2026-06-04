@@ -324,6 +324,53 @@ class TenantSchemaService
         ];
     }
 
+    public function tenantDataStatus(Tenant $tenant, array $tables = []): array
+    {
+        if (! $this->supportsSchemas()) {
+            throw ValidationException::withMessages([
+                'database' => ['La migracion por schema solo esta soportada en PostgreSQL'],
+            ]);
+        }
+
+        $schemaName = $tenant->schema_name ?: $this->generateSchemaName($tenant);
+        $tables = $tables ?: $this->tenantTables();
+        $results = [];
+
+        foreach ($tables as $table) {
+            $table = trim((string) $table);
+
+            if ($table === '') {
+                continue;
+            }
+
+            $publicExists = $this->tableExists('public', $table);
+            $tenantExists = $this->tableExists($schemaName, $table);
+            $hasTenantId = $publicExists && in_array('tenant_id', $this->tableColumns('public', $table), true);
+            $publicCount = $hasTenantId
+                ? (int) DB::table($table)->where('tenant_id', $tenant->getKey())->count()
+                : null;
+            $schemaCount = $tenantExists
+                ? $this->tableCount($schemaName, $table)
+                : null;
+
+            $results[] = [
+                'table' => $table,
+                'public_exists' => $publicExists,
+                'tenant_exists' => $tenantExists,
+                'has_tenant_id' => $hasTenantId,
+                'public_count' => $publicCount,
+                'schema_count' => $schemaCount,
+                'delta' => is_int($publicCount) && is_int($schemaCount) ? $schemaCount - $publicCount : null,
+            ];
+        }
+
+        return [
+            'tenant_uid' => $tenant->uid,
+            'schema_name' => $schemaName,
+            'tables' => $results,
+        ];
+    }
+
     public function tableExists(string $schemaName, string $table): bool
     {
         if (! $this->supportsSchemas()) {
@@ -347,6 +394,19 @@ class TenantSchemaService
             ->where('table_name', $table)
             ->orderBy('ordinal_position')
             ->pluck('column_name')
+            ->all();
+    }
+
+    public function tenantSchemas(): array
+    {
+        if (! $this->supportsSchemas()) {
+            return [];
+        }
+
+        return DB::table('information_schema.schemata')
+            ->where('schema_name', 'like', config('tenancy.schema_prefix', 'tenant').'\_%')
+            ->orderBy('schema_name')
+            ->pluck('schema_name')
             ->all();
     }
 
@@ -400,6 +460,11 @@ class TenantSchemaService
             'max_id' => $maxId,
             'total' => $total,
         ];
+    }
+
+    private function tableCount(string $schemaName, string $table): int
+    {
+        return (int) DB::table(DB::raw($this->qualifiedTable($schemaName, $table)))->count();
     }
 
     private function schemaNameIsTaken(string $schemaName, Tenant $tenant): bool

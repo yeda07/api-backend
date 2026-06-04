@@ -182,7 +182,7 @@ class OpportunityController extends Controller
     public function storeActivity(Request $request, string $uid)
     {
         try {
-            return $this->successResponse($this->activityService->create(array_merge($request->all(), [
+            return $this->successResponse($this->activityService->createPayload(array_merge($request->all(), [
                 'entity_type' => 'opportunity',
                 'entity_uid' => $uid,
             ])), 201, 'Actividad creada');
