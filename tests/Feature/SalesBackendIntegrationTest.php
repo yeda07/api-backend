@@ -1560,7 +1560,7 @@ class SalesBackendIntegrationTest extends TestCase
 
     public function test_opportunity_activities_shortcut_returns_serialized_payload(): void
     {
-        $user = $this->authenticateWithPermissions(['opportunities.read', 'activities.read', 'activities.create']);
+        $user = $this->authenticateWithPermissions(['opportunities.read', 'activities.read', 'activities.create', 'activities.update']);
         $stage = OpportunityStage::query()->create([
             'tenant_id' => $user->tenant_id,
             'name' => 'Seguimiento',
@@ -1595,6 +1595,15 @@ class SalesBackendIntegrationTest extends TestCase
             'activityable_id' => $opportunity->getKey(),
             'title' => 'Llamar decisor',
         ]);
+
+        $this->putJson('/api/opportunities/'.$opportunity->uid.'/activities/'.$created->json('data.uid'), [
+            'title' => 'Llamar decisor actualizado',
+            'status' => 'in_progress',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.uid', $created->json('data.uid'))
+            ->assertJsonPath('data.title', 'Llamar decisor actualizado')
+            ->assertJsonPath('data.activityable_uid', $opportunity->uid);
     }
 
     private function account(User $user): Account

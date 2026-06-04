@@ -202,7 +202,7 @@ class OpportunityController extends Controller
                 return $this->errorResponse('Actividad no pertenece a esta oportunidad', 404);
             }
 
-            return $this->successResponse($this->activityService->update($activityUid, $request->all()), 200, 'Actividad actualizada');
+            return $this->successResponse($this->activityService->updatePayload($activityUid, $request->all()), 200, 'Actividad actualizada');
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation error', 422, $e->errors());
         } catch (\Throwable $e) {
