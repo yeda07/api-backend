@@ -64,15 +64,19 @@ class TaskService
         if ($withoutPagination) {
             $limit = min(max((int) ($filters['per_page'] ?? 25), 1), 100);
 
-            return $query->limit($limit)->get();
+            return $query->limit($limit)->get()
+                ->map(fn (Task $task) => $this->serializeTaskIndex($task))
+                ->values();
         }
 
-        return $query->paginate(
+        $result = $query->paginate(
             ApiIndex::perPage($filters),
             ['*'],
             'tasks_page',
             ApiIndex::page($filters)
         );
+
+        return $result->through(fn (Task $task) => $this->serializeTaskIndex($task));
     }
 
     public function getByUid(string $uid): Task
@@ -88,6 +92,11 @@ class TaskService
         return Task::query()->create($payload)->fresh($this->taskIndexRelations());
     }
 
+    public function createPayload(array $data): array
+    {
+        return $this->serializeTaskIndex($this->create($data));
+    }
+
     public function update(string $uid, array $data): Task
     {
         $task = $this->getByUid($uid);
@@ -97,6 +106,11 @@ class TaskService
         $task->update($payload);
 
         return $task->fresh($this->taskIndexRelations());
+    }
+
+    public function updatePayload(string $uid, array $data): array
+    {
+        return $this->serializeTaskIndex($this->update($uid, $data));
     }
 
     public function delete(string $uid): void
@@ -204,5 +218,46 @@ class TaskService
                 ]);
             },
         ];
+    }
+
+    private function serializeTaskIndex(Task $task): array
+    {
+        return [
+            'uid' => $task->uid,
+            'title' => $task->title,
+            'description' => $task->description,
+            'status' => $task->status,
+            'priority' => $task->priority,
+            'due_date' => $task->due_date,
+            'completed_at' => $task->completed_at,
+            'owner_user_uid' => $task->owner?->uid,
+            'owner_user_name' => $task->owner?->name,
+            'assigned_user_uid' => $task->assignedUser?->uid,
+            'assigned_user_name' => $task->assignedUser?->name,
+            'taskable_type' => $this->normalizeTaskableType($task->taskable_type),
+            'taskable_uid' => $task->taskable?->uid,
+            'taskable_label' => $this->resolveTaskableLabel($task->taskable),
+            'created_at' => $task->created_at,
+            'updated_at' => $task->updated_at,
+        ];
+    }
+
+    private function normalizeTaskableType(?string $type): ?string
+    {
+        return match ($type) {
+            Account::class => 'account',
+            Contact::class => 'contact',
+            Opportunity::class => 'opportunity',
+            null, '' => null,
+            default => str(class_basename($type))->snake()->toString(),
+        };
+    }
+
+    private function resolveTaskableLabel($entity): ?string
+    {
+        return $entity?->display_name
+            ?? $entity?->name
+            ?? $entity?->title
+            ?? null;
     }
 }

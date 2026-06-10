@@ -1320,6 +1320,65 @@ class SalesBackendIntegrationTest extends TestCase
             ->assertJsonPath('data.0.title', 'Oportunidad abierta');
     }
 
+    public function test_opportunity_board_limits_closed_opportunities_by_configurable_window(): void
+    {
+        $user = $this->authenticateWithPermissions(['opportunities.read']);
+        $activeStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Leads',
+            'key' => 'leads-window-'.uniqid(),
+            'position' => 1,
+            'probability_percent' => 10,
+        ]);
+        $closingStage = OpportunityStage::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Cerrador',
+            'key' => 'cerrador-window-'.uniqid(),
+            'position' => 2,
+            'probability_percent' => 90,
+            'is_won' => true,
+        ]);
+
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $activeStage->getKey(),
+            'title' => 'Abierta visible',
+            'amount' => 100,
+        ]);
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $activeStage->getKey(),
+            'title' => 'Ganada reciente',
+            'amount' => 200,
+            'won_at' => now()->subDays(2),
+        ]);
+        Opportunity::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'owner_user_id' => $user->getKey(),
+            'stage_id' => $activeStage->getKey(),
+            'title' => 'Ganada antigua',
+            'amount' => 300,
+            'won_at' => now()->subDays(20),
+        ]);
+
+        $this->getJson('/api/opportunities/board')
+            ->assertOk()
+            ->assertJsonPath('data.stages.0.summary.count', 1)
+            ->assertJsonPath('data.stages.1.summary.count', 1)
+            ->assertJsonMissing(['title' => 'Ganada antigua']);
+
+        $this->getJson('/api/opportunities/board?closed_days=30')
+            ->assertOk()
+            ->assertJsonPath('data.stages.1.summary.count', 2);
+
+        $this->getJson('/api/opportunities/board?include_closed=false')
+            ->assertOk()
+            ->assertJsonPath('data.stages.0.summary.count', 1)
+            ->assertJsonPath('data.stages.1.summary.count', 0);
+    }
+
     public function test_opportunity_can_be_marked_won_without_dragging_to_stage(): void
     {
         $user = $this->authenticateWithPermissions(['opportunities.read', 'opportunities.manage', 'projects.manage', 'activities.create']);
@@ -1550,12 +1609,16 @@ class SalesBackendIntegrationTest extends TestCase
             'priority' => 'high',
         ])
             ->assertCreated()
-            ->assertJsonPath('data.taskable_uid', $opportunity->uid);
+            ->assertJsonPath('data.taskable_uid', $opportunity->uid)
+            ->assertJsonPath('data.taskable_type', 'opportunity')
+            ->assertJsonMissingPath('data.taskable');
 
         $this->getJson('/api/opportunities/'.$opportunity->uid.'/tasks')
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.uid', $created->json('data.uid'));
+            ->assertJsonPath('data.0.uid', $created->json('data.uid'))
+            ->assertJsonPath('data.0.taskable_uid', $opportunity->uid)
+            ->assertJsonMissingPath('data.0.taskable');
     }
 
     public function test_opportunity_activities_shortcut_returns_serialized_payload(): void

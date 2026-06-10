@@ -22,6 +22,7 @@ return new class extends Migration
             $table->text('comment')->nullable();
             $table->json('meta')->nullable();
             $table->timestamp('released_at')->nullable();
+            $table->timestamp('consumed_at')->nullable();
             $table->timestamps();
 
             $table->index(['tenant_id', 'source_type', 'source_uid']);

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\InventoryService;
+use App\Support\ApiIndex;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -16,13 +18,20 @@ class InventoryWarehouseController extends Controller
     public function index(Request $request)
     {
         $payload = $this->inventoryService->listWarehouses($request->query());
+        $data = $payload['data'];
+        $meta = null;
+
+        if ($data instanceof LengthAwarePaginator) {
+            $meta = ApiIndex::meta($data);
+            $data = $data->items();
+        }
 
         return response()->json([
             'success' => true,
             'message' => null,
-            'data' => $payload['data'],
+            'data' => $data,
             'summary' => $payload['summary'],
-            'meta' => null,
+            'meta' => $meta,
             'errors' => null,
         ]);
     }

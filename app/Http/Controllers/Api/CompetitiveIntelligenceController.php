@@ -142,4 +142,9 @@ class CompetitiveIntelligenceController extends Controller
     {
         return $this->successResponse($this->service->lostReasonsReport($request->query()));
     }
+
+    public function heatmap(Request $request)
+    {
+        return $this->successResponse($this->service->lostReasonsHeatmap($request->query()));
+    }
 }

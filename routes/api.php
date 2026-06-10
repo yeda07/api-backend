@@ -383,6 +383,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'tenant.sche
         Route::put('/battlecards/{uid}', [CompetitiveIntelligenceController::class, 'updateBattlecard'])->middleware('permission:competitive-intelligence.manage');
         Route::delete('/battlecards/{uid}', [CompetitiveIntelligenceController::class, 'destroyBattlecard'])->middleware('permission:competitive-intelligence.manage');
 
+        Route::get('/heatmap', [CompetitiveIntelligenceController::class, 'heatmap'])->middleware('permission:competitive-intelligence.report');
         Route::get('/lost-reasons', [CompetitiveIntelligenceController::class, 'lostReasons'])->middleware('permission:competitive-intelligence.read');
         Route::post('/lost-reasons', [CompetitiveIntelligenceController::class, 'storeLostReason'])->middleware('permission:competitive-intelligence.manage');
         Route::put('/lost-reasons/{uid}', [CompetitiveIntelligenceController::class, 'updateLostReason'])->middleware('permission:competitive-intelligence.manage');
@@ -390,6 +391,7 @@ Route::middleware(['auth:sanctum', 'tenant.active', 'tenant.token', 'tenant.sche
         Route::get('/lost-reasons/report', [CompetitiveIntelligenceController::class, 'lostReasonsReport'])->middleware('permission:competitive-intelligence.report');
     });
 
+    Route::get('/intelligence/heatmap', [CompetitiveIntelligenceController::class, 'heatmap'])->middleware('permission:competitive-intelligence.report');
     Route::get('/battlecards', [CompetitiveIntelligenceController::class, 'battlecards'])->middleware('permission:competitive-intelligence.read');
     Route::get('/lost-reasons/report', [CompetitiveIntelligenceController::class, 'lostReasonsReport'])->middleware('permission:competitive-intelligence.report');
     Route::get('/lost-reasons', [CompetitiveIntelligenceController::class, 'lostReasons'])->middleware('permission:competitive-intelligence.read');

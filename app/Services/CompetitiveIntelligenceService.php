@@ -11,6 +11,7 @@ use App\Models\Competitor;
 use App\Models\LostReason;
 use App\Models\Opportunity;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -271,6 +272,39 @@ class CompetitiveIntelligenceService
         ];
     }
 
+    public function lostReasonsHeatmap(array $filters = []): array
+    {
+        $validated = Validator::make($filters, [
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+        ])->validate();
+
+        return DB::table('lost_reasons')
+            ->where('lost_reasons.tenant_id', auth()->user()?->tenant_id)
+            ->leftJoin('competitors', 'lost_reasons.competitor_id', '=', 'competitors.id')
+            ->when(! empty($validated['date_from']), fn ($query) => $query->whereDate('lost_reasons.lost_at', '>=', $validated['date_from']))
+            ->when(! empty($validated['date_to']), fn ($query) => $query->whereDate('lost_reasons.lost_at', '<=', $validated['date_to']))
+            ->select([
+                'competitors.uid as competitor_uid',
+                'competitors.name as competitor_name',
+                'lost_reasons.reason_type as reason_key',
+            ])
+            ->selectRaw('COUNT(lost_reasons.id) as count')
+            ->groupBy('competitors.uid', 'competitors.name', 'lost_reasons.reason_type')
+            ->orderBy('competitors.name')
+            ->orderBy('lost_reasons.reason_type')
+            ->get()
+            ->map(fn ($row) => [
+                'competitor_uid' => $row->competitor_uid,
+                'competitor_name' => $row->competitor_name,
+                'reason_key' => $row->reason_key,
+                'reason_label' => $this->lostReasonLabel($row->reason_key),
+                'count' => (int) $row->count,
+            ])
+            ->values()
+            ->all();
+    }
+
     private function lostReasonsQuery(array $filters)
     {
         $validated = Validator::make($filters, [
@@ -342,6 +376,18 @@ class CompetitiveIntelligenceService
             'created_at' => $lostReason->created_at,
             'updated_at' => $lostReason->updated_at,
         ];
+    }
+
+    private function lostReasonLabel(?string $reasonType): string
+    {
+        return match ($reasonType) {
+            'price' => 'Precio',
+            'features' => 'Producto',
+            'relationship' => 'Relacion',
+            'timing' => 'Timing',
+            'implementation', 'procurement' => 'Servicio',
+            default => 'Otro',
+        };
     }
 
     private function normalizeLossableType(?string $type): ?string

@@ -450,10 +450,17 @@ class OpportunityService
             'search' => 'nullable|string|max:255',
             'origin' => 'nullable|string|max:255',
             'product' => 'nullable|string|max:255',
+            'closed_days' => 'nullable|integer|min:1|max:365',
+            'include_closed' => 'nullable|string|in:true,false,1,0',
         ])->validate();
 
         $stages = OpportunityStage::query()->orderBy('position')->get();
         $opportunityQuery = Opportunity::query()->with(['stage', 'owner']);
+        $closedDays = (int) ($validated['closed_days'] ?? 7);
+        $includeClosed = ! array_key_exists('include_closed', $validated)
+            || filter_var($validated['include_closed'], FILTER_VALIDATE_BOOLEAN);
+
+        $this->applyBoardClosedWindow($opportunityQuery, $closedDays, $includeClosed);
 
         if (! empty($validated['search'])) {
             $this->applyOpportunitySearch($opportunityQuery, $validated['search']);
@@ -833,6 +840,30 @@ class OpportunityService
                             ->orWhere('profile_data->main_product', $product)
                             ->orWhere('profile_data->primary_product', $product);
                     });
+                });
+        });
+    }
+
+    private function applyBoardClosedWindow($query, int $closedDays, bool $includeClosed): void
+    {
+        if (! $includeClosed) {
+            $query->whereNull('won_at')->whereNull('lost_at');
+
+            return;
+        }
+
+        $closedSince = now()->subDays($closedDays)->startOfDay();
+
+        $query->where(function ($builder) use ($closedSince) {
+            $builder
+                ->where(function ($activeQuery) {
+                    $activeQuery->whereNull('won_at')->whereNull('lost_at');
+                })
+                ->orWhere(function ($wonQuery) use ($closedSince) {
+                    $wonQuery->whereNotNull('won_at')->where('won_at', '>=', $closedSince);
+                })
+                ->orWhere(function ($lostQuery) use ($closedSince) {
+                    $lostQuery->whereNotNull('lost_at')->where('lost_at', '>=', $closedSince);
                 });
         });
     }

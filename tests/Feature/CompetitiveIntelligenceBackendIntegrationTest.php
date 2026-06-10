@@ -123,6 +123,40 @@ class CompetitiveIntelligenceBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.summary.count', 1)
             ->assertJsonPath('data.summary.estimated_value_total', 45000);
+
+        $this->postJson('/api/competitive-intelligence/lost-reasons', [
+            'competitor_uid' => $competitorUid,
+            'reason_type' => 'price',
+            'summary' => 'Segundo deal perdido por precio',
+            'lost_at' => '2026-05-10',
+        ])->assertCreated();
+
+        $this->postJson('/api/competitive-intelligence/lost-reasons', [
+            'reason_type' => 'features',
+            'summary' => 'Perdida sin competidor',
+            'lost_at' => '2026-04-01',
+        ])->assertCreated();
+
+        $heatmap = collect($this->getJson('/api/competitive-intelligence/heatmap')
+            ->assertOk()
+            ->json('data'));
+
+        $this->assertTrue($heatmap->contains(fn (array $row) => $row['competitor_uid'] === $competitorUid
+            && $row['reason_key'] === 'price'
+            && $row['reason_label'] === 'Precio'
+            && $row['count'] === 2));
+        $this->assertTrue($heatmap->contains(fn (array $row) => $row['competitor_uid'] === null
+            && $row['reason_key'] === 'features'
+            && $row['count'] === 1));
+
+        $filteredHeatmap = collect($this->getJson('/api/intelligence/heatmap?date_from=2026-05-01&date_to=2026-05-31')
+            ->assertOk()
+            ->json('data'));
+
+        $this->assertTrue($filteredHeatmap->contains(fn (array $row) => $row['competitor_uid'] === $competitorUid
+            && $row['reason_key'] === 'price'
+            && $row['count'] === 2));
+        $this->assertFalse($filteredHeatmap->contains(fn (array $row) => $row['reason_key'] === 'features'));
     }
 
     private function authenticateWithPermissions(array $permissionKeys): User

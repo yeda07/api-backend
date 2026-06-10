@@ -12,6 +12,7 @@ use App\Support\ApiIndex;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -44,9 +45,11 @@ class InventoryService
     {
         $validated = Validator::make($data, [
             'name' => 'required|string|max:255',
-            'key' => 'required|string|max:255',
+            'key' => 'nullable|string|max:255',
             'description' => 'nullable|string',
         ])->validate();
+
+        $validated['key'] = $this->uniqueInventoryCategoryKey($validated['key'] ?? $validated['name']);
 
         return InventoryCategory::query()->create($validated);
     }
@@ -56,7 +59,6 @@ class InventoryService
         $category = $this->getCategoryByUid($uid);
         $validated = Validator::make($data, [
             'name' => 'sometimes|string|max:255',
-            'key' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
         ])->validate();
 
@@ -243,7 +245,7 @@ class InventoryService
             'has_stock' => 'nullable|string|in:true,false,1,0',
         ])->validate();
 
-        $warehouses = Warehouse::query()
+        $query = Warehouse::query()
             ->with(['stocks.product'])
             ->when(array_key_exists('has_stock', $validated), function ($query) use ($validated) {
                 $hasStock = filter_var($validated['has_stock'], FILTER_VALIDATE_BOOLEAN);
@@ -262,14 +264,30 @@ class InventoryService
                         ->orWhereRaw('LOWER(code) LIKE ?', [$search]);
                 });
             })
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        $summaryRows = (clone $query)->get();
+        $result = ApiIndex::paginateOrGet($query, $filters, 'warehouses_page');
+        $warehouses = $result instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator
+            ? collect($result->items())
+            : $result;
+
+        $data = $warehouses->map(fn (Warehouse $warehouse) => $this->warehouseRow($warehouse))->values();
+
+        if ($result instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+            $result->setCollection($data);
+        }
 
         return [
-            'data' => $warehouses->map(fn (Warehouse $warehouse) => $this->warehouseRow($warehouse))->values(),
+            'data' => $result,
             'summary' => [
-                'total_warehouses' => $warehouses->count(),
-                'active_warehouses' => $warehouses->where('is_active', true)->count(),
+                'total_warehouses' => $summaryRows->count(),
+                'active_warehouses' => $summaryRows->where('is_active', true)->count(),
+                'total_physical_stock' => (int) $summaryRows->sum(fn (Warehouse $warehouse) => $warehouse->stocks->sum('physical_stock')),
+                'total_available_stock' => (int) $summaryRows->sum(fn (Warehouse $warehouse) => $warehouse->stocks->sum(fn (InventoryStock $stock) => $stock->available_stock)),
+                'total_stock_value' => round((float) $summaryRows->sum(function (Warehouse $warehouse) {
+                    return $warehouse->stocks->sum(fn (InventoryStock $stock) => $stock->physical_stock * (float) ($stock->product?->cost_price ?? 0));
+                }), 2),
             ],
         ];
     }
@@ -1035,6 +1053,20 @@ class InventoryService
         }
 
         return $categoryId;
+    }
+
+    private function uniqueInventoryCategoryKey(string $source): string
+    {
+        $base = str_replace('-', '_', Str::slug($source, '_')) ?: 'categoria';
+        $key = $base;
+        $suffix = 2;
+
+        while (InventoryCategory::query()->where('key', $key)->exists()) {
+            $key = "{$base}_{$suffix}";
+            $suffix++;
+        }
+
+        return $key;
     }
 
     private function getOrCreateStock(InventoryProduct $product, Warehouse $warehouse): InventoryStock

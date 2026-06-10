@@ -168,7 +168,7 @@ class OpportunityController extends Controller
     public function storeTask(Request $request, string $uid)
     {
         try {
-            return $this->successResponse($this->taskService->create(array_merge($request->all(), [
+            return $this->successResponse($this->taskService->createPayload(array_merge($request->all(), [
                 'taskable_type' => 'opportunity',
                 'taskable_uid' => $uid,
             ])), 201, 'Tarea creada');

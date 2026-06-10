@@ -81,6 +81,9 @@ class InventoryBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('summary.total_warehouses', 2)
             ->assertJsonPath('summary.active_warehouses', 1)
+            ->assertJsonPath('summary.total_physical_stock', 50)
+            ->assertJsonPath('summary.total_available_stock', 45)
+            ->assertJsonPath('summary.total_stock_value', 60000)
             ->assertJsonPath('data.0.summary.sku_count', 1)
             ->assertJsonPath('data.0.summary.total_physical', 50)
             ->assertJsonPath('data.0.summary.total_reserved', 5)
@@ -212,6 +215,84 @@ class InventoryBackendIntegrationTest extends TestCase
             ->assertOk()
             ->assertJsonCount(2, 'data')
             ->assertJsonMissing(['code' => 'STOCK']);
+    }
+
+    public function test_inventory_categories_generate_key_from_name_when_missing(): void
+    {
+        $this->authenticateWithPermissions(['inventory.read', 'inventory.manage']);
+
+        $this->postJson('/api/inventory/categories', [
+            'name' => 'Materia Prima',
+            'description' => 'Insumos base',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Materia Prima')
+            ->assertJsonPath('data.key', 'materia_prima');
+
+        $second = $this->postJson('/api/inventory/categories', [
+            'name' => 'Materia Prima',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.key', 'materia_prima_2')
+            ->json('data');
+
+        $this->putJson('/api/inventory/categories/'.$second['uid'], [
+            'name' => 'Materia Prima Actualizada',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Materia Prima Actualizada')
+            ->assertJsonPath('data.key', 'materia_prima_2');
+    }
+
+    public function test_warehouses_are_paginated_with_global_summary(): void
+    {
+        $user = $this->authenticateWithPermissions(['inventory.read']);
+
+        $firstWarehouse = Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega A',
+            'code' => 'A',
+            'is_active' => true,
+        ]);
+        Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega B',
+            'code' => 'B',
+            'is_active' => true,
+        ]);
+        Warehouse::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'name' => 'Bodega C',
+            'code' => 'C',
+            'is_active' => false,
+        ]);
+
+        $product = InventoryProduct::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'sku' => 'SKU-STOCK',
+            'name' => 'Producto Stock',
+            'cost_price' => 100,
+            'is_active' => true,
+        ]);
+
+        InventoryStock::query()->create([
+            'tenant_id' => $user->tenant_id,
+            'product_id' => $product->getKey(),
+            'warehouse_id' => $firstWarehouse->getKey(),
+            'physical_stock' => 10,
+            'reserved_stock' => 2,
+        ]);
+
+        $this->getJson('/api/inventory/warehouses?page=1&per_page=2')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.pagination.total', 3)
+            ->assertJsonPath('meta.pagination.per_page', 2)
+            ->assertJsonPath('summary.total_warehouses', 3)
+            ->assertJsonPath('summary.active_warehouses', 2)
+            ->assertJsonPath('summary.total_physical_stock', 10)
+            ->assertJsonPath('summary.total_available_stock', 8)
+            ->assertJsonPath('summary.total_stock_value', 1000);
     }
 
     public function test_bulk_adjust_and_movements_summary_match_inventory_document(): void
